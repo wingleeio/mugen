@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+.output/
+.nitro/
+.vercel/
+.source/
+.wrangler/
+
+# Turbo
+.turbo/
+
+# Vitest browser-mode artifacts
+**/__screenshots__/
+test-results/
+
+# TanStack Router generated route tree
+**/routeTree.gen.ts
+
+# Env files
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json

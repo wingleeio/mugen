@@ -1,0 +1,94 @@
+---
+title: Fonts & Layout
+description: The font/line-height/width fields that drive measurement and CSS.
+---
+
+The font a `Text` measures with *is* the font its CSS paints with — that's why
+heights can't drift. Each `Text` carries its own font; `<MugenVList>` supplies
+**defaults** so you don't repeat them, and `maxW` (the content-width cap, which
+the engine needs to measure) lives on the list.
+
+```tsx twoslash
+import { MugenVList, useMugenVirtualizer } from 'mugen';
+import type { ReactNode } from 'react';
+interface Msg {
+  id: string;
+}
+declare const messages: Msg[];
+declare const renderRow: (m: Msg) => ReactNode;
+const list = useMugenVirtualizer({ items: messages });
+// ---cut---
+<MugenVList
+  instance={list}
+  getKey={(m) => m.id}
+  render={renderRow}
+  font="16px Inter" // default for every <Text> — canvas/CSS shorthand
+  lineHeight={22} // px
+  letterSpacing={0} // px (optional)
+  whiteSpace="normal" // or 'pre-wrap'  (optional)
+  wordBreak="normal" // or 'keep-all'  (optional)
+  maxW="3xl" // content width cap (optional)
+/>;
+```
+
+A `<Text>` with no `font`/`lineHeight` inherits these defaults; one that sets its
+own overrides them. (A `Text` with neither its own nor a default font throws.)
+
+## Cheap vs expensive
+
+`font`, `letterSpacing`, `whiteSpace`, `wordBreak` feed pretext's expensive
+`prepare()` pass — changing one re-segments the text. `lineHeight` and `maxW` are
+cheap: they only re-run the arithmetic `layout()` pass, so a resize that changes
+the available width never re-segments.
+
+## `maxW`
+
+The content width is `min(viewport, maxW)`. `maxW` accepts:
+
+- a **number** — px, e.g. `maxW: 768`
+- a **rem/px string** — `maxW: '48rem'`
+- a **named size** — `sm` `md` `lg` `xl` `2xl` … `7xl` (a Tailwind-ish rem scale)
+
+Named and rem values resolve against the **live** root font-size at measure time,
+so the list tracks browser zoom and `:root { font-size }` changes instead of
+baking in a px assumption. When `maxW` is finite and narrower than the viewport,
+rows are centered and the text wraps at `maxW` — exactly as the rendered column
+does.
+
+## Per-`Text` overrides
+
+A row often mixes styles (a bold author over regular body text). The default
+covers the body; override on the `Text` for the exceptions — used for both
+measure and render, so they stay in sync:
+
+```tsx twoslash
+import { VStack, Text } from 'mugen';
+declare const item: { author: string; body: string };
+// ---cut---
+<VStack gap={2}>
+  <Text font="600 15px Inter" lineHeight={20}>{item.author}</Text>
+  <Text>{item.body}</Text> {/* inherits the list default */}
+</VStack>;
+```
+
+## Fonts are typed
+
+`font` (the list default and a `Text`'s `font` prop) is a typed template literal —
+only the canvas shorthands pretext can actually measure type-check: an optional
+style and/or weight, then a `size+unit`, then a family.
+
+```ts twoslash
+// @errors: 2322
+import type { Font } from 'mugen';
+// ---cut---
+const a: Font = '16px Inter'; // ✓
+const b: Font = '600 14px Inter'; // ✓
+const c: Font = 'italic 500 17px Inter'; // ✓
+const d: Font = '15px Inter, sans-serif'; // ✓
+const e: Font = 'Inter'; // ✗ no size+unit
+const f: Font = '16 Inter'; // ✗ no unit
+const g: Font = '16px system-ui'; // type-ok, but rejected at runtime
+```
+
+This catches a whole class of "why is my text the wrong height" bugs before you
+run anything.

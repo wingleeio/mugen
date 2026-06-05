@@ -1,0 +1,68 @@
+---
+title: Scrolling
+description: Drive scroll imperatively through the list instance.
+---
+
+The instance from `useMugenVirtualizer` is your handle on the list. Because every
+row's offset is known analytically — on- or off-screen — scrolling to a specific
+item lands **pixel-exact** on the first try, with no measure-and-correct dance.
+
+```tsx twoslash
+import { MugenVList, Text, VStack, useMugenVirtualizer } from 'mugen';
+
+interface Row {
+  id: string;
+  text: string;
+}
+
+export function List({ rows }: { rows: Row[] }) {
+  const list = useMugenVirtualizer({ items: rows });
+
+  return (
+    <>
+      <button onClick={() => list.scrollToItem('42', { behavior: 'smooth', align: 'center' })}>
+        Reveal #42
+      </button>
+      <MugenVList
+        instance={list}
+        getKey={(r) => r.id}
+        font="15px Inter"
+        lineHeight={22}
+        render={(r) => (
+          <VStack padding={12}>
+            <Text>{r.text}</Text>
+          </VStack>
+        )}
+      />
+    </>
+  );
+}
+```
+
+## Methods
+
+| Method | |
+| --- | --- |
+| `scrollToItem(key, options?)` | Scroll a row into view by its `getKey` value. |
+| `scrollToIndex(index, options?)` | Scroll a row into view by index. |
+| `length` | Number of items. |
+| `totalHeight()` | The exact scrollable height (px) — every row counted. |
+
+## Options
+
+```ts twoslash
+import type {} from 'mugen'; // mark this a module so the interface stays local
+// ---cut---
+interface ScrollToOptions {
+  behavior?: 'auto' | 'smooth';
+  align?: 'auto' | 'start' | 'center' | 'end';
+}
+```
+
+- **`behavior`** — `'smooth'` animates; `'auto'` (default) jumps.
+- **`align`** — where the row lands: `start` (top), `center`, `end` (bottom), or
+  `auto` (default) which scrolls the *least* — a no-op if the row is already fully
+  visible, otherwise to the nearest edge.
+
+Call these from anywhere you hold the instance — an effect, an event handler, a
+deep-link router. The instance is stable across renders.

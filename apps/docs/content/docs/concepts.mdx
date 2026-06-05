@@ -1,0 +1,92 @@
+---
+title: How It Works
+description: The single-source measurement model behind mugen.
+---
+
+## One description, two consumers
+
+A row is a pure function of its item to a tree of [primitives](/docs/primitives) —
+the function you hand to `<MugenVList render={Row} />`:
+
+```tsx twoslash
+import { Text, VStack } from 'mugen';
+
+interface Comment {
+  title: string;
+  body: string;
+}
+// ---cut---
+function Row(item: Comment) {
+  return (
+    <VStack gap={4} padding={12}>
+      <Text>{item.title}</Text>
+      <Text>{item.body}</Text>
+    </VStack>
+  );
+}
+```
+
+The tree it returns is consumed two ways:
+
+1. **The walker** (`heightOf`) interprets it to compute a height — threading the
+   available width top-down, recursing through composites, summing child heights,
+   and calling pretext at each `Text` leaf. No React render, no DOM, no reflow.
+2. **React** renders the same tree to the DOM for the rows in the visible window.
+
+Because both come from one description, a row's measured height and its painted
+height **cannot disagree**.
+
+## pretext: height without the DOM
+
+[pretext](https://github.com/chenglou/pretext) measures wrapped text
+analytically. It splits into two calls:
+
+```ts twoslash
+declare function prepare(text: string, font: string, options: object): object;
+declare function layout(p: object, width: number, lineHeight: number): { height: number };
+declare const text: string, font: string, options: object, width: number, lineHeight: number;
+// ---cut---
+const prepared = prepare(text, font, options); // expensive: canvas + segmentation
+const { height } = layout(prepared, width, lineHeight); // cheap: pure arithmetic
+```
+
+mugen caches `prepare` on `(font, options, text)` — never on width — so resizing
+the list is a pure `layout()` pass over cached work. This is the dominant
+performance term, and it's why a 100k-row resize stays smooth.
+
+## The offset index
+
+Per-row heights are kept in a [Fenwick tree](https://en.wikipedia.org/wiki/Fenwick_tree):
+
+- the prefix sum to row *i* is its top offset,
+- the total sum is the scrollbar height,
+- a point update (one row changed) and a scroll-position lookup are both O(log n).
+
+So when a single row's height changes, patching the scrollbar and finding the new
+visible slice cost a logarithm, not a re-scan.
+
+## Off-screen state is real state
+
+A row's [`useMugenState`](/docs/state) lives in the list instance's slot store, not
+in a mounted React component. The walker runs `render(item)` for **every** row to
+measure it — on- or off-screen — so that state, and the height it produces, is
+real whether or not the row was ever painted:
+
+> A [`useMugenEffect`](/docs/effects) on row 9,000 parses its markdown and calls
+> `setBlocks(...)`. mugen re-walks **that one row**, patches the offset index, and
+> the scrollbar grows to the real height — even though row 9,000 was never on
+> screen.
+
+## The measure pass
+
+To measure a row, mugen runs `render(item)` inside an ambient *session* (so the
+mugen hooks resolve their per-row slots by call order) and an inert React
+dispatcher, so:
+
+- `useMugenState` / `useMugenMemo` read their slot in the instance,
+- cosmetic `useState` returns its initial value (it can't affect height),
+- `useEffect` / `useLayoutEffect` **throw** — a row that needs a React effect
+  can't be measured without mounting; use [`useMugenEffect`](/docs/effects).
+
+This is why rows must be [pure item → tree](/docs/constraints), with the mugen
+hooks called in the same order every render.

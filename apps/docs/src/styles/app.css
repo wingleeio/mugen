@@ -1,0 +1,126 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+@import '@fontsource-variable/geist';
+@import '@fontsource-variable/geist-mono';
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import 'fumadocs-twoslash/twoslash.css';
+
+@theme {
+  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', SFMono-Regular, monospace;
+}
+
+html {
+  scrollbar-gutter: stable;
+  scroll-behavior: smooth;
+}
+
+html > body[data-scroll-locked] {
+  margin-right: 0px !important;
+  --removed-body-scroll-bar-size: 0px !important;
+}
+
+/* ── Refined thin scrollbar for embedded scrollers (e.g. the demo list) ── */
+.mu-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--color-fd-foreground) 20%, transparent) transparent;
+  overscroll-behavior: contain;
+}
+.mu-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.mu-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.mu-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--color-fd-foreground) 16%, transparent);
+  border-radius: 9999px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+.mu-scroll::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklab, var(--color-fd-foreground) 30%, transparent);
+  background-clip: padding-box;
+}
+
+/* ── Blueprint grid backdrop (the product measures things — lean into it) ── */
+.mu-grid {
+  --mu-grid-line: color-mix(in oklab, var(--color-fd-foreground) 6%, transparent);
+  background-image:
+    linear-gradient(to right, var(--mu-grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--mu-grid-line) 1px, transparent 1px);
+  background-size: 36px 36px;
+  -webkit-mask-image: radial-gradient(ellipse 75% 55% at 50% 0%, #000 35%, transparent 78%);
+  mask-image: radial-gradient(ellipse 75% 55% at 50% 0%, #000 35%, transparent 78%);
+}
+
+/* ── Pre-highlighted Shiki code (dual theme via CSS vars) ── */
+.mu-code .shiki {
+  margin: 0;
+  padding: 1.05rem 1.2rem;
+  overflow-x: auto;
+  background: transparent !important;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.7;
+  tab-size: 2;
+  /* show literal => / !== etc. instead of Geist Mono's ligatures */
+  font-variant-ligatures: none;
+  font-feature-settings: 'liga' 0, 'calt' 0;
+}
+.mu-code .shiki,
+.mu-code .shiki span {
+  color: var(--shiki-light);
+}
+.dark .mu-code .shiki,
+.dark .mu-code .shiki span {
+  color: var(--shiki-dark);
+}
+
+/* ── Code: literal operators (Geist Mono ligatures off) everywhere ── */
+code,
+pre,
+kbd,
+.shiki,
+.shiki span {
+  font-variant-ligatures: none;
+  font-feature-settings: 'liga' 0, 'calt' 0;
+}
+
+/* ── Sidebar section labels → mono eyebrows (matches the landing aesthetic) ── */
+[class~='mt-6'] > .fd-page-tree-item-name {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-fd-muted-foreground);
+}
+
+/* ── Staggered load reveal ── */
+@keyframes mu-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.mu-rise {
+  animation: mu-rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .mu-rise {
+    animation: none;
+  }
+}

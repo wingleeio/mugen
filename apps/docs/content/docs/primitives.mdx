@@ -1,0 +1,117 @@
+---
+title: Primitives
+description: The measurable vocabulary rows are built from.
+---
+
+A row is built from **primitives** — each one carries both an analytic `measure`
+and a DOM `render`, so mugen can compute its height and paint it from one
+description. A raw `<div>` has no `measure`, so it breaks the walk and throws in
+development. There are three built-ins — `Text`, `VStack`, `HStack` — and
+`definePrimitive(tag)` to make your own from any HTML element.
+
+> Every snippet below is type-checked — hover a primitive or prop to see its type,
+> and the ✗ lines show the actual compiler error.
+
+## `Text`
+
+The only primitive that calls pretext. Its measured height is
+`layout(prepare(text, font, opts), width, lineHeight)`; its rendered CSS uses the
+identical font, line-height, and spacing, so the two agree. `font`/`lineHeight`
+fall back to the [list defaults](/docs/fonts) on `<MugenVList>`.
+
+```tsx twoslash
+import { Text } from 'mugen';
+declare const item: { title: string; body: string; bubble: string };
+// ---cut---
+<Text>{item.body}</Text>; // inherits the list font
+<Text font="700 18px Inter" lineHeight={24}>{item.title}</Text>;
+<Text shrink>{item.bubble}</Text>; // shrink-wrap to natural width
+```
+
+| Prop | Type | Notes |
+| --- | --- | --- |
+| `children` | `string` | Must be a single string. |
+| `font` | `Font` | Overrides the list default (still measurable). |
+| `lineHeight` | `number` | px. |
+| `letterSpacing` | `number` | px, matches CSS. |
+| `whiteSpace` | `'normal' \| 'pre-wrap'` | `pre-wrap` keeps `\n`/tabs/spaces. |
+| `wordBreak` | `'normal' \| 'keep-all'` | |
+| `color` | `string` | |
+| `shrink` | `boolean` | Shrink-wrap to the text's natural width (bubbles). |
+
+## `VStack` / `HStack`
+
+The two layout boxes. `VStack` sums child heights plus gaps; `HStack` takes the
+max child height and distributes width — fixed-width siblings keep their `width`,
+the rest share the remainder (so a `Text` slot grows).
+
+```tsx twoslash
+import { HStack, VStack, Text } from 'mugen';
+declare const item: { author: string; body: string; color: string };
+// ---cut---
+// avatar | (author over body)
+<HStack gap={12} padding={12}>
+  <VStack width={40} height={40} style={{ background: item.color }} />
+  <VStack gap={2}>
+    <Text font="600 15px Inter">{item.author}</Text>
+    <Text>{item.body}</Text>
+  </VStack>
+</HStack>;
+```
+
+Layout is set through **props**, never CSS, because the props are the chrome the
+walker counts:
+
+| Prop | Type | |
+| --- | --- | --- |
+| `gap` | `number` | Space between children (px). |
+| `padding` | `number` | Uniform padding (px). |
+| `width` | `number` | Declared width — lays out a fixed sibling in an `HStack`. |
+| `height` | `number` | Declared height — the box's height *is* this (replaces `Fixed`). |
+| `align` / `justify` | `string` | `align-items` / `justify-content`. |
+
+A box with a `height` is a fixed box (an avatar, a spacer); a box with children
+derives its height from them.
+
+## `definePrimitive(tag)`
+
+Make a measurable primitive backed by any HTML tag. It's a layout box (like
+`VStack`/`HStack`, which are themselves `definePrimitive('div', …)`) with the same
+chrome props — plus the tag's own attributes passed straight through, so a
+`button` is clickable and an `a` takes an `href`.
+
+```tsx twoslash
+import { definePrimitive, Text } from 'mugen';
+declare const item: { label: string };
+declare function openItem(item: unknown): void;
+// ---cut---
+const Button = definePrimitive('button'); // vertical
+const Toolbar = definePrimitive('div', { direction: 'horizontal' });
+
+<Button padding={10} onClick={() => openItem(item)}>
+  <Text>{item.label}</Text>
+</Button>;
+```
+
+This replaces the old `Pressable` (use a `button` and its `onClick`) and `Fixed`
+(use `width`/`height` on a box).
+
+## Measurability is enforced by types
+
+A primitive's `style` and `className` are restricted so its painted box can't
+diverge from the box the walker computes. Padding, margin, gap, and sizing are
+owned by props — setting them via raw CSS or a utility class is a **type error**
+(hover the ✗ lines):
+
+```tsx twoslash
+// @errors: 2353 2322
+import { VStack } from 'mugen';
+// ---cut---
+<VStack style={{ padding: 8 }} />; // ✗ use the `padding` prop
+<VStack className="p-4 gap-2" />; // ✗ spacing utilities break measurement
+<VStack padding={8} gap={2} />; // ✓
+<VStack className="rounded-full" />; // ✓ visual-only classes are fine
+```
+
+This is the type-system replacement for the old lint rule: the editor stops you
+before a height can ever drift.

@@ -1,0 +1,99 @@
+---
+title: State & Hooks
+description: Per-row state, memo, and effects — the React-shaped hooks rows use.
+---
+
+A row authored by `render` is a real React render path, so you reach for hooks —
+but mugen's hooks, not React's, because their state must be readable **without
+mounting** (the walker measures every row off-screen) and a change to it must
+**re-measure** the row. They mirror `useState` / `useMemo` / `useEffect`.
+
+> Call them directly inside the `render` function (or a plain function it calls),
+> in the same order every render — the usual rules of hooks. They throw if used
+> in a nested JSX-element component, an event handler, or outside a list.
+
+## `useMugenState`
+
+State that can change a row's height — an expanded flag, an edited string, loaded
+content. Shaped exactly like `useState`, but the value lives in the list instance
+and a `set` re-measures **only that row** (O(log n)), even off-screen.
+
+```tsx twoslash
+import {
+  MugenVList, Text, VStack, definePrimitive,
+  useMugenState, useMugenVirtualizer,
+} from 'mugen';
+
+interface Thread {
+  id: string;
+  title: string;
+  body: string;
+}
+
+const Row = definePrimitive('button');
+
+function ThreadRow(thread: Thread) {
+  const [expanded, setExpanded] = useMugenState(false);
+  return (
+    <Row padding={12} onClick={() => setExpanded((e) => !e)}>
+      <VStack gap={4}>
+        <Text font="600 15px Inter">{thread.title}</Text>
+        {expanded ? <Text>{thread.body}</Text> : null}
+      </VStack>
+    </Row>
+  );
+}
+
+export function Threads({ threads }: { threads: Thread[] }) {
+  const list = useMugenVirtualizer({ items: threads });
+  return (
+    <MugenVList instance={list} getKey={(t) => t.id} render={ThreadRow}
+      font="15px Inter" lineHeight={22} />
+  );
+}
+```
+
+There are no reducers or actions — a `set` is the whole API, just like React.
+
+<Showcase example="accordion" filename="faq.tsx" />
+
+## `useMugenMemo`
+
+Derive a value per row, recomputed only when its `deps` change. Like `useMemo`,
+but readable in the measure walk — use it to keep expensive per-row derivation out
+of the hot path (the walker re-runs a row's body on every re-measure).
+
+```tsx twoslash
+import { Text, VStack, useMugenMemo } from 'mugen';
+
+declare function splitIntoParagraphs(md: string): string[];
+
+interface Doc {
+  id: string;
+  markdown: string;
+}
+
+export function DocRow(doc: Doc) {
+  const blocks = useMugenMemo(() => splitIntoParagraphs(doc.markdown), [doc.markdown]);
+  return (
+    <VStack gap={8} padding={12}>
+      {blocks.map((b, i) => (
+        <Text key={i}>{b}</Text>
+      ))}
+    </VStack>
+  );
+}
+```
+
+## `useMugenEffect`
+
+Run a side effect per row when `deps` change — to transform content (parse
+markdown, highlight, load) and then `set` height-affecting state. It runs for
+**every** row, on- or off-screen, so the height becomes exact the moment the work
+resolves. See [Effects](/docs/effects) for the full pattern.
+
+## Item updates are height triggers too
+
+When you pass new `items` to `useMugenVirtualizer`, mugen re-keys and re-measures.
+A row whose text now wraps to a different height re-anchors the scrollbar without
+a flash — through the same path as a `set`.

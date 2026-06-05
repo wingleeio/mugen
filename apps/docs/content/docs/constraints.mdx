@@ -1,0 +1,75 @@
+---
+title: Constraints
+description: The invariants that make analytic measurement possible — and v1 limits.
+---
+
+mugen trades flexibility for exactness. These rules are what let it measure a row
+without mounting it. Most are enforced — by the type system, or in development
+with a precise error.
+
+## Rows are pure `item → tree`
+
+mugen runs `render(item)` to measure, calling it as a plain function. Therefore a
+row may not:
+
+- use `useEffect` / `useLayoutEffect` — they throw; use [`useMugenEffect`](/docs/effects),
+- render to a portal, or measure a child via a ref,
+- depend on anything but its item and the [mugen hooks](/docs/state) for its height.
+
+Cosmetic `useState` is allowed (it can't change height). Height-affecting state —
+the kind that *does* — goes through `useMugenState`. The mugen hooks must be
+called directly in `render` (not a nested JSX-element component) and in the same
+order every render.
+
+## Only primitives are measurable
+
+A row may contain [primitives](/docs/primitives) (`Text`, `VStack`, `HStack`, or
+your own `definePrimitive(tag)`) and hook-free components composed from them. A raw
+`<div>` has no `measure` and breaks the walk — so a row's `render` may return:
+
+```tsx twoslash
+import { VStack, Text } from 'mugen';
+declare const item: { text: string };
+// ---cut---
+<div>{item.text}</div>; // ❌ runtime: not measurable
+<VStack><Text>{item.text}</Text></VStack>; // ✅
+```
+
+Raw strings must be wrapped in `<Text>` so they can be measured.
+
+## Layout goes through props, not CSS
+
+Padding, margin, gap, and sizing are the chrome the walker counts, so they're
+**props** — `gap`, `padding`, `width`, `height`. Setting them through `style` or a
+utility `className` is a **type error**, because the painted box would diverge from
+the measured one. Visual-only styles (color, background, border-radius) are fine.
+
+## Fonts must match the CSS
+
+Whatever `font` / `lineHeight` / `letterSpacing` a `Text` measures with must equal
+the CSS that paints it. A `Text` carries its own (or inherits the list defaults),
+and the same values feed measurement and render — so they can't drift. `system-ui`
+is rejected outright.
+
+## Keep row bodies cheap
+
+Re-measuring re-runs a row's body. Expensive per-row derivation belongs in
+[`useMugenMemo`](/docs/state) (recomputed only on `deps` change); keep the body a
+thin map from data to primitives.
+
+## v1 scope
+
+| | |
+| --- | --- |
+| ✅ Vertical lists | Text-dominant, structurally-regular rows. |
+| ❌ Horizontal / grids | pretext is height-from-width; the inverted axis is a separate design. |
+| ❌ Arbitrary CSS rows | Only the measurable primitive vocabulary can be walked. |
+| ⚠️ Animated height | mugen commits the final height and lets you animate visually. Exact per-frame offsets would mean re-patching every frame. |
+
+## The fit test
+
+mugen pays off when a row's height is *text (measured by pretext) + declared
+chrome*. If your rows are dominated by content mugen can't measure analytically —
+charts, arbitrary embeds, media of unknown aspect — you've left the regime where
+analytic measurement wins, and a DOM-measuring virtualizer may fit better. Before
+committing, try rebuilding your ugliest real row purely in primitives.

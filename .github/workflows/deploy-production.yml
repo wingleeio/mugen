@@ -1,0 +1,50 @@
+name: Deploy docs · production
+
+# Production deploy of apps/docs to Cloudflare Workers on every push to main.
+# The build (vite + Nitro `cloudflare_module` preset) emits the Worker plus a
+# redirected wrangler config at apps/docs/.wrangler/deploy/config.json, which
+# `wrangler deploy` auto-discovers — no hand-written wrangler config needed.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/docs/**'
+      - 'packages/mugen/**'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/deploy-production.yml'
+  workflow_dispatch:
+
+# Never run two production deploys at once; let an in-flight one finish.
+concurrency:
+  group: docs-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4 # version comes from package.json#packageManager
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22 # repo engines require >=22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm build # turbo builds `mugen` then `docs`
+
+      - name: Deploy to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/docs
+          wranglerVersion: '4'
+          command: deploy

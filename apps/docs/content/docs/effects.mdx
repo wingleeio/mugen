@@ -1,0 +1,120 @@
+---
+title: Effects
+description: Transform content into state — markdown, syntax highlighting, async loads.
+---
+
+Some content can't be rendered as primitives until it's transformed: markdown has
+to be parsed, code has to be highlighted, a remote value has to load.
+**`useMugenEffect`** does that transform and stores the result with
+[`useMugenState`](/docs/state) — and because a `set` re-measures the row, the
+height stays exact the moment the content resolves.
+
+It's shaped like `useEffect` — `(effect, deps)`, return a cleanup — with one
+deliberate difference: it runs for **every** row, on- or off-screen, not just
+mounted ones. That's the point: row 9,000's markdown parses and its height
+becomes exact without ever scrolling to it.
+
+## Markdown in a row
+
+```tsx twoslash
+import {
+  MugenVList, Text, VStack,
+  useMugenEffect, useMugenState, useMugenVirtualizer,
+} from 'mugen';
+
+interface Post {
+  id: string;
+  markdown: string;
+}
+
+declare function parseMarkdown(src: string): Promise<string[]>;
+
+function PostRow(post: Post) {
+  const [blocks, setBlocks] = useMugenState<string[]>([]);
+
+  useMugenEffect(() => {
+    let cancelled = false;
+    parseMarkdown(post.markdown).then((b) => {
+      if (!cancelled) setBlocks(b);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [post.markdown]);
+
+  return (
+    <VStack gap={8} padding={16}>
+      {blocks.length === 0 ? (
+        <Text>{'Loading…'}</Text>
+      ) : (
+        blocks.map((b, i) => <Text key={i}>{b}</Text>)
+      )}
+    </VStack>
+  );
+}
+
+export function Posts({ posts }: { posts: Post[] }) {
+  const list = useMugenVirtualizer({ items: posts });
+  return (
+    <MugenVList instance={list} getKey={(p) => p.id} render={PostRow}
+      font="16px Inter" lineHeight={24} maxW="2xl" />
+  );
+}
+```
+
+The row first measures the `Loading…` placeholder. When `parseMarkdown` resolves,
+`setBlocks` replaces the blocks, mugen re-walks the row, and the scrollbar grows
+to the real, parsed height — no layout shift, no measure-on-mount.
+
+<Showcase example="markdown" filename="notes.tsx" />
+
+## Highlighting code
+
+The same shape — and pair it with `useMugenMemo` for the cheap synchronous split:
+
+```tsx twoslash
+import { Text, VStack, useMugenEffect, useMugenMemo, useMugenState } from 'mugen';
+
+interface Snippet {
+  id: string;
+  code: string;
+  lang: string;
+}
+
+declare function highlight(code: string, lang: string): Promise<string[]>;
+
+export function CodeRow(snippet: Snippet) {
+  // Cheap, synchronous fallback so the first measure is close.
+  const plainLines = useMugenMemo(() => snippet.code.split('\n'), [snippet.code]);
+  const [lines, setLines] = useMugenState<string[] | null>(null);
+
+  useMugenEffect(() => {
+    let cancelled = false;
+    highlight(snippet.code, snippet.lang).then((l) => {
+      if (!cancelled) setLines(l);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [snippet.code, snippet.lang]);
+
+  return (
+    <VStack gap={2} padding={12}>
+      {(lines ?? plainLines).map((line, i) => (
+        <Text key={i} font="13px 'JetBrains Mono'" lineHeight={20}>
+          {line}
+        </Text>
+      ))}
+    </VStack>
+  );
+}
+```
+
+## Rules of thumb
+
+- **Don't put the state you set into `deps`** — that would loop. Watch the
+  *inputs* (the source text), not the output.
+- Effects run off the measure pass on a microtask; a `set` re-measures the row.
+- Cancel async work in the returned cleanup (the `cancelled` flag above) — it runs
+  before the next effect and when the row is removed.
+- Keep `effect` idempotent for a given `deps` — it may re-run when deps change.

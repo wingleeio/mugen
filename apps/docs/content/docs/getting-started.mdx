@@ -1,0 +1,91 @@
+---
+title: Getting Started
+description: Install mugen and render your first analytic virtualized list.
+---
+
+## Install
+
+```npm
+npm i mugen @chenglou/pretext react react-dom
+```
+
+`@chenglou/pretext` is a peer-ish runtime dependency (mugen calls it to measure
+text). React 18.2+ or 19 is required.
+
+## Your first list
+
+A list is two pieces:
+
+- **`useMugenVirtualizer({ items })`** — a hook that creates and owns the list
+  *instance* (its measurement engine and scroll position).
+- **`<MugenVList>`** — the component. You give it the `instance`, a `getKey`, and
+  a `render` that returns each row as a tree of **primitives**.
+
+```tsx twoslash
+import { MugenVList, Text, VStack, useMugenVirtualizer } from 'mugen';
+
+interface Comment {
+  id: string;
+  author: string;
+  body: string;
+}
+
+export function Comments({ comments }: { comments: Comment[] }) {
+  const list = useMugenVirtualizer({ items: comments });
+  return (
+    <MugenVList
+      instance={list}
+      getKey={(c) => c.id}
+      // List-level text defaults — every <Text> inherits them (and can override).
+      font="15px Inter"
+      lineHeight={22}
+      maxW="2xl"
+      render={(c) => (
+        <VStack gap={4} padding={12}>
+          <Text font="600 15px Inter">{c.author}</Text>
+          <Text>{c.body}</Text>
+        </VStack>
+      )}
+    />
+  );
+}
+```
+
+Here's a list running — toggle between the preview and the code:
+
+<Showcase example="chat" filename="chat-list.tsx" />
+
+That's a fully virtualized list. No `react-virtuoso`, no measure-on-mount, no
+layout shift — even with 100,000 comments, only the visible window mounts, and
+the scrollbar is exact from the first frame.
+
+## The item type is inferred
+
+`useMugenVirtualizer({ items })` infers the row type from `items`, and it flows
+through `getKey` and `render`. Pass it explicitly if you need to —
+`useMugenVirtualizer<Comment>({ items })`.
+
+## The font must be measurable
+
+pretext measures against the browser's font engine, so `font` must be a **named
+font** in canvas shorthand (`"16px Inter"`, `"600 15px Inter"`). `system-ui` is
+rejected — its metrics differ per OS, so heights would drift from what the user
+sees.
+
+```ts twoslash
+import type { Font } from 'mugen';
+// ---cut---
+const ok: Font = '16px Inter'; // ✓ measured against the font engine
+const sys: Font = '16px system-ui'; // type-ok, but throws at runtime (per-OS metrics)
+```
+
+If the font loads asynchronously (most web fonts do), mugen re-measures
+automatically once `document.fonts` settles — no layout shift.
+
+## Next
+
+- [How it works](/docs/concepts) — the single-source measurement model.
+- [Primitives](/docs/primitives) — the vocabulary rows are built from.
+- [State & hooks](/docs/state) — `useMugenState`, `useMugenMemo`, `useMugenEffect`.
+- [Scrolling](/docs/scrolling) — `instance.scrollToItem`.
+- [Recipes](/docs/recipes) — chat, accordions, deep links.

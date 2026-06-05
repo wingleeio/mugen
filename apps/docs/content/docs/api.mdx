@@ -1,0 +1,130 @@
+---
+title: API Reference
+description: The mugen public surface.
+---
+
+## `useMugenVirtualizer(options)`
+
+Creates and owns (across renders) the list instance for `items` — its measurement
+engine and scroll position. The item type `T` is inferred from `items`. Give the
+returned `instance` to `<MugenVList>`.
+
+```ts twoslash
+import { useMugenVirtualizer } from 'mugen';
+interface Item {
+  id: string;
+}
+declare const items: Item[];
+// ---cut---
+const instance = useMugenVirtualizer({ items }); // instance: MugenInstance<Item>
+```
+
+The library never inspects `T`. Branch on row shape with a `switch` inside
+`render`; you can upgrade `T` to a union later without touching the engine.
+
+## `<MugenVList>`
+
+```tsx twoslash
+import { MugenVList, Text, VStack, useMugenVirtualizer } from 'mugen';
+interface Item {
+  id: string;
+  text: string;
+}
+declare const items: Item[];
+const instance = useMugenVirtualizer({ items });
+// ---cut---
+<MugenVList
+  instance={instance}
+  getKey={(item) => item.id}
+  render={(item) => (
+    <VStack padding={12}>
+      <Text>{item.text}</Text>
+    </VStack>
+  )}
+  font="16px Inter"
+  lineHeight={22}
+/>;
+```
+
+| Prop | Type | Default | |
+| --- | --- | --- | --- |
+| `instance` | `MugenInstance<T>` | — | From `useMugenVirtualizer`. |
+| `getKey` | `(item, index) => string` | — | Stable key per item. |
+| `render` | `(item) => ReactNode` | — | The row as a primitive tree. |
+| `font` | [`Font`](/docs/fonts#fonts-are-typed) | — | Default font for every `Text`. |
+| `lineHeight` | `number` | — | Default line height (px). |
+| `maxW` | `number \| string` | ∞ | Content width cap (px / rem / named). |
+| `letterSpacing` / `whiteSpace` / `wordBreak` | | | `Text` defaults. |
+| `height` | `number` | fills parent | Viewport height (px). |
+| `width` | `number` | ResizeObserver | Override the measured width (SSR/tests). |
+| `overscan` | `number` | `200` | Extra px rendered above/below the viewport. |
+| `className` / `style` | | | On the scroll container. |
+
+## Row hooks
+
+Called inside `render`. See [State & Hooks](/docs/state) and [Effects](/docs/effects).
+
+```ts twoslash
+import { useMugenState, useMugenMemo, useMugenEffect } from 'mugen';
+declare const init: number;
+declare const factory: () => string[];
+declare const deps: readonly unknown[];
+declare const effect: () => void | (() => void);
+// ---cut---
+const [value, set] = useMugenState(init); // like useState; set re-measures
+const memo = useMugenMemo(factory, deps); // like useMemo; readable off-screen
+useMugenEffect(effect, deps); // like useEffect; runs for every row
+```
+
+`useMugenState`'s `set` and `useMugenEffect` re-measure the affected row in
+O(log n). `useMugenEffect` runs on a microtask after measure, for **every** row
+(on- or off-screen); return a cleanup like `useEffect`.
+
+## `MugenInstance`
+
+```ts twoslash
+import type { MugenInstance } from 'mugen';
+interface Item {
+  id: string;
+}
+declare const instance: MugenInstance<Item>;
+// ---cut---
+instance.scrollToItem('row-42', { behavior: 'smooth', align: 'center' });
+instance.scrollToIndex(42);
+instance.length; // number of items
+instance.totalHeight(); // exact scrollable height (px)
+```
+
+```ts twoslash
+import type { ScrollToOptions } from 'mugen';
+// ---cut---
+const options: ScrollToOptions = {
+  behavior: 'smooth', // 'auto' | 'smooth'
+  align: 'center', // 'auto' | 'start' | 'center' | 'end'
+};
+```
+
+See [Scrolling](/docs/scrolling).
+
+## Primitives
+
+`Text` is the pretext leaf; `VStack`/`HStack` are the layout boxes;
+`definePrimitive(tag, { direction? })` makes a measurable box from any HTML tag.
+`style` is `MeasurableStyle` and `className` is `SafeClassName` — spacing/sizing
+through either is a type error. See [Primitives](/docs/primitives).
+
+## Fonts
+
+`font` (typed [`Font`](/docs/fonts#fonts-are-typed)) and `lineHeight` are `Text`
+props with `<MugenVList>` defaults; `maxW` and the other text fields are list-level.
+See [Fonts & Layout](/docs/fonts).
+
+## Advanced / escape hatches
+
+| Export | Use |
+| --- | --- |
+| `prepareText` / `measureText` / `textHeight` | The pretext wrapper + cache. |
+| `naturalWidth(text, font, opts)` | Tightest shrink-wrap width. |
+| `clearTextCache()` | Drop the prepare cache. |
+| `watchFonts` / `subscribeFonts` / `fontEpoch` | Font-load coordination. |
+| `assertMeasurableFont(font)` | Throws on `system-ui`. |

@@ -1,0 +1,74 @@
+---
+title: Introduction
+description: Virtualized React lists whose row heights are computed, not measured.
+icon: Rocket
+---
+
+**mugen** is a React library for building vertical virtualized lists where each
+row's height is computed *arithmetically* — with [pretext](https://github.com/chenglou/pretext) —
+instead of measured from the DOM.
+
+You author a row once as a small tree of layout **primitives**. mugen interprets
+that tree to derive the row's height (no mount, no reflow), and renders the *same*
+tree to the DOM for the rows that are on screen.
+
+## Why
+
+Conventional virtualizers (react-virtuoso and friends) measure each row on mount.
+That has two costs:
+
+- **Layout shift.** The first paint uses an estimate; the real height arrives a
+  frame later and everything below jumps.
+- **Off-screen rows are unknowable.** If a row's height changes while it's
+  off-screen — "expand all", a deep link into a collapsed thread, new data — the
+  virtualizer can't know its new height until it scrolls into view and mounts.
+
+mugen removes the measure-on-mount pass entirely:
+
+- Because measurement and render come from **one description**, they can't desync.
+- Because per-row state lives in the **list instance** (not the React tree), an
+  off-screen row's height is exact — even if it never mounted.
+
+```tsx twoslash
+import { MugenVList, Text, VStack, useMugenVirtualizer } from 'mugen';
+
+interface Message {
+  id: string;
+  text: string;
+}
+// ---cut---
+function Messages({ messages }: { messages: Message[] }) {
+  const list = useMugenVirtualizer({ items: messages });
+  return (
+    <MugenVList
+      instance={list}
+      getKey={(m) => m.id}
+      font="16px Inter"
+      lineHeight={22}
+      maxW="3xl"
+      render={(m) => (
+        <VStack gap={4} padding={12}>
+          <Text>{m.text}</Text>
+        </VStack>
+      )}
+    />
+  );
+}
+```
+
+## What it's for (v1)
+
+**In scope:** vertical lists of text-dominant, structurally-regular rows — chat,
+feeds, comments — where a row's height is *text (measured by pretext) + declared
+chrome* (padding, gaps, fixed-size avatars).
+
+**Out of scope (for now):** horizontal lists and grids (pretext derives height
+from width; the inverted axis is a separate design) and rows built from arbitrary
+CSS (only the measurable [primitive vocabulary](/docs/primitives) can be walked).
+
+<Cards>
+  <Card title="Get started" href="/docs/getting-started" />
+  <Card title="How it works" href="/docs/concepts" />
+  <Card title="pretext" href="https://github.com/chenglou/pretext" />
+  <Card title="Built with Fumadocs" href="https://fumadocs.dev" />
+</Cards>

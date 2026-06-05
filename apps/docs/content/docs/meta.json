@@ -1,0 +1,21 @@
+{
+  "title": "Docs",
+  "pages": [
+    "index",
+    "---Get started---",
+    "getting-started",
+    "---Concepts---",
+    "concepts",
+    "primitives",
+    "fonts",
+    "---State & effects---",
+    "state",
+    "effects",
+    "---Guides---",
+    "recipes",
+    "scrolling",
+    "---Reference---",
+    "constraints",
+    "api"
+  ]
+}

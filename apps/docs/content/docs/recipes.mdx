@@ -1,0 +1,88 @@
+---
+title: Recipes
+description: Chat, accordions, deep links, and shrink-to-fit bubbles.
+---
+
+## Chat / message list
+
+Avatar on the left, author + message on the right. The avatar is a fixed-size box
+(`width`/`height`); the text column grows into the remaining width — and every row
+is a different height.
+
+<Showcase example="chat" filename="chat-list.tsx" />
+
+## Accordion rows
+
+`useMugenState` controls whether the body renders. Toggling re-measures the row.
+Click a question:
+
+<Showcase example="accordion" filename="faq.tsx" />
+
+## Deep link into a row
+
+Open a specific row's state and scroll to it — the scroll lands pixel-exact
+because the off-screen height is already known. Drive expansion from the item data
+so it works before the row ever mounts:
+
+```tsx twoslash
+import { MugenVList, Text, VStack, useMugenVirtualizer } from 'mugen';
+
+interface Thread {
+  id: string;
+  title: string;
+  body: string;
+  open: boolean; // expansion lives in the data
+}
+
+export function Threads({ threads, focusId }: { threads: Thread[]; focusId?: string }) {
+  const list = useMugenVirtualizer({ items: threads });
+
+  const openAndReveal = (id: string) => {
+    // flip `open` for this thread in your own state, then:
+    list.scrollToItem(id, { behavior: 'smooth', align: 'center' });
+  };
+  if (focusId) openAndReveal(focusId);
+
+  return (
+    <MugenVList
+      instance={list}
+      getKey={(t) => t.id}
+      font="15px Inter"
+      lineHeight={22}
+      render={(t) => (
+        <VStack gap={4} padding={12}>
+          <Text font="600 15px Inter">{t.title}</Text>
+          {t.open ? <Text>{t.body}</Text> : null}
+        </VStack>
+      )}
+    />
+  );
+}
+```
+
+See [Scrolling](/docs/scrolling) for the full `scrollToItem` API.
+
+## Shrink-to-fit bubbles
+
+Chat bubbles that hug their text instead of filling the column:
+
+```tsx twoslash
+import { Text, VStack } from 'mugen';
+
+interface Msg {
+  id: string;
+  text: string;
+}
+
+export function Bubble(msg: Msg) {
+  return (
+    <VStack padding={10}>
+      <Text shrink>{msg.text}</Text>
+    </VStack>
+  );
+}
+```
+
+`shrink` measures the text at its natural (tightest) width via pretext's
+`naturalWidth`, and renders with `width: fit-content` so the browser shrink-wraps
+to the same width.
