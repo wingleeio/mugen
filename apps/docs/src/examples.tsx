@@ -312,22 +312,25 @@ function ToolCard({ tool, running }: { tool: Tool; running?: boolean }): ReactNo
       gap={11}
       padding={10}
       align="center"
+      justify="space-between"
       style={{ background: AC.card, borderRadius: 12, boxShadow: `inset 0 0 0 1px ${AC.hairline}` }}
     >
-      <ToolIcon kind={tool.kind} />
-      <VStack gap={2}>
-        <Text font="500 13px Inter, sans-serif" lineHeight={18} color={AC.fg}>
-          {tool.title}
-        </Text>
-        {tool.detail ? (
-          <Text font={`11.5px ${MONO}`} lineHeight={16} color={AC.muted}>
-            {tool.detail}
+      <HStack gap={11} align="center">
+        <ToolIcon kind={tool.kind} />
+        <VStack gap={2}>
+          <Text font="500 13px Inter, sans-serif" lineHeight={18} color={AC.fg}>
+            {tool.title}
           </Text>
-        ) : null}
-      </VStack>
-      <VStack width={16} align="center" justify="center">
+          {tool.detail ? (
+            <Text font={`11.5px ${MONO}`} lineHeight={16} color={AC.muted}>
+              {tool.detail}
+            </Text>
+          ) : null}
+        </VStack>
+      </HStack>
+      <VStack width={18} align="center" justify="center">
         <Text
-          font="600 12px Inter, sans-serif"
+          font="600 13px Inter, sans-serif"
           lineHeight={16}
           color={running ? AC.active : AC.done}
           className={running ? 'mu-pulse' : undefined}
@@ -359,11 +362,15 @@ function Reasoning({ text }: { text: string }): ReactNode {
 }
 
 function UserTurn({ item }: { item: Turn }): ReactNode {
+  // The bubble's `width` must live inside an HStack: `width` renders as
+  // `flex: 0 0 Wpx`, whose basis applies to the row's main axis (the width).
+  // In a VStack (column) that basis would instead pin the *height*.
   return (
-    <VStack padding={14} align="flex-end">
+    <HStack padding={14} justify="flex-end">
       <VStack
         width={430}
         padding={14}
+        gap={3}
         style={{ background: AC.bubble, borderRadius: 16, boxShadow: `inset 0 0 0 1px ${AC.hairline}` }}
       >
         {item.body.map((p, i) => (
@@ -372,7 +379,7 @@ function UserTurn({ item }: { item: Turn }): ReactNode {
           </Text>
         ))}
       </VStack>
-    </VStack>
+    </HStack>
   );
 }
 
