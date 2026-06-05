@@ -18,5 +18,12 @@
   "devDependencies": {
     "turbo": "^2.9.16",
     "typescript": "^6.0.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp",
+      "workerd"
+    ]
   }
 }
