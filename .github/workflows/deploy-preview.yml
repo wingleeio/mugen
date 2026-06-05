@@ -27,6 +27,7 @@ permissions:
 jobs:
   preview:
     runs-on: ubuntu-latest
+    timeout-minutes: 15 # safety net so a hung build can't run for hours
     # Secrets aren't exposed to PRs from forks, so wrangler can't authenticate.
     # Skip those; they still get a production deploy once merged.
     if: github.event.pull_request.head.repo.full_name == github.repository
@@ -43,6 +44,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm build
+        env:
+          # Prerender crawls routes under workerd, which hangs on CI runners.
+          # Ship an SSR-only Worker; every route renders on demand at the edge.
+          DISABLE_PRERENDER: '1'
 
       - name: Upload preview version to Cloudflare
         id: upload

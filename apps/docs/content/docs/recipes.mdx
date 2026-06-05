@@ -3,6 +3,19 @@ title: Recipes
 description: Chat, accordions, deep links, and shrink-to-fit bubbles.
 ---
 
+## AI chat with thinking & steps
+
+A modern assistant transcript is a stress test for a virtualizer: every turn is a
+different height, reasoning traces collapse and expand, and the newest turn keeps
+growing as it streams. It maps cleanly onto mugen — each turn is a pure
+`item → tree` that uses all three hooks. `useMugenState` collapses the “Thought
+for…” trace (toggling re-measures just that row); `useMugenEffect` lets the final
+turn “think”, then stream its answer in; and because heights are computed, a turn
+far off-screen already knows its exact size. Expand a reasoning trace and watch the
+list re-flow without losing your place:
+
+<Showcase example="ai-chat" filename="ai-chat.tsx" />
+
 ## Chat / message list
 
 Avatar on the left, author + message on the right. The avatar is a fixed-size box

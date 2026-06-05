@@ -152,6 +152,73 @@ function Notes({ items }: { items: Note[] }) {
       font="14px Inter" lineHeight={22} maxW={560} />
   );
 }`,
+
+  aiChatHtml: `import {
+  MugenVList, Text, VStack, HStack, definePrimitive,
+  useMugenState, useMugenEffect, useMugenVirtualizer,
+} from 'mugen';
+
+interface Tool { kind: 'search' | 'read' | 'run' | 'web'; title: string; detail?: string }
+interface Turn {
+  id: string;
+  role: 'user' | 'assistant';
+  body: string[];
+  thinking?: string;   // collapsed reasoning trace
+  tools?: Tool[];      // tool-use cards
+  live?: boolean;      // streams its answer in
+}
+
+const Disclosure = definePrimitive('button');
+
+// A turn is a pure item -> tree. The three mugen hooks do the rest.
+function TurnRow(item: Turn) {
+  // Collapse / expand the reasoning — re-measures just this row, O(log n).
+  const [open, setOpen] = useMugenState(!!item.live);
+
+  // The final turn "works", then streams its answer in.
+  const [streamed, setStreamed] = useMugenState(!item.live);
+  useMugenEffect(() => {
+    if (!item.live) return;
+    const t = setTimeout(() => setStreamed(true), 1100);
+    return () => clearTimeout(t);
+  }, [item.id]);
+
+  const working = item.live && !streamed;
+  if (item.role === 'user') return <UserBubble item={item} />;
+
+  return (
+    <VStack gap={12} padding={20}>
+      {item.thinking ? (
+        <VStack gap={open ? 9 : 0}>
+          <Disclosure onClick={() => setOpen((o) => !o)}>
+            <Text font="500 11.5px 'Geist Mono Variable'" color="gray">
+              {(open ? '▾ ' : '▸ ') + (working ? 'Thinking…' : 'Thought for 2.7s')}
+            </Text>
+          </Disclosure>
+          {open ? <Reasoning text={item.thinking} /> : null}
+        </VStack>
+      ) : null}
+
+      {item.tools?.map((t, i) => (
+        <ToolCard key={i} tool={t} running={working && i === item.tools!.length - 1} />
+      ))}
+
+      {working
+        ? <Text color="gray">Writing the answer…</Text>
+        : item.body.map((p, i) => <Text key={i}>{p}</Text>)}
+    </VStack>
+  );
+}
+
+function Chat({ turns }: { turns: Turn[] }) {
+  const list = useMugenVirtualizer({ items: turns });
+  return (
+    <MugenVList
+      instance={list} getKey={(t) => t.id} render={TurnRow}
+      font="15px Inter" lineHeight={24} maxW={720}
+    />
+  );
+}`,
 };
 
 const entries = await Promise.all(

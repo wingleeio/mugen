@@ -101,6 +101,20 @@ kbd,
   color: var(--color-fd-muted-foreground);
 }
 
+/* ── Soft pulse for "live" affordances (active step, streaming caption) ── */
+@keyframes mu-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+.mu-pulse {
+  animation: mu-pulse 1.5s ease-in-out infinite;
+}
+
 /* ── Staggered load reveal ── */
 @keyframes mu-rise {
   from {
@@ -121,6 +135,9 @@ kbd,
     scroll-behavior: auto;
   }
   .mu-rise {
+    animation: none;
+  }
+  .mu-pulse {
     animation: none;
   }
 }
