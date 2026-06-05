@@ -12,6 +12,13 @@ import { nitro } from 'nitro/vite';
 // `vite build` (and the prerender preview server it spawns) keeps Nitro.
 const disableNitro = process.env.DISABLE_NITRO === '1';
 
+// Prerendering crawls the built routes by spawning the Cloudflare Worker under
+// workerd. That worker-based crawl hangs on CI runners, so CI sets
+// DISABLE_PRERENDER=1 and ships an SSR-only Worker (every route is rendered on
+// demand at the edge, which we verify in production). Local/manual builds keep
+// prerendering, which works fine there.
+const disablePrerender = process.env.DISABLE_PRERENDER === '1';
+
 export default defineConfig({
   server: {
     port: 3000,
@@ -21,7 +28,7 @@ export default defineConfig({
     tailwindcss(),
     tanstackStart({
       prerender: {
-        enabled: true,
+        enabled: !disablePrerender,
       },
     }),
     react(),
