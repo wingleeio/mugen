@@ -3,7 +3,7 @@ name: Deploy docs · PR preview
 # Every PR gets its own live deployment. We upload a new Worker *version*
 # without promoting it to production (`wrangler versions upload`) and pin a
 # stable per-PR alias, so the URL stays the same across pushes:
-#   https://pr-<number>-mugen-docs.<your-subdomain>.workers.dev
+#   https://pr-<number>-mugen.<your-subdomain>.workers.dev
 # The URL is then posted as a sticky comment on the PR.
 on:
   pull_request:
@@ -62,7 +62,7 @@ jobs:
         run: |
           # Prefer the stable aliased URL; fall back to the per-version URL.
           preview_url=$(printf '%s' "$WRANGLER_OUTPUT" \
-            | grep -oE 'https://pr-[0-9]+-mugen-docs\.[a-z0-9.-]+\.workers\.dev' \
+            | grep -oE 'https://pr-[0-9]+-mugen\.[a-z0-9.-]+\.workers\.dev' \
             | head -n1)
           if [ -z "$preview_url" ]; then
             preview_url=$(printf '%s' "$WRANGLER_OUTPUT" \

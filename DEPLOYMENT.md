@@ -8,8 +8,8 @@ a deployable Worker and auto-generates the wrangler config.
 
 | Trigger | Workflow | Result |
 | --- | --- | --- |
-| Push to `main` | `.github/workflows/deploy-production.yml` | Production: `https://mugen-docs.<subdomain>.workers.dev` |
-| Open / update a PR | `.github/workflows/deploy-preview.yml` | Per-PR preview: `https://pr-<number>-mugen-docs.<subdomain>.workers.dev` |
+| Push to `main` | `.github/workflows/deploy-production.yml` | Production: `https://mugen.<subdomain>.workers.dev` |
+| Open / update a PR | `.github/workflows/deploy-preview.yml` | Per-PR preview: `https://pr-<number>-mugen.<subdomain>.workers.dev` |
 
 `<subdomain>` is your account's `workers.dev` subdomain (chosen in step 1).
 
@@ -19,7 +19,7 @@ a deployable Worker and auto-generates the wrangler config.
 `cloudflare.deployConfig: true`. That produces:
 
 - `apps/docs/.output/server/` — the Worker (`index.mjs`) + generated
-  `wrangler.json` (name `mugen-docs`, `nodejs_compat`, `ASSETS` binding).
+  `wrangler.json` (name `mugen`, `nodejs_compat`, `ASSETS` binding).
 - `apps/docs/.output/public/` — prerendered HTML + static assets.
 - `apps/docs/.wrangler/deploy/config.json` — a Cloudflare
   [redirected config](https://developers.cloudflare.com/workers/wrangler/configuration#generated-wrangler-configuration)
@@ -65,7 +65,7 @@ Repo → **Settings → Secrets and variables → Actions → New repository sec
 ### 5. First production deploy
 
 Push to `main` (or run a manual deploy locally — see below). This creates the
-`mugen-docs` Worker. After it exists, PR previews work on every pull request.
+`mugen` Worker. After it exists, PR previews work on every pull request.
 
 > Add a remote first if you haven't: `git remote add origin <url>`. The `gh`
 > CLI isn't installed here, so create the GitHub repo + push manually (or
@@ -93,7 +93,7 @@ it from `apps/docs` after a build. First-time local use needs auth:
   skipped for forks (they still deploy to production once merged). For
   same-repo branches it works normally.
 - **Custom domain.** To serve production on your own domain instead of
-  `workers.dev`, add a route/custom domain to the `mugen-docs` Worker in the
+  `workers.dev`, add a route/custom domain to the `mugen` Worker in the
   dashboard (or add `routes` under `cloudflare.wrangler` in `vite.config.ts`).
 - **Environment variables / bindings.** Because `deployConfig: true` makes the
   generated config the source of truth, dashboard-set vars are ignored at

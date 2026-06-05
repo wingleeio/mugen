@@ -44,11 +44,11 @@ export default defineConfig({
               nodeCompat: true,
               // Merged into the generated `.output/server/wrangler.json`.
               // `name` is the Worker name (production URL becomes
-              // `mugen-docs.<subdomain>.workers.dev`); the explicit
+              // `mugen.<subdomain>.workers.dev`); the explicit
               // `compatibility_date` guarantees the >= 2024-09-19 that
               // Workers-with-static-assets requires.
               wrangler: {
-                name: 'mugen-docs',
+                name: 'mugen',
                 compatibility_date: '2024-11-01',
               },
             },
