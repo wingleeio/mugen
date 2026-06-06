@@ -723,14 +723,15 @@ function AiChatExample(): ReactNode {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div className="flex items-center justify-between border-b bg-fd-muted/30 px-3 py-2">
-        <span className="font-mono text-[11px] text-fd-muted-foreground">
-          {CONVO.length.toLocaleString()} messages · streaming · stick-to-bottom
+      <div className="flex items-center justify-between gap-2 border-b bg-fd-muted/30 px-3 py-2">
+        <span className="min-w-0 truncate font-mono text-[11px] text-fd-muted-foreground">
+          {CONVO.length.toLocaleString()} messages
+          <span className="hidden sm:inline"> · streaming · stick-to-bottom</span>
         </span>
         <button
           type="button"
           onClick={() => setRunId((r) => r + 1)}
-          className="inline-flex items-center gap-1.5 rounded-lg border bg-fd-background px-2.5 py-1 font-mono text-xs text-fd-muted-foreground transition-colors hover:text-fd-foreground"
+          className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border bg-fd-background px-2.5 py-1 font-mono text-xs text-fd-muted-foreground transition-colors hover:text-fd-foreground"
         >
           ↻ Replay
         </button>
