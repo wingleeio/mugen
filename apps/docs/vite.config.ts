@@ -9,14 +9,12 @@ import { nitro } from 'nitro/vite';
 // this Vite 8 / Nitro 3 beta stack — interactive `vite dev` throws
 // "Vite environment 'ssr' is unavailable". The `dev` scripts set
 // DISABLE_NITRO=1 so dev uses TanStack Start's in-process SSR instead, while
-// `vite build` (and the prerender preview server it spawns) keeps Nitro.
+// `vite build` keeps Nitro.
 const disableNitro = process.env.DISABLE_NITRO === '1';
 
-// Prerendering crawls the built routes by spawning the Cloudflare Worker under
-// workerd. That worker-based crawl hangs on CI runners, so CI sets
-// DISABLE_PRERENDER=1 and ships an SSR-only Worker (every route is rendered on
-// demand at the edge, which we verify in production). Local/manual builds keep
-// prerendering, which works fine there.
+// Escape hatch to skip prerendering and ship an SSR-only build (every route
+// rendered on demand). Prerendering renders routes in-process, which is fine on
+// Vercel — but keep the switch for CI/debugging.
 const disablePrerender = process.env.DISABLE_PRERENDER === '1';
 
 export default defineConfig({
@@ -35,33 +33,15 @@ export default defineConfig({
       },
     }),
     react(),
-    // Production target: Cloudflare Workers (with static assets). The
-    // `cloudflare_module` preset is Cloudflare's recommended modern target.
-    // `deployConfig: true` makes Nitro emit `.wrangler/deploy/config.json`
-    // (Cloudflare's "redirected" wrangler config that points wrangler at the
-    // build output), so `wrangler deploy` / `wrangler versions upload` work
-    // with zero hand-written wrangler config. Workers + static assets needs a
-    // compatibility date >= 2024-09-19.
-    // https://nitro.build/deploy/providers/cloudflare
+    // Production target: Vercel. Nitro's `vercel` preset emits a
+    // `.vercel/output` Build Output API directory that Vercel deploys directly —
+    // no adapter config, no wrangler. https://nitro.build/deploy/providers/vercel
     ...(disableNitro
       ? []
       : [
           nitro({
-            preset: 'cloudflare_module',
+            preset: 'vercel',
             compatibilityDate: '2024-11-01',
-            cloudflare: {
-              deployConfig: true,
-              nodeCompat: true,
-              // Merged into the generated `.output/server/wrangler.json`.
-              // `name` is the Worker name (production URL becomes
-              // `mugen.<subdomain>.workers.dev`); the explicit
-              // `compatibility_date` guarantees the >= 2024-09-19 that
-              // Workers-with-static-assets requires.
-              wrangler: {
-                name: 'mugen',
-                compatibility_date: '2024-11-01',
-              },
-            },
           }),
         ]),
   ],

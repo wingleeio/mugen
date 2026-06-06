@@ -10,7 +10,7 @@
     "start": "vite preview",
     "preview": "vite preview",
     "check-types": "fumadocs-mdx && tsc --noEmit",
-    "clean": "rm -rf .output .nitro .vercel .source build dist .turbo"
+    "clean": "rm -rf .output .nitro .vercel .wrangler .source build dist .turbo"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.9",
@@ -41,7 +41,6 @@
     "nitro": "3.0.260522-beta",
     "shiki": "^4.2.0",
     "tailwindcss": "^4.3.0",
-    "typescript": "^6.0.3",
-    "wrangler": "^4.98.0"
+    "typescript": "^6.0.3"
   }
 }
