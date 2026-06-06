@@ -128,13 +128,13 @@ function DemoList() {
     list.scrollToItem(String(i), { behavior: 'smooth', align: 'center' });
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-2 border-b px-4 py-2.5 font-mono text-[11px] text-fd-muted-foreground">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-2 border-b px-4 py-2.5 font-mono text-[11px] text-fd-muted-foreground">
         <span className="tabular-nums text-fd-foreground">{items.length.toLocaleString()}</span>
         <span>rows · click one to expand</span>
-        <div className="ml-auto flex gap-1">
+        <div className="ml-auto flex shrink-0 gap-1">
           <JumpButton onClick={() => jump(0)}>Top</JumpButton>
           <JumpButton onClick={() => jump(500)}>#500</JumpButton>
-          <JumpButton onClick={() => jump(1900)}>Jump to #1,900</JumpButton>
+          <JumpButton onClick={() => jump(1900)}>#1,900</JumpButton>
         </div>
       </div>
       <MugenVList
