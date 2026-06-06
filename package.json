@@ -13,9 +13,14 @@
     "test": "turbo run test",
     "check-types": "turbo run check-types",
     "lint": "turbo run lint",
-    "clean": "turbo run clean"
+    "clean": "turbo run clean",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "turbo run build --filter=@wingleeio/mugen && changeset publish"
   },
   "devDependencies": {
+    "@changesets/changelog-github": "^0.7.0",
+    "@changesets/cli": "^2.31.0",
     "turbo": "^2.9.16",
     "typescript": "^6.0.3"
   },

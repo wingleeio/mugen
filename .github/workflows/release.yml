@@ -1,0 +1,51 @@
+name: Release
+
+# Publishes @wingleeio/mugen to npm via Changesets. On every push to main:
+#   - if there are unreleased changesets, it opens/updates a "Version Packages"
+#     PR that bumps the version and updates the changelog;
+#   - when that PR is merged (no changesets left), it publishes to npm.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Never run two releases at once.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write # commit the version bump + push git tags
+  pull-requests: write # open/update the "Version Packages" PR
+  id-token: write # npm provenance (OIDC)
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Changesets needs full history
+
+      - uses: pnpm/action-setup@v4 # version comes from package.json#packageManager
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22 # repo engines require >=22
+          cache: pnpm
+          registry-url: 'https://registry.npmjs.org'
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Create Version PR or publish
+        uses: changesets/action@v1
+        with:
+          version: pnpm version-packages
+          publish: pnpm release
+          commit: 'chore: version packages'
+          title: 'chore: version packages'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: 'true' # attach a build provenance attestation
