@@ -5,12 +5,20 @@ description: Install mugen and render your first analytic virtualized list.
 
 ## Install
 
-```npm
-npm i mugen @chenglou/pretext react react-dom
+```package-install
+@wingleeio/mugen react react-dom
 ```
 
-`@chenglou/pretext` is a peer-ish runtime dependency (mugen calls it to measure
-text). React 18.2+ or 19 is required.
+React 18.2+ or 19 is required.
+
+mugen measures text with [`@chenglou/pretext`](https://www.npmjs.com/package/@chenglou/pretext)
+and depends on it directly, so it's installed for you — you don't add it
+yourself. That dependency is **pinned to an exact version** (`@chenglou/pretext`
+is pre-1.0 and its API still moves between releases), so every mugen install
+resolves the same, known-good pretext; a new pretext is adopted only by a new
+mugen release. If you reach for pretext's escape hatches, import them from
+`@wingleeio/mugen` (e.g. `prepareText`, `measureText`) rather than installing
+pretext separately, so you stay on that one pinned copy.
 
 ## Your first list
 
@@ -22,7 +30,7 @@ A list is two pieces:
   a `render` that returns each row as a tree of **primitives**.
 
 ```tsx twoslash
-import { MugenVList, Text, VStack, useMugenVirtualizer } from 'mugen';
+import { MugenVList, Text, VStack, useMugenVirtualizer } from '@wingleeio/mugen';
 
 interface Comment {
   id: string;
@@ -73,7 +81,7 @@ rejected — its metrics differ per OS, so heights would drift from what the use
 sees.
 
 ```ts twoslash
-import type { Font } from 'mugen';
+import type { Font } from '@wingleeio/mugen';
 // ---cut---
 const ok: Font = '16px Inter'; // ✓ measured against the font engine
 const sys: Font = '16px system-ui'; // type-ok, but throws at runtime (per-OS metrics)

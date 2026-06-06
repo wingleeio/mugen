@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const SNIPPETS = {
-  contractHtml: `import { MugenVList, Text, VStack, useMugenVirtualizer } from 'mugen';
+  contractHtml: `import { MugenVList, Text, VStack, useMugenVirtualizer } from '@wingleeio/mugen';
 
 function Inbox({ messages }: { messages: Message[] }) {
   const list = useMugenVirtualizer({ items: messages });
@@ -30,7 +30,7 @@ function Inbox({ messages }: { messages: Message[] }) {
   demoSourceHtml: `import {
   MugenVList, Text, VStack, HStack,
   definePrimitive, useMugenState, useMugenVirtualizer,
-} from 'mugen';
+} from '@wingleeio/mugen';
 
 interface Msg { id: string; author: string; color: string; body: string }
 
@@ -64,7 +64,7 @@ function Chat({ messages }: { messages: Msg[] }) {
   );
 }`,
 
-  chatHtml: `import { MugenVList, Text, VStack, HStack, useMugenVirtualizer } from 'mugen';
+  chatHtml: `import { MugenVList, Text, VStack, HStack, useMugenVirtualizer } from '@wingleeio/mugen';
 
 interface Msg { id: string; author: string; color: string; text: string }
 
@@ -91,7 +91,7 @@ function Chat({ messages }: { messages: Msg[] }) {
   accordionHtml: `import {
   MugenVList, Text, VStack, definePrimitive,
   useMugenState, useMugenVirtualizer,
-} from 'mugen';
+} from '@wingleeio/mugen';
 
 interface Faq { id: string; q: string; a: string }
 
@@ -120,7 +120,7 @@ function Faqs({ items }: { items: Faq[] }) {
   markdownHtml: `import {
   MugenVList, Text, VStack,
   useMugenEffect, useMugenState, useMugenVirtualizer,
-} from 'mugen';
+} from '@wingleeio/mugen';
 
 interface Note { id: string; md: string }
 
@@ -156,7 +156,7 @@ function Notes({ items }: { items: Note[] }) {
   aiChatHtml: `import {
   MugenVList, Text, VStack, HStack, definePrimitive,
   useMugenState, useMugenEffect, useMugenVirtualizer,
-} from 'mugen';
+} from '@wingleeio/mugen';
 
 interface Tool { kind: 'search' | 'read' | 'run' | 'web'; title: string; detail?: string }
 interface Turn {

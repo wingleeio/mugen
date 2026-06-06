@@ -10,7 +10,7 @@ engine and scroll position. The item type `T` is inferred from `items`. Give the
 returned `instance` to `<MugenVList>`.
 
 ```ts twoslash
-import { useMugenVirtualizer } from 'mugen';
+import { useMugenVirtualizer } from '@wingleeio/mugen';
 interface Item {
   id: string;
 }
@@ -25,7 +25,7 @@ The library never inspects `T`. Branch on row shape with a `switch` inside
 ## `<MugenVList>`
 
 ```tsx twoslash
-import { MugenVList, Text, VStack, useMugenVirtualizer } from 'mugen';
+import { MugenVList, Text, VStack, useMugenVirtualizer } from '@wingleeio/mugen';
 interface Item {
   id: string;
   text: string;
@@ -65,7 +65,7 @@ const instance = useMugenVirtualizer({ items });
 Called inside `render`. See [State & Hooks](/docs/state) and [Effects](/docs/effects).
 
 ```ts twoslash
-import { useMugenState, useMugenMemo, useMugenEffect } from 'mugen';
+import { useMugenState, useMugenMemo, useMugenEffect } from '@wingleeio/mugen';
 declare const init: number;
 declare const factory: () => string[];
 declare const deps: readonly unknown[];
@@ -83,7 +83,7 @@ O(log n). `useMugenEffect` runs on a microtask after measure, for **every** row
 ## `MugenInstance`
 
 ```ts twoslash
-import type { MugenInstance } from 'mugen';
+import type { MugenInstance } from '@wingleeio/mugen';
 interface Item {
   id: string;
 }
@@ -96,7 +96,7 @@ instance.totalHeight(); // exact scrollable height (px)
 ```
 
 ```ts twoslash
-import type { ScrollToOptions } from 'mugen';
+import type { ScrollToOptions } from '@wingleeio/mugen';
 // ---cut---
 const options: ScrollToOptions = {
   behavior: 'smooth', // 'auto' | 'smooth'

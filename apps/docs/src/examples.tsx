@@ -8,7 +8,7 @@ import {
   useMugenState,
   useMugenVirtualizer,
   VStack,
-} from 'mugen';
+} from '@wingleeio/mugen';
 import { chatHtml, accordionHtml, markdownHtml, aiChatHtml } from './components/highlighted';
 
 const scrollCls = 'mu-scroll [&>div>div>div]:border-b [&>div>div>div]:border-fd-border/50';

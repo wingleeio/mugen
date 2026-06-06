@@ -22,7 +22,7 @@ and a `set` re-measures **only that row** (O(log n)), even off-screen.
 import {
   MugenVList, Text, VStack, definePrimitive,
   useMugenState, useMugenVirtualizer,
-} from 'mugen';
+} from '@wingleeio/mugen';
 
 interface Thread {
   id: string;
@@ -64,7 +64,7 @@ but readable in the measure walk — use it to keep expensive per-row derivation
 of the hot path (the walker re-runs a row's body on every re-measure).
 
 ```tsx twoslash
-import { Text, VStack, useMugenMemo } from 'mugen';
+import { Text, VStack, useMugenMemo } from '@wingleeio/mugen';
 
 declare function splitIntoParagraphs(md: string): string[];
 

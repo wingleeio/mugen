@@ -8,10 +8,22 @@ there's no measure-on-mount layout shift.
 
 Full documentation lives in [`apps/docs`](../../apps/docs).
 
+## Install
+
+```bash
+npm i @wingleeio/mugen react react-dom
+```
+
+mugen depends on `@chenglou/pretext` (its text-measurement engine) and **pins it
+to an exact version** — pretext is pre-1.0 and its API still moves between
+releases, so it's installed for you and locked; a new pretext is adopted only by
+a new mugen release. Don't install pretext yourself; if you need its escape
+hatches, import them from `@wingleeio/mugen`. React 18.2+ or 19 is required.
+
 ## Quick start
 
 ```tsx
-import { MugenVList, Text, VStack, useMugenVirtualizer } from 'mugen';
+import { MugenVList, Text, VStack, useMugenVirtualizer } from '@wingleeio/mugen';
 
 function Inbox({ messages }: { messages: Message[] }) {
   const list = useMugenVirtualizer({ items: messages });
@@ -41,8 +53,8 @@ function Inbox({ messages }: { messages: Message[] }) {
 ## Develop
 
 ```bash
-pnpm --filter mugen test          # node tests (happy-dom, pretext mocked)
-pnpm --filter mugen test:browser  # real-browser accuracy gate (Playwright/Chromium)
-pnpm --filter mugen check-types
-pnpm --filter mugen build         # ESM + CJS + d.ts via tsdown
+pnpm --filter @wingleeio/mugen test          # node tests (happy-dom, pretext mocked)
+pnpm --filter @wingleeio/mugen test:browser  # real-browser accuracy gate (Playwright/Chromium)
+pnpm --filter @wingleeio/mugen check-types
+pnpm --filter @wingleeio/mugen build         # ESM + CJS + d.ts via tsdown
 ```

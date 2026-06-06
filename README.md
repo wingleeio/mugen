@@ -39,8 +39,8 @@ Run from the repo root (Turborepo orchestrates the workspaces):
 To work on a single workspace, use a filter, e.g.:
 
 ```bash
-pnpm --filter docs dev      # docs site only
-pnpm --filter mugen build   # the mugen package only
+pnpm --filter docs dev               # docs site only
+pnpm --filter @wingleeio/mugen build # the mugen package only
 ```
 
 ## Local domains (Portless) — one per worktree

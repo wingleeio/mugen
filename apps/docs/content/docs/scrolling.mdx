@@ -8,7 +8,7 @@ row's offset is known analytically — on- or off-screen — scrolling to a spec
 item lands **pixel-exact** on the first try, with no measure-and-correct dance.
 
 ```tsx twoslash
-import { MugenVList, Text, VStack, useMugenVirtualizer } from 'mugen';
+import { MugenVList, Text, VStack, useMugenVirtualizer } from '@wingleeio/mugen';
 
 interface Row {
   id: string;
@@ -51,7 +51,7 @@ export function List({ rows }: { rows: Row[] }) {
 ## Options
 
 ```ts twoslash
-import type {} from 'mugen'; // mark this a module so the interface stays local
+import type {} from '@wingleeio/mugen'; // mark this a module so the interface stays local
 // ---cut---
 interface ScrollToOptions {
   behavior?: 'auto' | 'smooth';

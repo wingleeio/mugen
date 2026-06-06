@@ -20,7 +20,7 @@ identical font, line-height, and spacing, so the two agree. `font`/`lineHeight`
 fall back to the [list defaults](/docs/fonts) on `<MugenVList>`.
 
 ```tsx twoslash
-import { Text } from 'mugen';
+import { Text } from '@wingleeio/mugen';
 declare const item: { title: string; body: string; bubble: string };
 // ---cut---
 <Text>{item.body}</Text>; // inherits the list font
@@ -46,7 +46,7 @@ max child height and distributes width — fixed-width siblings keep their `widt
 the rest share the remainder (so a `Text` slot grows).
 
 ```tsx twoslash
-import { HStack, VStack, Text } from 'mugen';
+import { HStack, VStack, Text } from '@wingleeio/mugen';
 declare const item: { author: string; body: string; color: string };
 // ---cut---
 // avatar | (author over body)
@@ -81,7 +81,7 @@ chrome props — plus the tag's own attributes passed straight through, so a
 `button` is clickable and an `a` takes an `href`.
 
 ```tsx twoslash
-import { definePrimitive, Text } from 'mugen';
+import { definePrimitive, Text } from '@wingleeio/mugen';
 declare const item: { label: string };
 declare function openItem(item: unknown): void;
 // ---cut---
@@ -105,7 +105,7 @@ owned by props — setting them via raw CSS or a utility class is a **type error
 
 ```tsx twoslash
 // @errors: 2353 2322
-import { VStack } from 'mugen';
+import { VStack } from '@wingleeio/mugen';
 // ---cut---
 <VStack style={{ padding: 8 }} />; // ✗ use the `padding` prop
 <VStack className="p-4 gap-2" />; // ✗ spacing utilities break measurement

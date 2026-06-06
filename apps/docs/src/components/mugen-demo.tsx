@@ -7,7 +7,7 @@ import {
   useMugenState,
   useMugenVirtualizer,
   VStack,
-} from 'mugen';
+} from '@wingleeio/mugen';
 import { demoSourceHtml } from './highlighted';
 
 interface Msg {

@@ -35,6 +35,9 @@ importers:
       '@tanstack/react-start':
         specifier: 1.168.14
         version: 1.168.14(crossws@0.4.5(srvx@0.11.16))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vite@8.0.16(@types/node@25.9.1)(esbuild@0.28.0)(jiti@2.7.0))
+      '@wingleeio/mugen':
+        specifier: workspace:*
+        version: link:../../packages/mugen
       fumadocs-core:
         specifier: ^16.9.3
         version: 16.9.3(@mdx-js/mdx@3.1.1)(@tanstack/react-router@1.170.8(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.16)(lucide-react@1.17.0(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(zod@4.4.3)
@@ -50,9 +53,6 @@ importers:
       lucide-react:
         specifier: ^1.17.0
         version: 1.17.0(react@19.2.7)
-      mugen:
-        specifier: workspace:*
-        version: link:../../packages/mugen
       react:
         specifier: ^19.2.6
         version: 19.2.7
@@ -106,7 +106,7 @@ importers:
   packages/mugen:
     dependencies:
       '@chenglou/pretext':
-        specifier: ^0.0.7
+        specifier: 0.0.7
         version: 0.0.7
       use-sync-external-store:
         specifier: ^1.6.0

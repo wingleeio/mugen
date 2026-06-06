@@ -9,7 +9,7 @@ heights can't drift. Each `Text` carries its own font; `<MugenVList>` supplies
 the engine needs to measure) lives on the list.
 
 ```tsx twoslash
-import { MugenVList, useMugenVirtualizer } from 'mugen';
+import { MugenVList, useMugenVirtualizer } from '@wingleeio/mugen';
 import type { ReactNode } from 'react';
 interface Msg {
   id: string;
@@ -62,7 +62,7 @@ covers the body; override on the `Text` for the exceptions — used for both
 measure and render, so they stay in sync:
 
 ```tsx twoslash
-import { VStack, Text } from 'mugen';
+import { VStack, Text } from '@wingleeio/mugen';
 declare const item: { author: string; body: string };
 // ---cut---
 <VStack gap={2}>
@@ -79,7 +79,7 @@ style and/or weight, then a `size+unit`, then a family.
 
 ```ts twoslash
 // @errors: 2322
-import type { Font } from 'mugen';
+import type { Font } from '@wingleeio/mugen';
 // ---cut---
 const a: Font = '16px Inter'; // ✓
 const b: Font = '600 14px Inter'; // ✓

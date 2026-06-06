@@ -20,7 +20,7 @@ becomes exact without ever scrolling to it.
 import {
   MugenVList, Text, VStack,
   useMugenEffect, useMugenState, useMugenVirtualizer,
-} from 'mugen';
+} from '@wingleeio/mugen';
 
 interface Post {
   id: string;
@@ -73,7 +73,7 @@ to the real, parsed height — no layout shift, no measure-on-mount.
 The same shape — and pair it with `useMugenMemo` for the cheap synchronous split:
 
 ```tsx twoslash
-import { Text, VStack, useMugenEffect, useMugenMemo, useMugenState } from 'mugen';
+import { Text, VStack, useMugenEffect, useMugenMemo, useMugenState } from '@wingleeio/mugen';
 
 interface Snippet {
   id: string;

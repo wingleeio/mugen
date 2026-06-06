@@ -28,7 +28,7 @@ your own `definePrimitive(tag)`) and hook-free components composed from them. A 
 `<div>` has no `measure` and breaks the walk — so a row's `render` may return:
 
 ```tsx twoslash
-import { VStack, Text } from 'mugen';
+import { VStack, Text } from '@wingleeio/mugen';
 declare const item: { text: string };
 // ---cut---
 <div>{item.text}</div>; // ❌ runtime: not measurable
