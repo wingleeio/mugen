@@ -127,10 +127,6 @@ function Home() {
               {() => <DemoShowcase />}
             </ClientOnly>
           </div>
-          <p className="mt-3 text-center text-sm text-fd-muted-foreground">
-            2,000 messages of wildly different lengths, fully virtualized. Heights are computed —
-            &ldquo;Expand all&rdquo; resizes every row, on-screen or not, with zero DOM measurement.
-          </p>
         </section>
 
         {/* ── Features ── */}

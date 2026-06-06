@@ -20,7 +20,8 @@ a deployable Worker and auto-generates the wrangler config.
 
 - `apps/docs/.output/server/` — the Worker (`index.mjs`) + generated
   `wrangler.json` (name `mugen`, `nodejs_compat`, `ASSETS` binding).
-- `apps/docs/.output/public/` — prerendered HTML + static assets.
+- `apps/docs/.output/public/` — client assets (plus prerendered HTML on local
+  builds; CI builds with `DISABLE_PRERENDER=1`, see Notes).
 - `apps/docs/.wrangler/deploy/config.json` — a Cloudflare
   [redirected config](https://developers.cloudflare.com/workers/wrangler/configuration#generated-wrangler-configuration)
   pointing wrangler at the generated config. `wrangler deploy` /
@@ -101,3 +102,9 @@ it from `apps/docs` after a build. First-time local use needs auth:
   `nitro({ cloudflare: { wrangler: { … } } })` in `apps/docs/vite.config.ts`.
 - **Preview cleanup.** Per-PR aliases are reassigned on each push and expire
   with their Worker versions; there's no explicit teardown step.
+- **Prerendering is off in CI.** Prerendering crawls routes by running the
+  Worker under workerd, which hangs on GitHub's runners. Both workflows set
+  `DISABLE_PRERENDER=1` (declared in `turbo.json`), so CI ships an SSR-only
+  Worker — every route renders on demand at the edge and is cached there.
+  Local/manual `pnpm build` still prerenders. Re-enable in CI by dropping the
+  env once the workerd-crawl issue is resolved.

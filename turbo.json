@@ -4,6 +4,7 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "env": ["DISABLE_PRERENDER", "DISABLE_NITRO"],
       "outputs": [
         "dist/**",
         "build/**",

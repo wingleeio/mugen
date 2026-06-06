@@ -66,3 +66,45 @@ interface ScrollToOptions {
 
 Call these from anywhere you hold the instance — an effect, an event handler, a
 deep-link router. The instance is stable across renders.
+
+## Start at the bottom
+
+Chat-style lists open at the newest message, not the oldest. Pass
+`initialScroll="bottom"` to `<MugenVList>` and it opens scrolled to the end:
+
+```tsx
+<MugenVList instance={list} getKey={(m) => m.id} render={Message} initialScroll="bottom" />
+```
+
+It's applied once, after the first measure and **before paint** — no
+top-to-bottom flash, no blank gap. Because every row's height is already known,
+the landing is exact even though those rows have never mounted. The default is
+`"top"`. To animate the landing instead of jumping, pass an object:
+
+```tsx
+<MugenVList … initialScroll={{ to: 'bottom', behavior: 'smooth' }} />
+```
+
+## Stick to the bottom while streaming
+
+For a chat that streams tokens, set `stickToBottom` and the list stays pinned to
+the bottom as content grows — following each new token with a velocity-based
+spring. The instant the reader scrolls up it lets go; when they return to the
+bottom it re-engages:
+
+```tsx
+<MugenVList … initialScroll="bottom" stickToBottom />
+```
+
+Tune the spring — or snap instantly — by passing options:
+
+```tsx
+<MugenVList
+  …
+  stickToBottom={{ behavior: 'smooth', damping: 0.7, stiffness: 0.05, mass: 1.25, threshold: 70 }}
+/>
+```
+
+`threshold` is how close to the bottom (px) still counts as "stuck". See both in
+the [AI chat recipe](/docs/recipes#ai-chat-with-thinking--steps): it streams the
+last turn and follows it down, and you can scroll up to break free or hit Replay.

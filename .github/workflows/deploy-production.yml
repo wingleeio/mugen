@@ -26,6 +26,7 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 15 # safety net so a hung build can't run for hours
     steps:
       - uses: actions/checkout@v4
 
@@ -39,6 +40,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm build # turbo builds `mugen` then `docs`
+        env:
+          # Prerender crawls routes under workerd, which hangs on CI runners.
+          # Ship an SSR-only Worker; every route renders on demand at the edge.
+          DISABLE_PRERENDER: '1'
 
       - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v4
