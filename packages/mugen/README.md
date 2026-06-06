@@ -11,14 +11,15 @@ Full documentation lives in [`apps/docs`](../../apps/docs).
 ## Install
 
 ```bash
-npm i @wingleeio/mugen react react-dom
+npm i @wingleeio/mugen
 ```
 
-mugen depends on `@chenglou/pretext` (its text-measurement engine) and **pins it
-to an exact version** — pretext is pre-1.0 and its API still moves between
-releases, so it's installed for you and locked; a new pretext is adopted only by
-a new mugen release. Don't install pretext yourself; if you need its escape
-hatches, import them from `@wingleeio/mugen`. React 18.2+ or 19 is required.
+React 18.2+ or 19 is required — it's a peer dependency, so your app already has
+it. mugen depends on `@chenglou/pretext` (its text-measurement engine) and
+**pins it to an exact version** — pretext is pre-1.0 and its API still moves
+between releases, so it's installed for you and locked; a new pretext is adopted
+only by a new mugen release. Don't install pretext yourself; if you need its
+escape hatches, import them from `@wingleeio/mugen`.
 
 ## Quick start
 
