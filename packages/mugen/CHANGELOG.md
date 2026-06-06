@@ -1,5 +1,11 @@
 # @wingleeio/mugen
 
+## 0.2.1
+
+### Patch Changes
+
+- [`d53d0f1`](https://github.com/wingleeio/mugen/commit/d53d0f150dca26717123d60f034e62993e018214) Thanks [@wingleeio](https://github.com/wingleeio)! - Fix `stickToBottom` overpowering a slow scroll-up: the stick now breaks on any upward move and re-engages only when returning toward the bottom, instead of re-sticking whenever within the "near bottom" threshold. Touch drags that pull up before lifting near the bottom no longer snap back.
+
 ## 0.2.0
 
 ### Minor Changes
