@@ -175,16 +175,22 @@ function TurnRow(item: Turn) {
   // Collapse / expand the reasoning — re-measures just this row, O(log n).
   const [open, setOpen] = useMugenState(!!item.live);
 
-  // The final turn "works", then streams its answer in.
-  const [streamed, setStreamed] = useMugenState(!item.live);
+  // The live turn streams its answer in, word by word.
+  const words = item.body.join(' ').split(' ');
+  const [shown, setShown] = useMugenState(item.live ? 0 : words.length);
   useMugenEffect(() => {
     if (!item.live) return;
-    const t = setTimeout(() => setStreamed(true), 1100);
-    return () => clearTimeout(t);
+    let n = 0;
+    const id = setInterval(() => {
+      n += 1;
+      setShown(n);
+      if (n >= words.length) clearInterval(id);
+    }, 60);
+    return () => clearInterval(id);
   }, [item.id]);
 
-  const working = item.live && !streamed;
   if (item.role === 'user') return <UserBubble item={item} />;
+  const streaming = item.live && shown < words.length;
 
   return (
     <VStack gap={12} padding={20}>
@@ -192,7 +198,7 @@ function TurnRow(item: Turn) {
         <VStack gap={open ? 9 : 0}>
           <Disclosure onClick={() => setOpen((o) => !o)}>
             <Text font="500 11.5px 'Geist Mono Variable'" color="gray">
-              {(open ? '▾ ' : '▸ ') + (working ? 'Thinking…' : 'Thought for 2.7s')}
+              {open ? '▾ Thought for 2.7s' : '▸ Thought for 2.7s'}
             </Text>
           </Disclosure>
           {open ? <Reasoning text={item.thinking} /> : null}
@@ -200,22 +206,24 @@ function TurnRow(item: Turn) {
       ) : null}
 
       {item.tools?.map((t, i) => (
-        <ToolCard key={i} tool={t} running={working && i === item.tools!.length - 1} />
+        <ToolCard key={i} tool={t} running={streaming && i === item.tools!.length - 1} />
       ))}
 
-      {working
-        ? <Text color="gray">Writing the answer…</Text>
+      {item.live
+        ? <Text>{words.slice(0, shown).join(' ') + (streaming ? ' ▍' : '')}</Text>
         : item.body.map((p, i) => <Text key={i}>{p}</Text>)}
     </VStack>
   );
 }
 
+// Opens at the latest turn and follows the stream down — scroll up to break free.
 function Chat({ turns }: { turns: Turn[] }) {
   const list = useMugenVirtualizer({ items: turns });
   return (
     <MugenVList
       instance={list} getKey={(t) => t.id} render={TurnRow}
       font="15px Inter" lineHeight={24} maxW={720}
+      initialScroll="bottom" stickToBottom
     />
   );
 }`,

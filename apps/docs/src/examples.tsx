@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import {
   definePrimitive,
   HStack,
@@ -237,6 +237,7 @@ const AC = {
   hairline: 'color-mix(in oklab, var(--color-fd-foreground) 10%, transparent)',
   card: 'color-mix(in oklab, var(--color-fd-foreground) 4%, transparent)',
   bubble: 'color-mix(in oklab, var(--color-fd-foreground) 6%, transparent)',
+  rule: 'color-mix(in oklab, var(--color-fd-foreground) 20%, transparent)',
 } as const;
 
 const MONO = "'Geist Mono Variable', monospace";
@@ -343,21 +344,16 @@ function ToolCard({ tool, running }: { tool: Tool; running?: boolean }): ReactNo
 }
 
 function Reasoning({ text }: { text: string }): ReactNode {
+  // Claude/ChatGPT-style: just a thin left rule and muted text — no card, no
+  // border. `align="stretch"` makes the 2px rail fill the text's height; it
+  // measures as 0 so it never affects the row height.
   return (
-    <VStack
-      padding={12}
-      style={{
-        background: AC.card,
-        borderRadius: 11,
-        // Left accent + hairline as inset shadows so they never change the
-        // measured box (a real border would shift wrapping).
-        boxShadow: `inset 2px 0 0 0 ${AC.accent}, inset 0 0 0 1px ${AC.hairline}`,
-      }}
-    >
-      <Text font="13.5px Inter, sans-serif" lineHeight={21} color={AC.muted}>
+    <HStack gap={13} align="stretch">
+      <VStack width={2} style={{ background: AC.rule, borderRadius: 2 }} />
+      <Text font="14px Inter, sans-serif" lineHeight={23} color={AC.muted}>
         {text}
       </Text>
-    </VStack>
+    </HStack>
   );
 }
 
@@ -386,25 +382,28 @@ function UserTurn({ item }: { item: Turn }): ReactNode {
 function TurnRow(item: Turn): ReactNode {
   const isLive = !!item.live;
 
-  // Reasoning starts open on the "live" turn so you catch it thinking.
+  // Reasoning starts open on the "live" turn so you catch it working.
   const [open, setOpen] = useMugenState(isLive);
-  // The live turn streams its answer in after a beat; others are done already.
-  const [streamed, setStreamed] = useMugenState(!isLive);
+
+  // The live turn streams its answer in, word by word: useMugenEffect drives a
+  // timer, useMugenState holds how many words are revealed, and the row
+  // re-measures on each tick — so stickToBottom can follow it down smoothly.
+  const words = item.body.join(' ').split(' ');
+  const [revealed, setRevealed] = useMugenState(isLive ? 0 : words.length);
   useMugenEffect(() => {
     if (!isLive) return;
-    let cancelled = false;
-    const t = setTimeout(() => {
-      if (!cancelled) setStreamed(true);
-    }, 1100);
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-    };
-  }, [item.id, isLive]);
+    let n = 0;
+    const id = setInterval(() => {
+      n += 1;
+      setRevealed(n);
+      if (n >= words.length) clearInterval(id);
+    }, 60);
+    return () => clearInterval(id);
+  }, [item.id]);
 
   if (item.role === 'user') return <UserTurn item={item} />;
 
-  const working = isLive && !streamed;
+  const streaming = isLive && revealed < words.length;
 
   return (
     <VStack gap={12} padding={20}>
@@ -422,13 +421,8 @@ function TurnRow(item: Turn): ReactNode {
               <Text font={`600 11px ${MONO}`} lineHeight={16} color={AC.muted}>
                 {open ? '▾' : '▸'}
               </Text>
-              <Text
-                font={`500 11.5px ${MONO}`}
-                lineHeight={16}
-                color={AC.muted}
-                className={working ? 'mu-pulse' : undefined}
-              >
-                {working ? 'Thinking…' : `Thought for ${item.thoughtFor ?? '3.0s'}`}
+              <Text font={`500 11.5px ${MONO}`} lineHeight={16} color={AC.muted}>
+                {`Thought for ${item.thoughtFor ?? '3.0s'}`}
               </Text>
             </HStack>
           </Disclosure>
@@ -439,20 +433,15 @@ function TurnRow(item: Turn): ReactNode {
       {item.tools ? (
         <VStack gap={7}>
           {item.tools.map((t, i) => (
-            <ToolCard key={i} tool={t} running={working && i === item.tools!.length - 1} />
+            <ToolCard key={i} tool={t} running={streaming && i === item.tools!.length - 1} />
           ))}
         </VStack>
       ) : null}
 
-      {working ? (
-        <HStack gap={8} align="center">
-          <Text font="600 13px Inter, sans-serif" lineHeight={24} color={AC.accent} className="mu-pulse">
-            ●
-          </Text>
-          <Text font="15px Inter, sans-serif" lineHeight={24} color={AC.muted}>
-            Writing the answer…
-          </Text>
-        </HStack>
+      {isLive ? (
+        <Text font="15px Inter, sans-serif" lineHeight={24} color={AC.fg}>
+          {words.slice(0, revealed).join(' ') + (streaming ? ' ▍' : '')}
+        </Text>
       ) : (
         item.body.map((p, i) => (
           <Text key={i} font="15px Inter, sans-serif" lineHeight={24} color={AC.fg}>
@@ -622,18 +611,43 @@ const CONVO: Turn[] = [
 ];
 
 function AiChatExample(): ReactNode {
-  const list = useMugenVirtualizer({ items: CONVO });
+  // `runId` re-keys the live turn so Replay restarts its stream from scratch.
+  const [runId, setRunId] = useState(0);
+  const items = useMemo(
+    () => CONVO.map((t) => (t.live ? { ...t, id: `live-${runId}` } : t)),
+    [runId],
+  );
+  const list = useMugenVirtualizer({ items });
+
   return (
-    <MugenVList
-      instance={list}
-      getKey={(t) => t.id}
-      render={TurnRow}
-      font="15px Inter, sans-serif"
-      lineHeight={24}
-      maxW={720}
-      overscan={320}
-      className="mu-scroll"
-    />
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div className="flex items-center justify-between border-b bg-fd-muted/30 px-3 py-2">
+        <span className="font-mono text-[11px] text-fd-muted-foreground">
+          streaming · stick-to-bottom
+        </span>
+        <button
+          type="button"
+          onClick={() => setRunId((r) => r + 1)}
+          className="inline-flex items-center gap-1.5 rounded-lg border bg-fd-background px-2.5 py-1 font-mono text-xs text-fd-muted-foreground transition-colors hover:text-fd-foreground"
+        >
+          ↻ Replay
+        </button>
+      </div>
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <MugenVList
+          instance={list}
+          getKey={(t) => t.id}
+          render={TurnRow}
+          font="15px Inter, sans-serif"
+          lineHeight={24}
+          maxW={720}
+          overscan={320}
+          initialScroll="bottom"
+          stickToBottom
+          className="mu-scroll"
+        />
+      </div>
+    </div>
   );
 }
 
