@@ -463,8 +463,9 @@ function TurnRow(item: Turn): ReactNode {
   );
 }
 
-// A long, believable session so the list actually scrolls.
-const CONVO: Turn[] = [
+// The most recent stretch of the session — shown first since the list opens at
+// the bottom. A few thousand generated turns are prepended before it (below).
+const TAIL: Turn[] = [
   {
     id: '1',
     role: 'user',
@@ -622,6 +623,95 @@ const CONVO: Turn[] = [
   },
 ];
 
+// ── Synthetic history ────────────────────────────────────────────────────────
+// Pools cycled by index (no Math.random, so server and client agree on the
+// markup) into a few thousand believable turns of varied height. Scroll up from
+// the bottom to see them — and to watch O(log n) virtualization in action.
+
+const HISTORY_USER: string[] = [
+  'Can the list virtualize a feed where every item is a different height?',
+  'What happens to my scroll position when an image finishes loading in a row above me?',
+  'Do I have to give every row a fixed height? My content is all over the place.',
+  'How do I render a chat where some bubbles are one word and others are paragraphs?',
+  'Can I jump to an arbitrary message without mounting everything in between?',
+  'My rows have a header, a body, and sometimes a footer. Will the heights still be exact?',
+  'Can I keep per-row state like an expanded flag without re-rendering the whole list?',
+  'What does it cost to insert a message at the top while I’m scrolled to the bottom?',
+  'Does resizing the window re-measure everything, or is it cheaper than that?',
+  'How do code blocks with long lines affect the measured width?',
+  'If a row’s text changes after a translation loads, does the height update on its own?',
+  'Can two columns share the leftover width while a fixed avatar keeps its size?',
+  'Is there a measure-on-mount flash when I first paint the list?',
+  'How many rows can this handle before scrolling starts to chug?',
+];
+
+const HISTORY_ASST: string[][] = [
+  ['Yes — heights come from the text, font, and column width, so every row can differ and the list still knows its full scroll height up front.'],
+  ['It stays put. The height change is an O(log n) patch to the offset index and the visible slice is recomputed from the new offsets, so nothing under your cursor jumps.'],
+  ['No fixed heights. You describe each row as a tree of primitives and the walker derives the height analytically — one description feeds both the measure and the render.'],
+  ['Render the bubble as a VStack of Text. A one-word bubble measures to a single line, a paragraph wraps to many — both exact, because the column width drives the wrap.'],
+  ['scrollToItem resolves the row’s offset from the index without mounting anything in between, so it lands in one jump even for a row that has never rendered.'],
+  ['Exact. The header, body, and optional footer are primitives with gaps and padding the walker counts, so the total is their sum to the pixel.'],
+  [
+    'Keep the flag in useMugenState. Toggling re-measures just that row and patches the index; the rest of the list never re-renders.',
+    'Off-screen rows keep their state in the instance, so their heights are right before you ever scroll to them.',
+  ],
+  ['Cheap — a prepend shifts one entry in the Fenwick tree and re-anchors your scroll by the inserted height, so the bottom stays exactly where you left it.'],
+  ['Cheaper. A resize is pure arithmetic over the cached per-string metrics — no re-layout, no DOM reads — so it re-flows in a few milliseconds even for a big list.'],
+  ['The column width sets the wrap point. For code you cap the width and scroll horizontally inside the row; the measured height just follows whichever you pick.'],
+  ['On its own — swap the text in useMugenEffect, store it with useMugenState, and the affected rows re-measure to their new heights with zero layout shift.'],
+  ['Yes. Give the avatar a fixed width and let the text column take the remainder: fixed siblings keep their size, the rest share what’s left.'],
+  ['No flash. Heights are computed before paint, so the scrollbar and offsets are correct on the very first frame — there’s no mount-then-measure correction.'],
+  ['Comfortably into the hundreds of thousands. Only the visible slice mounts and everything hot is O(log n), so the row count stops being the bottleneck — your data is.'],
+];
+
+const HISTORY_THINK: string[] = [
+  'Heights derive from text + font + width via a cached canvas layout, so the list has its full scroll height without mounting any rows.',
+  'A Fenwick offset index turns one row’s height change into an O(log n) patch; the visible window is a binary search over offsets.',
+  'Per-row state lives in the instance, so off-screen rows have exact heights and re-measure on demand without a full re-render.',
+  'pretext caches prepare() per (font, string); a resize is arithmetic over the cached metrics, not a re-layout.',
+  'useMugenEffect runs for every row on a microtask after measure, so async content settles to an exact height with no shift.',
+];
+
+const HISTORY_TOOLS: Tool[][] = [
+  [{ kind: 'read', title: 'Read the concepts guide', detail: 'concepts.mdx' }],
+  [
+    { kind: 'search', title: 'Searched the API', detail: 'useMugenVirtualizer · MugenVList' },
+    { kind: 'run', title: 'Profiled a height patch', detail: 'O(log n) · 0.04ms' },
+  ],
+  [{ kind: 'run', title: 'Benchmarked the scroll', detail: '60fps · 200k rows' }],
+  [
+    { kind: 'read', title: 'Read the effects guide', detail: 'effects.mdx' },
+    { kind: 'web', title: 'Checked measureText()', detail: 'canvas text metrics' },
+  ],
+  [{ kind: 'search', title: 'Traced setMugenState → re-measure', detail: 'instance.ts' }],
+];
+
+const THOUGHT_FOR = ['1.4s', '2.1s', '1.8s', '2.6s', '0.9s', '3.0s'];
+
+function makeHistory(pairs: number): Turn[] {
+  const out: Turn[] = [];
+  for (let i = 0; i < pairs; i++) {
+    out.push({ id: `h${2 * i}`, role: 'user', body: [HISTORY_USER[i % HISTORY_USER.length]!] });
+    const asst: Turn = {
+      id: `h${2 * i + 1}`,
+      role: 'assistant',
+      body: HISTORY_ASST[i % HISTORY_ASST.length]!,
+    };
+    // Roughly every third reply shows a reasoning trace + tools, for height variety.
+    if (i % 3 === 0) {
+      asst.thoughtFor = THOUGHT_FOR[i % THOUGHT_FOR.length];
+      asst.thinking = HISTORY_THINK[i % HISTORY_THINK.length];
+      asst.tools = HISTORY_TOOLS[i % HISTORY_TOOLS.length];
+    }
+    out.push(asst);
+  }
+  return out;
+}
+
+// ~2984 generated turns + the 16 curated tail turns ≈ 3,000 messages.
+const CONVO: Turn[] = [...makeHistory(1492), ...TAIL];
+
 function AiChatExample(): ReactNode {
   // `runId` re-keys the live turn so Replay restarts its stream from scratch.
   const [runId, setRunId] = useState(0);
@@ -635,7 +725,7 @@ function AiChatExample(): ReactNode {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div className="flex items-center justify-between border-b bg-fd-muted/30 px-3 py-2">
         <span className="font-mono text-[11px] text-fd-muted-foreground">
-          streaming · stick-to-bottom
+          {CONVO.length.toLocaleString()} messages · streaming · stick-to-bottom
         </span>
         <button
           type="button"
