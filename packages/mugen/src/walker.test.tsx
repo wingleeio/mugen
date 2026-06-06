@@ -52,6 +52,25 @@ describe('walker: primitive measurement', () => {
     expect(h).toBe(LH + 16); // max(line, line) + 2×padding
   });
 
+  it('clamps a fixed-width child to the row, wrapping its text at the clamped width', () => {
+    // The child declares width 600 but the row is only 300 wide. It must be
+    // measured at 300 (clamped) — the painted child shrinks to the row via
+    // `max-width: 100%`, so measuring at 600 would under-count its wrapped lines
+    // and leave the row too short (the mobile chat-bubble overflow bug).
+    const bubble = (count: number) => (
+      <HStack>
+        <VStack width={600}>
+          <Text>{'x'.repeat(count)}</Text>
+        </VStack>
+      </HStack>
+    );
+    // 60 chars × 10px = 600px of text: 2 lines at the clamped width 300, but
+    // only 1 line at the un-clamped 600 — so this asserts the clamp happened.
+    expect(heightOf(bubble(60), 300, defaults)).toBe(2 * LH);
+    // A row wide enough for the declared width leaves it un-clamped: 1 line.
+    expect(heightOf(bubble(60), 600, defaults)).toBe(LH);
+  });
+
   it('a declared height is authoritative (ignores children)', () => {
     const h = heightOf(
       <VStack height={120}>

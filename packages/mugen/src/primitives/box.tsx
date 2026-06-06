@@ -72,7 +72,15 @@ function distribute(kids: ReactNode[], inner: number, gap: number): number[] {
   const totalGap = gap * Math.max(0, kids.length - 1);
   let fixedTotal = 0;
   let growCount = 0;
-  const declared = kids.map((k) => declaredWidth(k));
+  // A fixed child is capped at the row's inner width — it shrinks to fit rather
+  // than overflowing (the scroll container clips overflow-x). This mirrors the
+  // rendered `max-width: 100%`, so the measured width stays equal to the painted
+  // one and heights never desync. Without it, e.g. a 430px chat bubble on a
+  // 360px phone measures at 430 but paints clipped at 360.
+  const declared = kids.map((k) => {
+    const d = declaredWidth(k);
+    return d != null ? Math.min(d, inner) : null;
+  });
   for (const d of declared) {
     if (d != null) fixedTotal += d;
     else growCount++;
@@ -128,7 +136,15 @@ function renderBox(
     justifyContent: p.justify,
     ...(p.gap != null ? { gap: `${p.gap}px` } : null),
     ...(p.padding != null ? { padding: `${p.padding}px` } : null),
-    ...(p.width != null ? { flex: `0 0 ${p.width}px`, width: `${p.width}px` } : null),
+    // A fixed-width child keeps `flex-shrink: 0` so a wide sibling (e.g. a long
+    // message next to an avatar) can never squeeze it — the sibling wraps
+    // instead. `max-width: 100%` (with `min-width: 0`) still clamps the child to
+    // the row when its own declared width exceeds it (e.g. a 430px chat bubble
+    // on a 360px phone), which max-size clamping applies even at shrink 0. Both
+    // match the clamp the measure pass applies in `distribute`.
+    ...(p.width != null
+      ? { flex: `0 0 ${p.width}px`, width: `${p.width}px`, maxWidth: '100%', minWidth: 0 }
+      : null),
     ...(p.height != null ? { height: `${p.height}px` } : null),
     ...(p.style as CSSProperties | undefined),
   };

@@ -48,6 +48,23 @@ describe('ScrollController', () => {
     expect(c.escaped).toBe(false);
   });
 
+  it('stays stuck when content shrinks and clamps scrollTop (e.g. replay)', () => {
+    const c = new ScrollController();
+    const el = fakeEl(1000, 400, 600); // pinned at the bottom
+    c.attach(el);
+    expect(c.escaped).toBe(false);
+
+    // A live turn restarts and collapses: scrollHeight drops, so the browser
+    // clamps scrollTop down to the new max. That's a downward move, but we're
+    // still at the new bottom — it must not be mistaken for a user scroll-up.
+    const geom = el as unknown as { scrollHeight: number; scrollTop: number };
+    geom.scrollHeight = 700;
+    geom.scrollTop = 300; // 700 - 400, the clamped max
+    c.handleScroll(STICK_THRESHOLD_PX);
+    expect(c.distanceFromBottom()).toBe(0);
+    expect(c.escaped).toBe(false);
+  });
+
   it('attaching a new element resets the escaped state', () => {
     const c = new ScrollController();
     c.attach(fakeEl(1000, 400, 0));

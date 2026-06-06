@@ -98,8 +98,14 @@ export class ScrollController {
     this.lastScrollTop = st;
     const fromAnim = this.raf != null && Math.abs(st - this.expectedTop) <= 2;
     if (fromAnim || this.pointerActive) return;
-    if (st < prev - 1) this.release();
-    else if (this.distanceFromBottom() <= threshold) this.escaped = false;
+    // Stay (or re-engage) stuck whenever we're still at the bottom. This takes
+    // precedence over the downward-delta check below: when content *shrinks*
+    // (e.g. a stream restarts on replay), the browser clamps scrollTop down to
+    // the new, smaller max — a downward move that leaves us pinned at the
+    // bottom, not a user scrolling away. Only an upward move that actually
+    // leaves the bottom zone counts as the user breaking the stick.
+    if (this.distanceFromBottom() <= threshold) this.escaped = false;
+    else if (st < prev - 1) this.release();
   }
 
   private release(): void {
