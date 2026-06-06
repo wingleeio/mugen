@@ -25,8 +25,12 @@ export interface SpringOptions {
 /** Defaults tuned to match use-stick-to-bottom's "smooth" feel. */
 export const DEFAULT_SPRING: SpringOptions = { damping: 0.7, stiffness: 0.05, mass: 1.25 };
 
-/** Within this many px of the bottom counts as "at the bottom". */
+/** Returning downward to within this many px of the bottom re-engages the stick. */
 export const STICK_THRESHOLD_PX = 70;
+
+/** Treat as exactly pinned to the bottom — distinguishes a user scroll-up from a
+ *  content-shrink clamp (which drops scrollTop but leaves us at the bottom). */
+const AT_BOTTOM_PX = 2;
 
 const FRAME_MS = 1000 / 60;
 
@@ -40,6 +44,9 @@ export class ScrollController {
   private lastScrollTop = 0;
   /** A touch drag is in progress — don't fight the finger. */
   private pointerActive = false;
+  /** The current touch drag has moved up at least once (so it breaks the stick
+   *  even if the finger lifts back near the bottom). */
+  private movedUpWhilePointer = false;
   /** The user scrolled away from the bottom; stop sticking until they return. */
   escaped = false;
 
@@ -49,6 +56,7 @@ export class ScrollController {
     this.el = el;
     this.escaped = false;
     this.pointerActive = false;
+    this.movedUpWhilePointer = false;
     this.lastScrollTop = el ? el.scrollTop : 0;
   }
 
@@ -75,20 +83,23 @@ export class ScrollController {
   /** Finger down: stop the animation so it doesn't fight the drag. */
   handleTouchStart(): void {
     this.pointerActive = true;
+    this.movedUpWhilePointer = false;
     this.stop();
   }
 
-  /** Finger up: stay stuck only if they let go at the bottom. */
+  /** Finger up: stay stuck only if the drag never pulled up and ends at the bottom. */
   handleTouchEnd(threshold: number): void {
     this.pointerActive = false;
-    this.escaped = this.distanceFromBottom() > threshold;
+    this.escaped = this.movedUpWhilePointer || this.distanceFromBottom() > threshold;
+    this.movedUpWhilePointer = false;
     if (this.el) this.lastScrollTop = this.el.scrollTop;
   }
 
   /**
-   * Scroll handler — a fallback for inputs without a wheel/touch (scrollbar
-   * drag, keyboard, programmatic). Ignores our own animation frames; breaks the
-   * stick on an upward move and re-engages when the user returns to the bottom.
+   * Scroll handler — the fallback for inputs without a wheel event (scrollbar
+   * drag, keyboard) and the bookkeeper during touch drags. Ignores our own
+   * animation frames; breaks the stick on any upward move and re-engages only
+   * when the user returns *downward* toward the bottom.
    */
   handleScroll(threshold: number): void {
     const el = this.el;
@@ -97,15 +108,23 @@ export class ScrollController {
     const prev = this.lastScrollTop;
     this.lastScrollTop = st;
     const fromAnim = this.raf != null && Math.abs(st - this.expectedTop) <= 2;
-    if (fromAnim || this.pointerActive) return;
-    // Stay (or re-engage) stuck whenever we're still at the bottom. This takes
-    // precedence over the downward-delta check below: when content *shrinks*
-    // (e.g. a stream restarts on replay), the browser clamps scrollTop down to
-    // the new, smaller max — a downward move that leaves us pinned at the
-    // bottom, not a user scrolling away. Only an upward move that actually
-    // leaves the bottom zone counts as the user breaking the stick.
-    if (this.distanceFromBottom() <= threshold) this.escaped = false;
-    else if (st < prev - 1) this.release();
+    if (fromAnim) return;
+    const movedUp = st < prev - 1;
+    // A touch drag drives the scroll itself and the spring is already stopped —
+    // just remember if the finger pulled up, so touchEnd won't snap back.
+    if (this.pointerActive) {
+      if (movedUp) this.movedUpWhilePointer = true;
+      return;
+    }
+    const dist = this.distanceFromBottom();
+    if (movedUp) {
+      // Scrolled up → break. Exception: a content-shrink clamp (e.g. replay)
+      // also drops scrollTop, but leaves us pinned at the bottom (dist ≈ 0).
+      if (dist > AT_BOTTOM_PX) this.release();
+    } else if (dist <= threshold) {
+      // Steady at, or moving down toward, the bottom → (re-)engage.
+      this.escaped = false;
+    }
   }
 
   private release(): void {

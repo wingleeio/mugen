@@ -48,6 +48,17 @@ describe('ScrollController', () => {
     expect(c.escaped).toBe(false);
   });
 
+  it('breaks the stick on a slow scroll up that stays within the threshold', () => {
+    const c = new ScrollController();
+    const el = fakeEl(1000, 400, 600); // pinned at the bottom
+    c.attach(el);
+    // Nudge up only 30px — still inside STICK_THRESHOLD_PX (70) — but it must
+    // still break, or the spring would overpower the user's slow scroll.
+    el.scrollTop = 570;
+    c.handleScroll(STICK_THRESHOLD_PX);
+    expect(c.escaped).toBe(true);
+  });
+
   it('stays stuck when content shrinks and clamps scrollTop (e.g. replay)', () => {
     const c = new ScrollController();
     const el = fakeEl(1000, 400, 600); // pinned at the bottom
@@ -104,6 +115,20 @@ describe('ScrollController', () => {
     c.handleTouchStart();
     c.handleTouchEnd(STICK_THRESHOLD_PX);
     expect(c.escaped).toBe(false);
+  });
+
+  it('an upward touch drag breaks the stick even when the finger lifts near the bottom', () => {
+    const c = new ScrollController();
+    const el = fakeEl(1000, 400, 600); // at the bottom
+    c.attach(el);
+    c.handleTouchStart();
+    el.scrollTop = 540; // finger drags up (dist 60)
+    c.handleScroll(STICK_THRESHOLD_PX); // recorded as an upward move during the drag
+    el.scrollTop = 595; // eases back to dist 5 — within threshold — before lifting
+    c.handleScroll(STICK_THRESHOLD_PX);
+    c.handleTouchEnd(STICK_THRESHOLD_PX);
+    // Without tracking the up-move, releasing at dist 5 would snap back. It must not.
+    expect(c.escaped).toBe(true);
   });
 
   it('springToBottom is a no-op once escaped', () => {
