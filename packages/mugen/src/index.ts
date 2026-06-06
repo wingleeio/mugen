@@ -8,7 +8,14 @@
 
 // ── The list ──
 export { useMugenVirtualizer, MugenVList } from './vlist';
-export type { UseMugenVirtualizerOptions, MugenVListProps } from './vlist';
+export type {
+  UseMugenVirtualizerOptions,
+  MugenVListProps,
+  InitialScrollOptions,
+  StickToBottomOptions,
+  MugenScrollEase,
+  SpringOptions,
+} from './vlist';
 export { MugenInstance } from './instance';
 export type {
   ScrollToOptions,

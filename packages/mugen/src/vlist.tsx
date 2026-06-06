@@ -2,6 +2,7 @@ import {
   memo,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -16,6 +17,34 @@ import { TextDefaultsContext, type TextDefaults } from './text-defaults';
 import type { Font, WhiteSpaceMode, WordBreakMode } from './text-defaults';
 import { rootFontSizePx } from './tokens-resolve';
 import { subscribeFonts, watchFonts } from './pretext/fonts';
+import {
+  ScrollController,
+  DEFAULT_SPRING,
+  STICK_THRESHOLD_PX,
+  type MugenScrollEase,
+  type SpringOptions,
+} from './scroll-controller';
+
+// useLayoutEffect on the client (run before paint so the initial scroll doesn't
+// flash), useEffect on the server (avoid the SSR warning; it no-ops there).
+const useIsoLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
+
+export type { MugenScrollEase, SpringOptions };
+
+/** Where the list sits on first measure, and how it gets there. */
+export interface InitialScrollOptions {
+  to: 'top' | 'bottom';
+  /** `'instant'` (default) jumps; `'smooth'` springs into place. */
+  behavior?: MugenScrollEase;
+}
+
+/** Keep the list pinned to the bottom as content grows (chat streaming). */
+export interface StickToBottomOptions extends Partial<SpringOptions> {
+  /** `'smooth'` (default) springs; `'instant'` snaps each growth. */
+  behavior?: MugenScrollEase;
+  /** Px from the bottom still treated as "stuck". Default 70. */
+  threshold?: number;
+}
 
 export interface UseMugenVirtualizerOptions<T> {
   /** The data. New array identity triggers a re-key + re-measure. */
@@ -55,6 +84,19 @@ export interface MugenVListProps<T> {
   maxW?: number | string;
   /** Viewport height in px. Defaults to filling the parent (`100%`). */
   height?: number;
+  /**
+   * Where to place the scroll on first measure. `'bottom'` opens the list at
+   * the end (e.g. a chat at the latest message); `'top'` (default) at the
+   * start. Pass an object to animate it in: `{ to: 'bottom', behavior: 'smooth' }`.
+   * Applied once.
+   */
+  initialScroll?: 'top' | 'bottom' | InitialScrollOptions;
+  /**
+   * Keep the list pinned to the bottom as content grows — for streaming chat.
+   * `true` uses a smooth spring; the user scrolling up interrupts it, and
+   * returning to the bottom re-engages. Pass an object to tune the spring.
+   */
+  stickToBottom?: boolean | StickToBottomOptions;
   /** Override the measured viewport width (tests/SSR); skips the ResizeObserver. */
   width?: number;
   /** Extra px rendered above/below the viewport. Default 200. */
@@ -171,6 +213,77 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     return subscribeFonts(() => instance.remeasure());
   }, [instance]);
 
+  // ── Scroll controller: initialScroll + stickToBottom (smooth spring) ──
+  const ctlRef = useRef<ScrollController | null>(null);
+  if (ctlRef.current === null) ctlRef.current = new ScrollController();
+  const ctl = ctlRef.current;
+  useEffect(() => () => ctl.attach(null), [ctl]); // stop the animation on unmount
+
+  const initial: InitialScrollOptions | null =
+    props.initialScroll == null
+      ? null
+      : typeof props.initialScroll === 'string'
+        ? { to: props.initialScroll }
+        : props.initialScroll;
+
+  const stickOpt = props.stickToBottom;
+  const stickOn = stickOpt === true || (typeof stickOpt === 'object' && stickOpt !== null);
+  const stickSpring: SpringOptions =
+    typeof stickOpt === 'object' && stickOpt
+      ? {
+          damping: stickOpt.damping ?? DEFAULT_SPRING.damping,
+          stiffness: stickOpt.stiffness ?? DEFAULT_SPRING.stiffness,
+          mass: stickOpt.mass ?? DEFAULT_SPRING.mass,
+        }
+      : DEFAULT_SPRING;
+  const stickInstant = typeof stickOpt === 'object' && stickOpt?.behavior === 'instant';
+  const stickThreshold =
+    (typeof stickOpt === 'object' && stickOpt?.threshold) || STICK_THRESHOLD_PX;
+
+  const syncWindowFromEl = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    instance.scrollTop = el.scrollTop;
+    setScrollTop(el.scrollTop);
+  };
+
+  // Apply `initialScroll` once, after the first real measure (content width and
+  // total height are only known after the ResizeObserver fires).
+  const didInitialScroll = useRef(false);
+  useIsoLayoutEffect(() => {
+    if (didInitialScroll.current) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    ctl.attach(el);
+    if (initial == null || initial.to === 'top') {
+      didInitialScroll.current = true;
+      return;
+    }
+    if (!ctl.hasOverflow()) return; // not measured yet — retry next render
+    if (initial.behavior === 'smooth') {
+      ctl.springToBottom(stickSpring);
+    } else {
+      ctl.jumpToBottom();
+      syncWindowFromEl();
+    }
+    didInitialScroll.current = true;
+  });
+
+  // Keep pinned to the bottom as content grows — runs after every render (the
+  // list re-renders whenever total height changes). No-op once the user escapes.
+  useIsoLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!stickOn || !didInitialScroll.current || !el) return;
+    ctl.attach(el);
+    if (ctl.escaped || !ctl.hasOverflow() || ctl.distanceFromBottom() <= 0.5) return;
+    if (stickInstant) {
+      ctl.jumpToBottom();
+      syncWindowFromEl();
+    } else {
+      ctl.springToBottom(stickSpring);
+    }
+  });
+
   // Stable text-defaults object (so Text's context doesn't churn on identity).
   const defaults = useMemo<TextDefaults>(
     () => ({
@@ -224,6 +337,7 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
         const st = e.currentTarget.scrollTop;
         instance.scrollTop = st;
         setScrollTop(st);
+        if (stickOn) ctl.handleScroll(stickThreshold);
       }}
       style={{
         position: 'relative',
