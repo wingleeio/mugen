@@ -9,16 +9,7 @@ description: Install mugen and render your first analytic virtualized list.
 @wingleeio/mugen
 ```
 
-React 18.2+ or 19 is required (a peer dependency — your app already has it).
-
-mugen measures text with [`@chenglou/pretext`](https://www.npmjs.com/package/@chenglou/pretext)
-and depends on it directly, so it's installed for you — you don't add it
-yourself. That dependency is **pinned to an exact version** (`@chenglou/pretext`
-is pre-1.0 and its API still moves between releases), so every mugen install
-resolves the same, known-good pretext; a new pretext is adopted only by a new
-mugen release. If you reach for pretext's escape hatches, import them from
-`@wingleeio/mugen` (e.g. `prepareText`, `measureText`) rather than installing
-pretext separately, so you stay on that one pinned copy.
+Requires React 18.2 or 19.
 
 ## Your first list
 
