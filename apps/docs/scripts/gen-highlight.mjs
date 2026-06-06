@@ -185,7 +185,7 @@ function TurnRow(item: Turn) {
       n += 1;
       setShown(n);
       if (n >= words.length) clearInterval(id);
-    }, 60);
+    }, 75);
     return () => clearInterval(id);
   }, [item.id]);
 

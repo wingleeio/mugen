@@ -379,6 +379,19 @@ function UserTurn({ item }: { item: Turn }): ReactNode {
   );
 }
 
+/** Reveal the first `count` words across paragraphs, keeping the breaks. */
+function revealWords(paras: string[], count: number): string[] {
+  const out: string[] = [];
+  let left = count;
+  for (const p of paras) {
+    if (left <= 0) break;
+    const w = p.split(' ');
+    out.push(w.slice(0, left).join(' '));
+    left -= w.length;
+  }
+  return out;
+}
+
 function TurnRow(item: Turn): ReactNode {
   const isLive = !!item.live;
 
@@ -388,22 +401,23 @@ function TurnRow(item: Turn): ReactNode {
   // The live turn streams its answer in, word by word: useMugenEffect drives a
   // timer, useMugenState holds how many words are revealed, and the row
   // re-measures on each tick — so stickToBottom can follow it down smoothly.
-  const words = item.body.join(' ').split(' ');
-  const [revealed, setRevealed] = useMugenState(isLive ? 0 : words.length);
+  const totalWords = item.body.reduce((n, p) => n + p.split(' ').length, 0);
+  const [revealed, setRevealed] = useMugenState(isLive ? 0 : totalWords);
   useMugenEffect(() => {
     if (!isLive) return;
     let n = 0;
     const id = setInterval(() => {
       n += 1;
       setRevealed(n);
-      if (n >= words.length) clearInterval(id);
-    }, 60);
+      if (n >= totalWords) clearInterval(id);
+    }, 75);
     return () => clearInterval(id);
   }, [item.id]);
 
   if (item.role === 'user') return <UserTurn item={item} />;
 
-  const streaming = isLive && revealed < words.length;
+  const streaming = isLive && revealed < totalWords;
+  const paras = isLive ? revealWords(item.body, revealed) : item.body;
 
   return (
     <VStack gap={12} padding={20}>
@@ -438,17 +452,11 @@ function TurnRow(item: Turn): ReactNode {
         </VStack>
       ) : null}
 
-      {isLive ? (
-        <Text font="15px Inter, sans-serif" lineHeight={24} color={AC.fg}>
-          {words.slice(0, revealed).join(' ') + (streaming ? ' ▍' : '')}
+      {(paras.length === 0 ? [''] : paras).map((p, i, arr) => (
+        <Text key={i} font="15px Inter, sans-serif" lineHeight={24} color={AC.fg}>
+          {p + (streaming && i === arr.length - 1 ? ' ▍' : '')}
         </Text>
-      ) : (
-        item.body.map((p, i) => (
-          <Text key={i} font="15px Inter, sans-serif" lineHeight={24} color={AC.fg}>
-            {p}
-          </Text>
-        ))
-      )}
+      ))}
     </VStack>
   );
 }
@@ -605,7 +613,9 @@ const CONVO: Turn[] = [
       { kind: 'run', title: 'Computed the centered scroll target', detail: 'align: center' },
     ],
     body: [
-      'Yes: list.scrollToItem("41212", { align: "center", behavior: "smooth" }). The offset is already known, so it lands centered on the first try — no jump, no correction pass.',
+      'Yes — list.scrollToItem("41212", { align: "center", behavior: "smooth" }). Because every row\'s offset already lives in the index, it lands dead-center on the very first try: no measure-on-arrival, no second correction pass, and no scrollbar jump as rows mount in around it.',
+      'That\'s really the whole idea. One description of a row feeds both the measurement walk and the React render, so the height you compute is the height that paints. Inline expansion, async content, a webfont loading late — they all flow through the same single re-measure path, and the offsets stay exact the entire time.',
+      'So whether it\'s 50,000 emails or a million, you get buttery scrolling, an honest scrollbar, and pixel-exact deep links — without ever touching the DOM to ask how tall anything is. Go ahead and scroll up mid-stream: this reply keeps writing, but it won\'t yank you back down until you return to the bottom.',
     ],
   },
 ];
