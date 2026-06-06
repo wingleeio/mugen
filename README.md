@@ -9,7 +9,7 @@ A [Turborepo](https://turborepo.com) monorepo for the **mugen** package and its 
 ├── apps/
 │   └── docs/        # Documentation site — Fumadocs on TanStack Start (Vite 8)
 └── packages/
-    └── mugen/       # The mugen package (work in progress)
+    └── mugen/       # The @wingleeio/mugen library
 ```
 
 ## Requirements
@@ -83,10 +83,14 @@ pnpm --filter docs dev:vite  # plain Vite on http://localhost:3000
 
 ## Packages
 
-### `mugen`
+### `@wingleeio/mugen`
 
-The library this repo is built around. It is currently an empty scaffold — the
-public API and the docs in `apps/docs` will grow together over time.
+The library this repo is built around: virtualized React lists whose row heights
+are computed analytically with
+[`@chenglou/pretext`](https://github.com/chenglou/pretext) instead of measured
+from the DOM, so off-screen and never-mounted rows have exact heights and there
+is no measure-on-mount layout shift. See [`packages/mugen`](packages/mugen) for
+the API.
 
 ### `docs`
 
