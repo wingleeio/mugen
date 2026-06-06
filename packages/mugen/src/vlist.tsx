@@ -335,7 +335,7 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
       className={props.className}
       onScroll={(e) => {
         const st = e.currentTarget.scrollTop;
-        instance.scrollTop = st;
+        instance.setScrollTop(st); // updates scrollTop + wakes useMugenSelector
         setScrollTop(st);
         if (stickOn) ctl.handleScroll(stickThreshold);
       }}

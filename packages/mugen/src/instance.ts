@@ -16,6 +16,18 @@ export interface ScrollToOptions {
   align?: MugenScrollAlign;
 }
 
+/** Reactive viewport/scroll state, read with `useMugenSelector`. */
+export interface MugenScrollState {
+  /** Current scroll offset from the top, in px. */
+  scrollTop: number;
+  /** Height of the scroll viewport, in px. */
+  viewportHeight: number;
+  /** Total scrollable content height, in px. */
+  totalHeight: number;
+  /** Distance from the bottom, in px (0 = pinned to the bottom). */
+  distanceFromBottom: number;
+}
+
 /** Render-time config fed by `<MugenVList>`. */
 export interface MugenConfig<T> {
   getKey: (item: T, index: number) => string;
@@ -95,6 +107,9 @@ export class MugenInstance<T> implements SlotHost {
   private scrollEl: HTMLElement | null = null;
   /** Current scroll position, kept in sync by the list. */
   scrollTop = 0;
+  /** Cached scroll-state snapshot — recreated only when an input changes, so
+   *  `getScrollState` is referentially stable for `useSyncExternalStore`. */
+  private scrollSnapshot: MugenScrollState | null = null;
 
   // ── Public scroll API ──────────────────────────────────────────────────────
 
@@ -106,6 +121,44 @@ export class MugenInstance<T> implements SlotHost {
   /** Total scrollable height (the spacer height), in px. */
   totalHeight(): number {
     return this.offset.total();
+  }
+
+  /**
+   * The list's reactive viewport/scroll state. Returns a stable reference until
+   * one of its inputs changes, so it's safe as a `useSyncExternalStore`
+   * snapshot. Read it reactively with `useMugenSelector`.
+   */
+  getScrollState(): MugenScrollState {
+    const totalHeight = this.totalHeight();
+    const viewportHeight = this.viewportHeight;
+    const scrollTop = this.scrollTop;
+    const prev = this.scrollSnapshot;
+    if (
+      prev &&
+      prev.scrollTop === scrollTop &&
+      prev.viewportHeight === viewportHeight &&
+      prev.totalHeight === totalHeight
+    ) {
+      return prev;
+    }
+    const distanceFromBottom = Math.max(0, totalHeight - viewportHeight - scrollTop);
+    const snap: MugenScrollState = { scrollTop, viewportHeight, totalHeight, distanceFromBottom };
+    this.scrollSnapshot = snap;
+    return snap;
+  }
+
+  /** Record the live scroll position (called by the list) and wake selectors. */
+  setScrollTop(top: number): void {
+    if (top === this.scrollTop) return;
+    this.scrollTop = top;
+    this.notifyGlobal();
+  }
+
+  /** Jump/animate to the very bottom. Re-engages `stickToBottom` on arrival. */
+  scrollToBottom(options: { behavior?: MugenScrollBehavior } = {}): void {
+    const el = this.scrollEl;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: options.behavior ?? 'auto' });
   }
 
   /** Scroll a row into view by its key. No-op if the key is unknown. */

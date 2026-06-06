@@ -21,12 +21,16 @@ export type {
   ScrollToOptions,
   MugenScrollBehavior,
   MugenScrollAlign,
+  MugenScrollState,
   MugenConfig,
 } from './instance';
 
 // ── Row hooks (used inside `render`) ──
 export { useMugenState, useMugenMemo, useMugenEffect } from './hooks';
 export type { SetMugenState, EffectCleanup } from './hooks';
+
+// ── Selecting list state (e.g. a scroll-to-bottom button) ──
+export { useMugenSelector } from './use-mugen-selector';
 
 // ── Primitives ──
 export { Text } from './primitives/text';

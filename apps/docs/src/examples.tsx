@@ -3,8 +3,10 @@ import {
   definePrimitive,
   HStack,
   MugenVList,
+  type MugenInstance,
   Text,
   useMugenEffect,
+  useMugenSelector,
   useMugenState,
   useMugenVirtualizer,
   VStack,
@@ -643,7 +645,7 @@ function AiChatExample(): ReactNode {
           ↻ Replay
         </button>
       </div>
-      <div style={{ flex: 1, minHeight: 0 }}>
+      <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
         <MugenVList
           instance={list}
           getKey={(t) => t.id}
@@ -656,8 +658,31 @@ function AiChatExample(): ReactNode {
           stickToBottom
           className="mu-scroll"
         />
+        <ScrollToBottomButton list={list} />
       </div>
     </div>
+  );
+}
+
+// Floats over the list, shown only while the user has scrolled away from the
+// bottom. Visibility is a selector over the instance's scroll state, so it
+// re-renders only when that boolean flips — not on every streamed token.
+function ScrollToBottomButton({ list }: { list: MugenInstance<Turn> }): ReactNode {
+  const awayFromBottom = useMugenSelector(list, (s) => s.distanceFromBottom > 200);
+  return (
+    <button
+      type="button"
+      onClick={() => list.scrollToBottom({ behavior: 'smooth' })}
+      className="group absolute bottom-4 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-fd-border/70 bg-fd-background/80 py-1.5 pl-2.5 pr-3.5 text-xs font-medium text-fd-muted-foreground shadow-lg ring-1 ring-black/5 backdrop-blur-md transition-all duration-200 ease-out hover:border-fd-border hover:text-fd-foreground data-[hidden=true]:pointer-events-none data-[hidden=true]:translate-y-2 data-[hidden=true]:opacity-0 dark:ring-white/10"
+      data-hidden={!awayFromBottom}
+    >
+      <span className="flex size-4 items-center justify-center rounded-full bg-fd-primary/10 text-fd-primary transition-transform duration-200 group-hover:translate-y-0.5">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M12 5v14M19 12l-7 7-7-7" />
+        </svg>
+      </span>
+      Scroll to bottom
+    </button>
   );
 }
 
