@@ -17,7 +17,7 @@ concurrency:
 permissions:
   contents: write # commit the version bump + push git tags
   pull-requests: write # open/update the "Version Packages" PR
-  id-token: write # npm provenance (OIDC)
+  # id-token: write   # re-add when publishing with provenance (public repo)
 
 jobs:
   release:
@@ -47,5 +47,11 @@ jobs:
           title: 'chore: version packages'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # `changesets/action` keys off `NPM_TOKEN`; `changeset publish` reads
+          # auth from the .npmrc that setup-node writes via `NODE_AUTH_TOKEN`.
+          # Both point at the same secret.
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_PROVENANCE: 'true' # attach a build provenance attestation
+          # Provenance needs a *public* source repo; this one is private, so it's
+          # off. Make the repo public and add `NPM_CONFIG_PROVENANCE: 'true'` (and
+          # `id-token: write` below) to get the "signed on GitHub Actions" badge.
