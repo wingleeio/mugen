@@ -21,6 +21,9 @@ const disablePrerender = process.env.DISABLE_PRERENDER === '1';
 
 export default defineConfig({
   server: {
+    // `host: true` binds 0.0.0.0 (all interfaces) instead of the default
+    // localhost-only, so the dev server is reachable over LAN / Tailscale.
+    host: true,
     port: 3000,
   },
   plugins: [
