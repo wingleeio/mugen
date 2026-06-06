@@ -2,8 +2,13 @@
  * Smooth scroll controller for `MugenVList` — powers `initialScroll` and
  * `stickToBottom`. It animates a scroll element toward the bottom with a
  * velocity-based spring (the same shape as stackblitz's use-stick-to-bottom),
- * so streaming content stays pinned smoothly, and releases the moment the user
- * scrolls away — re-engaging when they return to the bottom.
+ * so streaming content stays pinned smoothly.
+ *
+ * Interrupting is the subtle part. While the spring is running it keeps writing
+ * `scrollTop` every frame, so a real (many-tiny-deltas) scroll-up gets pulled
+ * back before a scroll-position handler can react. So we break the stick from
+ * the user's *input* — `wheel` (deltaY < 0) and touch drags — not from where
+ * the scrollbar ends up. Returning to the bottom re-engages.
  */
 
 export type MugenScrollEase = 'instant' | 'smooth';
@@ -32,6 +37,9 @@ export class ScrollController {
   private lastTick = 0;
   /** scrollTop our animation last wrote — lets onScroll tell us from the user. */
   private expectedTop = 0;
+  private lastScrollTop = 0;
+  /** A touch drag is in progress — don't fight the finger. */
+  private pointerActive = false;
   /** The user scrolled away from the bottom; stop sticking until they return. */
   escaped = false;
 
@@ -40,6 +48,8 @@ export class ScrollController {
     this.stop();
     this.el = el;
     this.escaped = false;
+    this.pointerActive = false;
+    this.lastScrollTop = el ? el.scrollTop : 0;
   }
 
   /** Distance from the bottom in px (0 = pinned). */
@@ -55,19 +65,49 @@ export class ScrollController {
     return !!el && el.scrollHeight - el.clientHeight > 0 && el.clientHeight > 0;
   }
 
+  // ── Interrupting from user input (reliable mid-animation) ──────────────────
+
+  /** A wheel/trackpad gesture. Scrolling up (deltaY < 0) breaks the stick now. */
+  handleWheel(deltaY: number): void {
+    if (deltaY < 0) this.release();
+  }
+
+  /** Finger down: stop the animation so it doesn't fight the drag. */
+  handleTouchStart(): void {
+    this.pointerActive = true;
+    this.stop();
+  }
+
+  /** Finger up: stay stuck only if they let go at the bottom. */
+  handleTouchEnd(threshold: number): void {
+    this.pointerActive = false;
+    this.escaped = this.distanceFromBottom() > threshold;
+    if (this.el) this.lastScrollTop = this.el.scrollTop;
+  }
+
   /**
-   * Call from the scroll handler. Distinguishes our own animation frames from
-   * real user input by comparing against the position we last wrote, then sets
-   * `escaped` from how far the user has moved off the bottom.
+   * Scroll handler — a fallback for inputs without a wheel/touch (scrollbar
+   * drag, keyboard, programmatic). Ignores our own animation frames; breaks the
+   * stick on an upward move and re-engages when the user returns to the bottom.
    */
   handleScroll(threshold: number): void {
     const el = this.el;
     if (!el) return;
-    const fromAnim = this.raf != null && Math.abs(el.scrollTop - this.expectedTop) < 2;
-    if (fromAnim) return;
-    this.escaped = this.distanceFromBottom() > threshold;
-    if (this.escaped) this.stop();
+    const st = el.scrollTop;
+    const prev = this.lastScrollTop;
+    this.lastScrollTop = st;
+    const fromAnim = this.raf != null && Math.abs(st - this.expectedTop) <= 2;
+    if (fromAnim || this.pointerActive) return;
+    if (st < prev - 1) this.release();
+    else if (this.distanceFromBottom() <= threshold) this.escaped = false;
   }
+
+  private release(): void {
+    this.escaped = true;
+    this.stop();
+  }
+
+  // ── Scrolling to the bottom ────────────────────────────────────────────────
 
   /** Jump to the bottom immediately and re-engage sticking. */
   jumpToBottom(): void {
@@ -76,6 +116,7 @@ export class ScrollController {
     this.stop();
     el.scrollTop = Math.max(0, el.scrollHeight - el.clientHeight);
     this.expectedTop = el.scrollTop;
+    this.lastScrollTop = el.scrollTop;
     this.escaped = false;
   }
 
@@ -85,11 +126,12 @@ export class ScrollController {
     this.stop();
     el.scrollTop = 0;
     this.expectedTop = 0;
+    this.lastScrollTop = 0;
   }
 
-  /** Spring toward the bottom. No-op if the user escaped or we're already there. */
+  /** Spring toward the bottom. No-op if escaped, dragging, or already there. */
   springToBottom(spring: SpringOptions): void {
-    if (this.escaped || !this.el || this.distanceFromBottom() <= 0.5) return;
+    if (this.escaped || this.pointerActive || !this.el || this.distanceFromBottom() <= 0.5) return;
     if (this.raf == null) {
       this.lastTick = 0;
       this.raf = requestAnimationFrame(() => this.tick(spring));
@@ -99,7 +141,7 @@ export class ScrollController {
   private tick(spring: SpringOptions): void {
     const el = this.el;
     this.raf = null;
-    if (!el || this.escaped) return;
+    if (!el || this.escaped || this.pointerActive) return;
     const target = el.scrollHeight - el.clientHeight;
     const diff = target - el.scrollTop;
     if (diff <= 0.5) {

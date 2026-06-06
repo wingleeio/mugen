@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ScrollController, STICK_THRESHOLD_PX } from './scroll-controller';
+import { ScrollController, STICK_THRESHOLD_PX, DEFAULT_SPRING } from './scroll-controller';
 
 /** A minimal stand-in for the scroll element (only the geometry we read). */
 function fakeEl(scrollHeight: number, clientHeight: number, scrollTop = 0): HTMLElement {
@@ -54,5 +54,47 @@ describe('ScrollController', () => {
     c.escaped = true;
     c.attach(fakeEl(1000, 400, 0));
     expect(c.escaped).toBe(false);
+  });
+
+  // ── Interrupting the stick (the part that fights a running spring) ──
+
+  it('breaks the stick on an upward wheel, ignores a downward one', () => {
+    const c = new ScrollController();
+    c.attach(fakeEl(1000, 400, 600));
+    c.handleWheel(40); // scrolling down — no change
+    expect(c.escaped).toBe(false);
+    c.handleWheel(-40); // scrolling up — release
+    expect(c.escaped).toBe(true);
+  });
+
+  it('a touch drag suppresses sticking; releasing away from the bottom stays escaped', () => {
+    const c = new ScrollController();
+    const el = fakeEl(1000, 400, 600);
+    c.attach(el);
+    c.handleTouchStart();
+    // The spring must not fight the finger while it's down.
+    c.springToBottom(DEFAULT_SPRING);
+    el.scrollTop = 200; // dragged up
+    expect(el.scrollTop).toBe(200); // springToBottom was a no-op
+    c.handleTouchEnd(STICK_THRESHOLD_PX);
+    expect(c.escaped).toBe(true);
+  });
+
+  it('releasing a touch at the bottom keeps it stuck', () => {
+    const c = new ScrollController();
+    const el = fakeEl(1000, 400, 600); // at the bottom
+    c.attach(el);
+    c.handleTouchStart();
+    c.handleTouchEnd(STICK_THRESHOLD_PX);
+    expect(c.escaped).toBe(false);
+  });
+
+  it('springToBottom is a no-op once escaped', () => {
+    const c = new ScrollController();
+    const el = fakeEl(1000, 400, 0); // at the top, would normally spring down
+    c.attach(el);
+    c.handleWheel(-10); // user scrolled up → escaped
+    c.springToBottom(DEFAULT_SPRING);
+    expect(el.scrollTop).toBe(0); // never started chasing the bottom
   });
 });

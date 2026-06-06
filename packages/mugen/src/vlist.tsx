@@ -339,6 +339,11 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
         setScrollTop(st);
         if (stickOn) ctl.handleScroll(stickThreshold);
       }}
+      // Break the stick from user *input* — reliable even while the spring is
+      // still writing scrollTop every frame during a stream.
+      onWheel={stickOn ? (e) => ctl.handleWheel(e.deltaY) : undefined}
+      onTouchStart={stickOn ? () => ctl.handleTouchStart() : undefined}
+      onTouchEnd={stickOn ? () => ctl.handleTouchEnd(stickThreshold) : undefined}
       style={{
         position: 'relative',
         overflowY: 'auto',
