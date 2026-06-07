@@ -1,5 +1,11 @@
 # @wingleeio/mugen
 
+## 0.2.2
+
+### Patch Changes
+
+- [`d6d40ea`](https://github.com/wingleeio/mugen/commit/d6d40eadbc6b1bf385dd5005a80ea016d42c156e) Thanks [@wingleeio](https://github.com/wingleeio)! - Fix `stickToBottom` over-triggering. Auto-scroll now fires only when the content actually grows (matching use-stick-to-bottom's resize-driven model) instead of on every render, so it no longer yanks you to the bottom when you're merely near it with static content. The stick also re-engages only on a real downward move, so a slow scroll-up reliably escapes instead of re-sticking between its own steps.
+
 ## 0.2.1
 
 ### Patch Changes
