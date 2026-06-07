@@ -121,8 +121,10 @@ export class ScrollController {
       // Scrolled up → break. Exception: a content-shrink clamp (e.g. replay)
       // also drops scrollTop, but leaves us pinned at the bottom (dist ≈ 0).
       if (dist > AT_BOTTOM_PX) this.release();
-    } else if (dist <= threshold) {
-      // Steady at, or moving down toward, the bottom → (re-)engage.
+    } else if (st > prev + 1 && dist <= threshold) {
+      // Re-engage only on a real *downward* move back into the bottom zone — not
+      // on a stationary/noise event, which would otherwise let a slow scroll-up
+      // re-stick between its own steps.
       this.escaped = false;
     }
   }

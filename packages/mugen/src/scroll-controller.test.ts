@@ -59,6 +59,22 @@ describe('ScrollController', () => {
     expect(c.escaped).toBe(true);
   });
 
+  it('re-engages only on a downward move, never on a stationary/noise event', () => {
+    const c = new ScrollController();
+    const el = fakeEl(1000, 400, 600);
+    c.attach(el);
+    el.scrollTop = 570; // scroll up → escape (dist 30, within threshold)
+    c.handleScroll(STICK_THRESHOLD_PX);
+    expect(c.escaped).toBe(true);
+    // A no-move scroll event near the bottom must NOT re-stick (the slow-scroll bug).
+    c.handleScroll(STICK_THRESHOLD_PX);
+    expect(c.escaped).toBe(true);
+    // Only a real downward move back toward the bottom re-engages.
+    el.scrollTop = 595;
+    c.handleScroll(STICK_THRESHOLD_PX);
+    expect(c.escaped).toBe(false);
+  });
+
   it('stays stuck when content shrinks and clamps scrollTop (e.g. replay)', () => {
     const c = new ScrollController();
     const el = fakeEl(1000, 400, 600); // pinned at the bottom

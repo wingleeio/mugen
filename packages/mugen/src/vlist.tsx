@@ -269,12 +269,21 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     didInitialScroll.current = true;
   });
 
-  // Keep pinned to the bottom as content grows — runs after every render (the
-  // list re-renders whenever total height changes). No-op once the user escapes.
+  // Keep pinned to the bottom as content grows. Crucially this reacts only to
+  // the content *growing* — never to a plain re-render (a scroll updating state,
+  // a row toggling). That mirrors use-stick-to-bottom's ResizeObserver: without
+  // it the spring would fire on the user's own scroll and yank them back even
+  // when nothing streamed. No-op once the user has escaped.
+  const prevTotalRef = useRef(-1);
   useIsoLayoutEffect(() => {
     const el = scrollRef.current;
     if (!stickOn || !didInitialScroll.current || !el) return;
     ctl.attach(el);
+    const total = instance.totalHeight();
+    const prevTotal = prevTotalRef.current;
+    prevTotalRef.current = total;
+    if (prevTotal < 0) return; // first run after initialScroll: record the baseline only
+    if (total <= prevTotal + 0.5) return; // not growth → leave the user where they are
     if (ctl.escaped || !ctl.hasOverflow() || ctl.distanceFromBottom() <= 0.5) return;
     if (stickInstant) {
       ctl.jumpToBottom();
