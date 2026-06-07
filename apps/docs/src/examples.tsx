@@ -6,6 +6,7 @@ import {
   type MugenInstance,
   Text,
   useMugenEffect,
+  useMugenMemo,
   useMugenSelector,
   useMugenState,
   useMugenVirtualizer,
@@ -430,16 +431,25 @@ function TurnRow(item: Turn): ReactNode {
   // it doesn't break the prefix relationship between ticks.
   const source = isLive ? words.slice(0, revealed).join(' ') : item.body;
 
-  return (
-    <VStack gap={12} padding={20}>
+  // Memoize the chrome that doesn't depend on the streaming `revealed` state so
+  // it keeps a *stable element reference* across ticks — React then bails out of
+  // re-rendering it, and only the streaming body updates each tick. (React.memo
+  // can't be used here: mugen's measure walker only handles plain components.)
+  const header = useMugenMemo(
+    () => (
       <HStack gap={9} align="center">
         <Mark />
         <Text font={`500 11px ${MONO}`} lineHeight={14} letterSpacing={0.6} color={AC.muted}>
           mugen
         </Text>
       </HStack>
+    ),
+    [],
+  );
 
-      {item.thinking ? (
+  const thinkingEl = useMugenMemo(
+    () =>
+      item.thinking ? (
         <VStack gap={open ? 9 : 0}>
           <Disclosure padding={2} onClick={() => setOpen((o) => !o)} style={{ ...buttonReset, borderRadius: 8 }}>
             <HStack gap={7} align="center">
@@ -453,16 +463,28 @@ function TurnRow(item: Turn): ReactNode {
           </Disclosure>
           {open ? <Reasoning text={item.thinking} /> : null}
         </VStack>
-      ) : null}
+      ) : null,
+    [open],
+  );
 
-      {item.tools ? (
+  // Tool cards only change when streaming flips (the last card's running ✓/◐).
+  const toolsEl = useMugenMemo(
+    () =>
+      item.tools ? (
         <VStack gap={7}>
           {item.tools.map((t, i) => (
             <ToolCard key={i} tool={t} running={streaming && i === item.tools!.length - 1} />
           ))}
         </VStack>
-      ) : null}
+      ) : null,
+    [streaming],
+  );
 
+  return (
+    <VStack gap={12} padding={20}>
+      {header}
+      {thinkingEl}
+      {toolsEl}
       <VStack gap={4}>
         <Markdown source={source} theme={CHAT_MD_THEME} />
         {streaming ? (

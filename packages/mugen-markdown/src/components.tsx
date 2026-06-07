@@ -28,22 +28,26 @@ function renderList(node: List, ctx: MarkdownRenderContext): ReactNode {
   const markerColor = theme.list.markerColor !== 'inherit' ? theme.list.markerColor : undefined;
 
   const items = node.children.map((item, i) => {
-    const content = ctx.renderBlocks(item.children, theme.list.gap);
     const markerText =
       item.checked != null ? (item.checked ? '☑' : '☐') : ordered ? `${start + i}.` : '•';
-    const markerRun: RichTextRun = { text: markerText, font };
-    if (markerColor != null) markerRun.color = markerColor;
-    const marker = createElement(RichText, {
-      runs: [markerRun],
-      font,
-      lineHeight: theme.lineHeight,
+    // Memoize each item by its content so finished items don't re-render while a
+    // later one streams in (`variant` carries the index + marker).
+    return ctx.memo(item, `li:${i}:${markerText}`, () => {
+      const content = ctx.renderBlocks(item.children, theme.list.gap);
+      const markerRun: RichTextRun = { text: markerText, font };
+      if (markerColor != null) markerRun.color = markerColor;
+      const marker = createElement(RichText, {
+        runs: [markerRun],
+        font,
+        lineHeight: theme.lineHeight,
+      });
+      return createElement(
+        HStack,
+        { key: i, align: 'flex-start' },
+        createElement(VStack, { width: theme.list.indent }, marker),
+        createElement(VStack, {}, content),
+      );
     });
-    return createElement(
-      HStack,
-      { key: i, align: 'flex-start' },
-      createElement(VStack, { width: theme.list.indent }, marker),
-      createElement(VStack, {}, content),
-    );
   });
 
   return createElement(VStack, { gap: theme.list.gap }, items);
@@ -55,23 +59,29 @@ function renderTable(node: Table, ctx: MarkdownRenderContext): ReactNode {
 
   const rows = node.children.map((row, ri) => {
     const isHeader = ri === 0;
-    const cells = row.children.map((cell, ci) => {
-      const content = ctx.inlineText(cell.children, {
-        lineHeight: theme.lineHeight,
-        weight: isHeader ? theme.table.headerWeight : undefined,
-        align: align[ci] ?? undefined,
-      });
-      return createElement(
-        VStack,
-        {
-          key: ci,
-          padding: theme.table.cellPadding,
-          ...(isHeader ? { style: { background: theme.table.headerBackground } } : null),
-        },
-        content,
+    // Memoize each row (and cell) so completed rows don't re-render while a later
+    // row streams in.
+    return ctx.memo(row, `tr:${ri}`, () => {
+      const cells = row.children.map((cell, ci) =>
+        ctx.memo(cell, `td:${ri}:${ci}:${isHeader ? 'h' : ''}:${align[ci] ?? ''}`, () => {
+          const content = ctx.inlineText(cell.children, {
+            lineHeight: theme.lineHeight,
+            weight: isHeader ? theme.table.headerWeight : undefined,
+            align: align[ci] ?? undefined,
+          });
+          return createElement(
+            VStack,
+            {
+              key: ci,
+              padding: theme.table.cellPadding,
+              ...(isHeader ? { style: { background: theme.table.headerBackground } } : null),
+            },
+            content,
+          );
+        }),
       );
+      return createElement(HStack, { key: ri }, cells);
     });
-    return createElement(HStack, { key: ri }, cells);
   });
 
   return createElement(VStack, { gap: theme.table.gap }, rows);

@@ -49,6 +49,14 @@ export interface MarkdownRenderContext {
   inlineRuns(nodes: readonly PhrasingContent[], base?: Partial<InlineFormat>): RichTextRun[];
   /** Build a `RichText` element from phrasing content (the inline pipeline). */
   inlineText(nodes: readonly PhrasingContent[], opts?: InlineTextOptions): ReactNode;
+  /**
+   * Memoize a rendered element by its `node`'s content, so streaming re-renders
+   * reuse it (React then bails out). `variant` distinguishes renderings of the
+   * same node that differ by sibling context — e.g. a list item's index/marker
+   * or a table cell's column. Use it in custom `list`/`table` components so their
+   * already-finished items/cells don't re-render while a later one streams in.
+   */
+  memo(node: object, variant: string, build: () => ReactNode): ReactNode;
 }
 
 /**

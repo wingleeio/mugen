@@ -46,6 +46,94 @@ function renderChildren(node: RootContent, ctx: MarkdownRenderContext): ReactNod
   }
 }
 
+// Per-block element cache. incremark's incremental parser returns *stable* node
+// references for already-completed blocks (only the still-streaming block gets a
+// fresh node on each append). Caching the rendered element by node reference
+// means a completed block returns the **identical** element across ticks, so
+// React bails out of re-rendering it (same element ⇒ same props) and only the
+// streaming block re-renders. Invalidated when the resolved theme/components
+// change. WeakMap, so nodes from an evicted/reset parser are GC'd.
+const blockCache = new WeakMap<
+  object,
+  { el: ReactNode; theme: MarkdownTheme; components: ResolvedMarkdownComponents; variant: string }
+>();
+
+// Secondary, content-keyed cache. The node-reference cache above only catches
+// blocks *outside* incremark's re-parsed tail: the still-streaming block is
+// re-parsed wholesale each append, so it and all its descendants (e.g. the items
+// of a streaming list) get fresh node references even when their content hasn't
+// changed. Keying by a structural signature lets those unchanged sub-blocks
+// reuse their element too, so only the one block actually being typed rebuilds.
+// Computed only on a node-ref miss, so the work is bounded to the streaming tail.
+const MAX_CONTENT_CACHE = 4096;
+const contentCache = new Map<string, ReactNode>();
+
+// Stable small id per resolved theme/components object, so the content key is
+// scoped to them without holding references.
+let optIdSeq = 0;
+const optId = new WeakMap<object, number>();
+function idOf(o: object): number {
+  let id = optId.get(o);
+  if (id === undefined) {
+    id = ++optIdSeq;
+    optId.set(o, id);
+  }
+  return id;
+}
+
+/** Structural signature of a node — content + shape, position-independent. */
+function blockSig(node: object): string {
+  return JSON.stringify(node, (k, v) => (k === 'position' ? undefined : v));
+}
+
+/**
+ * Memoize an element by its node's content. `variant` distinguishes renderings
+ * of the same node that differ by sibling context (a list item's index/marker, a
+ * table cell's column). First tries the node-reference cache (completed blocks
+ * outside the re-parsed tail), then the content signature (unchanged sub-blocks
+ * inside the streaming block), and only then runs `build`.
+ */
+function memoElement(
+  node: object,
+  ctx: MarkdownRenderContext,
+  variant: string,
+  build: () => ReactNode,
+): ReactNode {
+  const byRef = blockCache.get(node);
+  if (
+    byRef !== undefined &&
+    byRef.theme === ctx.theme &&
+    byRef.components === ctx.components &&
+    byRef.variant === variant
+  ) {
+    return byRef.el;
+  }
+  const sigKey = `${idOf(ctx.theme)}:${idOf(ctx.components)}:${variant}:${blockSig(node)}`;
+  const byContent = contentCache.get(sigKey);
+  if (byContent !== undefined) {
+    contentCache.delete(sigKey); // refresh LRU recency
+    contentCache.set(sigKey, byContent);
+    blockCache.set(node, { el: byContent, theme: ctx.theme, components: ctx.components, variant });
+    return byContent;
+  }
+  const el = build();
+  blockCache.set(node, { el, theme: ctx.theme, components: ctx.components, variant });
+  if (contentCache.size >= MAX_CONTENT_CACHE) {
+    const oldest = contentCache.keys().next().value;
+    if (oldest !== undefined) contentCache.delete(oldest);
+  }
+  contentCache.set(sigKey, el);
+  return el;
+}
+
+function memoDispatch(
+  node: RootContent,
+  ctx: MarkdownRenderContext,
+  key?: string | number,
+): ReactNode {
+  return memoElement(node, ctx, `b:${key}`, () => dispatch(node, ctx, key));
+}
+
 function dispatch(node: RootContent, ctx: MarkdownRenderContext, key?: string | number): ReactNode {
   // A paragraph that is just an image renders as a block image.
   if (
@@ -93,7 +181,10 @@ function createContext(
       return createElement(VStack, { gap }, kids);
     },
     renderBlock(node, key) {
-      return dispatch(node, ctx, key);
+      return memoDispatch(node, ctx, key);
+    },
+    memo(node, variant, build) {
+      return memoElement(node, ctx, variant, build);
     },
     renderChildren(node) {
       return renderChildren(node, ctx);
