@@ -154,8 +154,16 @@ export class MugenInstance<T> implements SlotHost {
     this.notifyGlobal();
   }
 
-  /** Jump/animate to the very bottom. Re-engages `stickToBottom` on arrival. */
+  /** Jump/animate to the very bottom and re-engage `stickToBottom`. */
   scrollToBottom(options: { behavior?: MugenScrollBehavior } = {}): void {
+    // Prefer the controller-backed driver (wired by <MugenVList>): it re-targets
+    // the bottom every frame, so it lands on the *current* bottom of a streaming
+    // list and re-engages the stick. A bare native `scrollTo` undershoots a list
+    // that grows mid-scroll and can leave the stick disengaged.
+    if (this.scrollToBottomDriver) {
+      this.scrollToBottomDriver(options.behavior ?? 'auto');
+      return;
+    }
     const el = this.scrollEl;
     if (!el) return;
     el.scrollTo({ top: el.scrollHeight, behavior: options.behavior ?? 'auto' });
@@ -436,6 +444,10 @@ export class MugenInstance<T> implements SlotHost {
 
   /** Set by the list: shift scroll by `delta` px to keep visible content stable. */
   scrollAnchor: ((delta: number) => void) | null = null;
+
+  /** Set by the list: drive `scrollToBottom` through the scroll controller (spring
+   *  for `smooth`, jump otherwise) so it re-engages the stick and tracks growth. */
+  scrollToBottomDriver: ((behavior: MugenScrollBehavior) => void) | null = null;
 
   /** Re-measure a single row, patch the index, re-anchor, notify row + list. */
   invalidate(key: string): void {

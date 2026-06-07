@@ -20,3 +20,20 @@ export type Font =
   | `${FontWeight} ${FontSize} ${FontFamily}`
   | `${FontStyle} ${FontSize} ${FontFamily}`
   | `${FontStyle} ${FontWeight} ${FontSize} ${FontFamily}`;
+
+/**
+ * Fold a line-height (px) into a `font` shorthand for use in a rendered inline
+ * style — e.g. `"600 16px Inter"` + 24 → `"600 16px/24px Inter"`.
+ *
+ * A primitive renders with the same font + line-height it measures with. Setting
+ * the `font` shorthand *and* a separate `lineHeight` longhand on one element
+ * makes React warn ("don't mix shorthand and non-shorthand") on every re-render
+ * (e.g. while streaming), and the shorthand alone would reset line-height to
+ * `normal`. Folding the line-height into the shorthand sets it in one property,
+ * so there's nothing to conflict and the computed line-height is unchanged.
+ */
+export function fontWithLineHeight(font: string, lineHeight: number): string {
+  // Insert `/<lh>px` right after the first size token (weights are unitless, so
+  // they don't match the required unit and are skipped).
+  return font.replace(/(\d*\.?\d+(?:px|rem|em))/, `$1/${lineHeight}px`);
+}

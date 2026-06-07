@@ -16,7 +16,7 @@ import { withSession, type MugenSession } from './session';
 import { TextDefaultsContext, type TextDefaults } from './text-defaults';
 import type { Font, WhiteSpaceMode, WordBreakMode } from './text-defaults';
 import { rootFontSizePx } from './tokens-resolve';
-import { subscribeFonts, watchFonts } from './pretext/fonts';
+import { fontEpoch, subscribeFonts, watchFonts } from './pretext/fonts';
 import {
   ScrollController,
   DEFAULT_SPRING,
@@ -247,6 +247,22 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     setScrollTop(el.scrollTop);
   };
 
+  // Back `instance.scrollToBottom()` with the controller so it re-engages the
+  // stick and (for `smooth`) springs to the bottom while re-targeting it every
+  // frame — landing on the current bottom of a streaming list instead of the
+  // stale one a native `scrollTo` aims at.
+  instance.scrollToBottomDriver = (behavior) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    ctl.attach(el);
+    ctl.escaped = false;
+    if (behavior === 'smooth') ctl.springToBottom(stickSpring);
+    else {
+      ctl.jumpToBottom();
+      syncWindowFromEl();
+    }
+  };
+
   // Apply `initialScroll` once, after the first real measure (content width and
   // total height are only known after the ResizeObserver fires).
   const didInitialScroll = useRef(false);
@@ -275,17 +291,31 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
   // it the spring would fire on the user's own scroll and yank them back even
   // when nothing streamed. No-op once the user has escaped.
   const prevTotalRef = useRef(-1);
+  const lastFontEpochRef = useRef(fontEpoch());
+  const lastViewportRef = useRef({ w: -1, h: -1 });
   useIsoLayoutEffect(() => {
     const el = scrollRef.current;
     if (!stickOn || !didInitialScroll.current || !el) return;
     ctl.attach(el);
+    // A font-settle re-measure or a viewport resize reflows *every* row at once
+    // (fallback metrics → the real web font; a new width → new wrapping), so the
+    // total height jumps. Snap to those instantly — animating a whole-layout
+    // correction reads as a janky "scroll to bottom" — rather than springing as
+    // we do for content that genuinely streams in.
+    const epoch = fontEpoch();
+    const fontSettleGrowth = epoch !== lastFontEpochRef.current;
+    lastFontEpochRef.current = epoch;
+    const curW = controlledWidth ?? measured.current.width;
+    const curH = props.height ?? measured.current.height;
+    const resized = curW !== lastViewportRef.current.w || curH !== lastViewportRef.current.h;
+    lastViewportRef.current = { w: curW, h: curH };
     const total = instance.totalHeight();
     const prevTotal = prevTotalRef.current;
     prevTotalRef.current = total;
     if (prevTotal < 0) return; // first run after initialScroll: record the baseline only
     if (total <= prevTotal + 0.5) return; // not growth → leave the user where they are
     if (ctl.escaped || !ctl.hasOverflow() || ctl.distanceFromBottom() <= 0.5) return;
-    if (stickInstant) {
+    if (stickInstant || fontSettleGrowth || resized) {
       ctl.jumpToBottom();
       syncWindowFromEl();
     } else {

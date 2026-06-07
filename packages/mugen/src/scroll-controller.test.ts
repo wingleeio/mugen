@@ -92,6 +92,27 @@ describe('ScrollController', () => {
     expect(c.escaped).toBe(false);
   });
 
+  it('re-engages a stale escape when a shrink clamps back to the bottom (replay)', () => {
+    const c = new ScrollController();
+    const el = fakeEl(1000, 400, 600); // pinned at the bottom
+    c.attach(el);
+
+    // User scrolls up to re-read → escapes the stick.
+    el.scrollTop = 500; // dist 100
+    c.handleScroll(STICK_THRESHOLD_PX);
+    expect(c.escaped).toBe(true);
+
+    // They press Replay: the live turn collapses, scrollHeight drops, and the
+    // browser clamps scrollTop onto the new (smaller) max — landing them at the
+    // bottom. The stale escape must clear so the new stream sticks again.
+    const geom = el as unknown as { scrollHeight: number; scrollTop: number };
+    geom.scrollHeight = 700;
+    geom.scrollTop = 300; // 700 - 400, the clamped max (at the bottom)
+    c.handleScroll(STICK_THRESHOLD_PX);
+    expect(c.distanceFromBottom()).toBe(0);
+    expect(c.escaped).toBe(false);
+  });
+
   it('attaching a new element resets the escaped state', () => {
     const c = new ScrollController();
     c.attach(fakeEl(1000, 400, 0));

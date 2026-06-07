@@ -17,6 +17,20 @@ a reasoning trace and watch the list re-flow without losing your place:
 
 <Showcase example="ai-chat" filename="ai-chat.tsx" />
 
+## Rich markdown rows
+
+[`@wingleeio/mugen-markdown`](https://www.npmjs.com/package/@wingleeio/mugen-markdown)
+parses each row's markdown with [incremark](https://www.incremark.com/) and renders
+it with mugen primitives — so headings, lists, fenced code, tables, and inline
+**bold** / `code` / [links](https://www.incremark.com/) are all measured by the
+walker. Off-screen rows have exact heights with no measure-on-mount shift, even
+though every row is a different mix of blocks. Inline marks are styled through a
+deep-partial `theme`; block nodes are overridable with a fully-typed `components`
+map (here, `h1` gets an accent rule) — both authored from the same primitives, so
+they stay measurable:
+
+<Showcase example="mugen-markdown" filename="notes.tsx" />
+
 ## Chat / message list
 
 Avatar on the left, author + message on the right. The avatar is a fixed-size box

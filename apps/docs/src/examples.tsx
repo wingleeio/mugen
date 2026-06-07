@@ -11,7 +11,8 @@ import {
   useMugenVirtualizer,
   VStack,
 } from '@wingleeio/mugen';
-import { chatHtml, accordionHtml, markdownHtml, aiChatHtml } from './components/highlighted';
+import { Markdown, defineMarkdownComponents } from '@wingleeio/mugen-markdown';
+import { chatHtml, accordionHtml, markdownHtml, mugenMarkdownHtml, aiChatHtml } from './components/highlighted';
 
 const scrollCls = 'mu-scroll [&>div>div>div]:border-b [&>div>div>div]:border-fd-border/50';
 
@@ -217,8 +218,8 @@ interface Tool {
 interface Turn {
   id: string;
   role: 'user' | 'assistant';
-  /** Body paragraphs (each its own measured <Text>). */
-  body: string[];
+  /** Body as markdown — rendered with @wingleeio/mugen-markdown, measured by the walker. */
+  body: string;
   /** Assistant only: the collapsed reasoning trace. */
   thinking?: string;
   /** Assistant only: caption for the disclosure, e.g. "2.7s". */
@@ -243,6 +244,23 @@ const AC = {
 } as const;
 
 const MONO = "'Geist Mono Variable', monospace";
+
+// Markdown styling tuned to the assistant turn's palette. A stable module-level
+// object so the theme resolves (and caches) once.
+const CHAT_MD_THEME = {
+  fontFamily: 'Inter',
+  monoFamily: '"Geist Mono Variable", monospace',
+  fontSize: 15,
+  lineHeight: 24,
+  color: AC.fg,
+  blockGap: 12,
+  heading: { color: AC.fg, weight: 650 },
+  link: { color: AC.accent, underline: true },
+  inlineCode: { background: AC.card, color: AC.fg, sizeScale: 0.9 },
+  code: { background: AC.card, color: AC.fg, padding: 12, radius: 10, fontSize: 13, lineHeight: 20 },
+  blockquote: { borderColor: AC.rule, color: AC.muted, padding: 12, gap: 8, borderWidth: 3 },
+  list: { gap: 6, indent: 24, markerColor: AC.muted },
+};
 
 /** Clickable header for the reasoning disclosure (a real <button>). */
 const Disclosure = definePrimitive('button', { name: 'Disclosure' });
@@ -371,27 +389,10 @@ function UserTurn({ item }: { item: Turn }): ReactNode {
         gap={3}
         style={{ background: AC.bubble, borderRadius: 16, boxShadow: `inset 0 0 0 1px ${AC.hairline}` }}
       >
-        {item.body.map((p, i) => (
-          <Text key={i} font="15px Inter, sans-serif" lineHeight={23} color={AC.fg}>
-            {p}
-          </Text>
-        ))}
+        <Markdown source={item.body} theme={CHAT_MD_THEME} />
       </VStack>
     </HStack>
   );
-}
-
-/** Reveal the first `count` words across paragraphs, keeping the breaks. */
-function revealWords(paras: string[], count: number): string[] {
-  const out: string[] = [];
-  let left = count;
-  for (const p of paras) {
-    if (left <= 0) break;
-    const w = p.split(' ');
-    out.push(w.slice(0, left).join(' '));
-    left -= w.length;
-  }
-  return out;
 }
 
 function TurnRow(item: Turn): ReactNode {
@@ -403,23 +404,31 @@ function TurnRow(item: Turn): ReactNode {
   // The live turn streams its answer in, word by word: useMugenEffect drives a
   // timer, useMugenState holds how many words are revealed, and the row
   // re-measures on each tick — so stickToBottom can follow it down smoothly.
-  const totalWords = item.body.reduce((n, p) => n + p.split(' ').length, 0);
+  // The growing markdown prefix is re-parsed incrementally by <Markdown> (it
+  // appends only the new words to a retained incremark parser), and the walker
+  // re-measures the row exactly as blocks resolve.
+  const words = item.body.split(' ');
+  const totalWords = words.length;
   const [revealed, setRevealed] = useMugenState(isLive ? 0 : totalWords);
   useMugenEffect(() => {
     if (!isLive) return;
+    // Reveal a few words per tick, scaled so any length streams in ~12s.
+    const step = Math.max(1, Math.ceil(totalWords / 200));
     let n = 0;
     const id = setInterval(() => {
-      n += 1;
-      setRevealed(n);
+      n += step;
+      setRevealed(Math.min(n, totalWords));
       if (n >= totalWords) clearInterval(id);
-    }, 75);
+    }, 60);
     return () => clearInterval(id);
   }, [item.id]);
 
   if (item.role === 'user') return <UserTurn item={item} />;
 
   const streaming = isLive && revealed < totalWords;
-  const paras = isLive ? revealWords(item.body, revealed) : item.body;
+  // A clean growing prefix keeps parsing incremental; the caret is a sibling so
+  // it doesn't break the prefix relationship between ticks.
+  const source = isLive ? words.slice(0, revealed).join(' ') : item.body;
 
   return (
     <VStack gap={12} padding={20}>
@@ -454,11 +463,14 @@ function TurnRow(item: Turn): ReactNode {
         </VStack>
       ) : null}
 
-      {(paras.length === 0 ? [''] : paras).map((p, i, arr) => (
-        <Text key={i} font="15px Inter, sans-serif" lineHeight={24} color={AC.fg}>
-          {p + (streaming && i === arr.length - 1 ? ' ▍' : '')}
-        </Text>
-      ))}
+      <VStack gap={4}>
+        <Markdown source={source} theme={CHAT_MD_THEME} />
+        {streaming ? (
+          <Text font="600 15px Inter, sans-serif" lineHeight={24} color={AC.accent} className="mu-pulse">
+            ▍
+          </Text>
+        ) : null}
+      </VStack>
     </VStack>
   );
 }
@@ -469,7 +481,7 @@ const TAIL: Turn[] = [
   {
     id: '1',
     role: 'user',
-    body: ['I need an inbox that scrolls 50,000 emails without jank, and some rows expand inline. Where do I start?'],
+    body: 'I need an inbox that scrolls **50,000 emails** without jank, and some rows expand inline. Where do I start?',
   },
   {
     id: '2',
@@ -481,15 +493,13 @@ const TAIL: Turn[] = [
       { kind: 'read', title: 'Read the concepts guide', detail: 'concepts.mdx · 180 lines' },
       { kind: 'search', title: 'Searched the API', detail: 'useMugenVirtualizer, MugenVList' },
     ],
-    body: [
-      'Start with one virtualizer over your data — useMugenVirtualizer({ items: emails }) — then render rows through MugenVList.',
-      'Because heights are computed (not measured on mount), the list knows its full scroll height up front. 50k rows scroll as smoothly as five.',
-    ],
+    body:
+      "Start with one virtualizer over your data, then render rows through `MugenVList`:\n\n```tsx\nconst list = useMugenVirtualizer({ items: emails });\n```\n\nBecause heights are **computed** — not measured on mount — the list knows its full scroll height up front, so **50k rows scroll as smoothly as five**.",
   },
   {
     id: '3',
     role: 'user',
-    body: ['Some rows open a reply box when clicked. Won’t expanding a row above the viewport shove everything and lose my scroll position?'],
+    body: 'Some rows open a reply box when clicked. Won’t expanding a row above the viewport shove everything and lose my scroll position?',
   },
   {
     id: '4',
@@ -501,15 +511,13 @@ const TAIL: Turn[] = [
       { kind: 'search', title: 'Traced setMugenState → re-measure', detail: 'instance.ts' },
       { kind: 'run', title: 'Profiled a 1-row height change', detail: 'O(log n) · 0.04ms' },
     ],
-    body: [
-      'No — keep the open/closed flag in useMugenState. Toggling re-measures just that row and patches the offset index, so nothing above the fold jumps.',
-      'Try it right here: open a “Thought for…” trace above and watch the list re-flow without losing your place.',
-    ],
+    body:
+      "No — keep the open/closed flag in `useMugenState`. Toggling:\n\n- re-measures **just that row**\n- patches the Fenwick offset index in `O(log n)`\n- leaves everything above the fold put\n\nTry it right here: open a *“Thought for…”* trace above and watch the list re-flow without losing your place.",
   },
   {
     id: '5',
     role: 'user',
-    body: ['How can the heights be exact if you never touch the DOM?'],
+    body: 'How can the heights be exact if you never touch the DOM?',
   },
   {
     id: '6',
@@ -520,14 +528,13 @@ const TAIL: Turn[] = [
     tools: [
       { kind: 'run', title: 'Measured a paragraph with pretext', detail: 'prepare() cached · layout 0.2ms' },
     ],
-    body: [
-      'One description feeds both the measurement walk and the React render, so they can’t disagree by a pixel — the height you compute is the height that paints.',
-    ],
+    body:
+      "One description feeds **both** the measurement walk and the React render, so they can’t disagree by a pixel — the height you compute is the height that paints.\n\n> The font `pretext` measures with is the font the CSS paints with.",
   },
   {
     id: '7',
     role: 'user',
-    body: ['Rows have avatars on the left and a growing text column on the right. How do I lay that out?'],
+    body: 'Rows have avatars on the left and a growing text column on the right. How do I lay that out?',
   },
   {
     id: '8',
@@ -538,34 +545,31 @@ const TAIL: Turn[] = [
     tools: [
       { kind: 'read', title: 'Read the primitives reference', detail: 'VStack, HStack, Text' },
     ],
-    body: [
-      'Put the avatar in a width/height box and let the text VStack take the remainder: <HStack gap={12}><VStack width={36} height={36}/><VStack>…</VStack></HStack>.',
-      'Every row can be a different height and they all measure correctly — the column width drives the text wrap, which drives the height.',
-    ],
+    body:
+      "An `HStack` with a fixed-width avatar and a flexible text column:\n\n```tsx\n<HStack gap={12}>\n  <VStack width={36} height={36} />\n  <VStack>{/* text */}</VStack>\n</HStack>\n```\n\nFixed siblings keep their width; the rest share the remainder. Spacing is **props**, never CSS, so the walker counts it exactly.",
   },
   {
     id: '9',
     role: 'user',
-    body: ['Each email body is markdown that I parse asynchronously. Can a row resize after it loads?'],
+    body: 'Each email body is **markdown**. Can a row resize after it renders?',
   },
   {
     id: '10',
     role: 'assistant',
     thoughtFor: '2.6s',
     thinking:
-      'useMugenEffect runs for every row, on- or off-screen, on a microtask after measure. Parse there, store the blocks with useMugenState, and the row re-measures to its exact height when the result lands — no layout shift.',
+      'Render it with @wingleeio/mugen-markdown: incremark parses the body, mugen primitives render it, and the walker measures every block — including off-screen rows. Streaming bodies re-parse incrementally.',
     tools: [
       { kind: 'read', title: 'Read the effects guide', detail: 'effects.mdx' },
-      { kind: 'run', title: 'Simulated an async parse', detail: 'row re-measured · 0 layout shift' },
+      { kind: 'run', title: 'Rendered a markdown row', detail: '0 layout shift' },
     ],
-    body: [
-      'Yes. Do the work in useMugenEffect, setMugenState with the parsed blocks, and mugen re-measures the affected rows for you. It works for off-screen rows too, so the scroll height is right before you ever get there.',
-    ],
+    body:
+      "Yes — render it with `@wingleeio/mugen-markdown`. It parses with incremark and renders **mugen primitives**, so headings, lists, fenced code, and inline `code` are all measured by the walker:\n\n```tsx\n<Markdown source={email.body} />\n```\n\nOff-screen rows get exact heights too — no measure-on-mount shift.",
   },
   {
     id: '11',
     role: 'user',
-    body: ['What fonts can I use, and does the measurement track them?'],
+    body: 'What fonts can I use, and does the measurement track them?',
   },
   {
     id: '12',
@@ -577,14 +581,13 @@ const TAIL: Turn[] = [
       { kind: 'read', title: 'Read the fonts page', detail: 'fonts.mdx' },
       { kind: 'web', title: 'Checked the canvas text metrics spec', detail: 'measureText()' },
     ],
-    body: [
-      'Any real family with a size: font="600 15px Inter". When a webfont finishes loading, mugen bumps a font epoch and re-measures the rows that used it — so the layout settles to the exact metrics.',
-    ],
+    body:
+      'Any real family with a size: `font="600 15px Inter"`. `system-ui` is rejected — its metrics aren’t deterministic.\n\nWhen a webfont finishes loading, mugen bumps a **font epoch** and re-measures the rows that used it, so layout settles to the exact metrics.',
   },
   {
     id: '13',
     role: 'user',
-    body: ['Does it hold up at a million rows, or is 50k the ceiling?'],
+    body: 'Does it hold up at a **million** rows, or is 50k the ceiling?',
   },
   {
     id: '14',
@@ -595,14 +598,13 @@ const TAIL: Turn[] = [
     tools: [
       { kind: 'run', title: 'Benchmarked 1,000,000 rows', detail: '60fps scroll · ~12ms initial' },
     ],
-    body: [
-      'It holds. The cost is logarithmic in row count and only the visible slice mounts, so a million rows scroll like a thousand — your data size is the real ceiling.',
-    ],
+    body:
+      'It holds. Everything hot is `O(log n)`:\n\n1. the offset index for height patches\n2. the binary search for the visible slice\n\nOnly the visible slice mounts, so a million rows scroll like a thousand — **your data size is the real ceiling**.',
   },
   {
     id: '15',
     role: 'user',
-    body: ['Last thing: can I deep-link to message #41,212 and have it land centered on the first try?'],
+    body: 'Last thing: can I deep-link to message **#41,212** and have it land centered on the first try?',
   },
   {
     id: '16',
@@ -615,11 +617,8 @@ const TAIL: Turn[] = [
       { kind: 'search', title: 'Looked up the offset for #41,212', detail: 'index hit · O(log n)' },
       { kind: 'run', title: 'Computed the centered scroll target', detail: 'align: center' },
     ],
-    body: [
-      'Yes — list.scrollToItem("41212", { align: "center", behavior: "smooth" }). Because every row\'s offset already lives in the index, it lands dead-center on the very first try: no measure-on-arrival, no second correction pass, and no scrollbar jump as rows mount in around it.',
-      'That\'s really the whole idea. One description of a row feeds both the measurement walk and the React render, so the height you compute is the height that paints. Inline expansion, async content, a webfont loading late — they all flow through the same single re-measure path, and the offsets stay exact the entire time.',
-      'So whether it\'s 50,000 emails or a million, you get buttery scrolling, an honest scrollbar, and pixel-exact deep links — without ever touching the DOM to ask how tall anything is. Go ahead and scroll up mid-stream: this reply keeps writing, but it won\'t yank you back down until you return to the bottom.',
-    ],
+    body:
+      'Yes — and it lands on the very first try:\n\n```tsx\nlist.scrollToItem("41212", { align: "center", behavior: "smooth" });\n```\n\nBecause every row’s offset already lives in the index, it’s **dead-center** immediately — no measure-on-arrival, no second correction, no scrollbar jump.\n\n## Putting it all together\n\nHere’s the whole flow, end to end. Every row is a pure `item → tree`, the walker derives its height analytically, and **nothing ever touches the DOM to measure**.\n\n### What you get\n\n- **Exact heights up front** — even for rows that never mount\n- **O(log n)** scroll math via a Fenwick offset index\n- **Zero layout shift** — one description feeds both measure *and* render\n- Pixel-exact `scrollToItem`, on- or off-screen\n- Streaming markdown that re-parses *incrementally* as it grows\n\n### Setting it up\n\n1. Create one virtualizer over your data\n2. Render each row through `MugenVList`\n3. Author the row from primitives — or drop in `<Markdown>`\n4. Keep height-affecting state in `useMugenState`\n\n```tsx\nconst list = useMugenVirtualizer({ items: messages });\n\nreturn (\n  <MugenVList\n    instance={list}\n    getKey={(m) => m.id}\n    render={(m) => <Markdown source={m.body} />}\n    initialScroll="bottom"\n    stickToBottom\n  />\n);\n```\n\n### Why it scales\n\n| rows | what mounts | scroll |\n|------|-------------|--------|\n| 1k | visible slice | 60fps |\n| 50k | visible slice | 60fps |\n| 1M | visible slice | 60fps |\n\nOnly the visible window mounts, so the row *count* stops being the bottleneck — your data is.\n\n> One description of a row feeds both the measurement walk and the React render, so the height you compute is the height that paints.\n\nAnd streaming? The answer you’re reading **streamed in word by word** just now:\n\n1. each chunk appended to a retained incremark parser (`O(delta)`)\n2. the walker re-measured *this one row*\n3. `stickToBottom` followed it down — until you scroll up to break free\n\nThat’s the entire idea: heights are *computed*, not measured; markdown is *parsed incrementally*, not re-parsed; and the list stays honest whether it’s **5 messages or a million**.',
   },
 ];
 
@@ -645,24 +644,21 @@ const HISTORY_USER: string[] = [
   'How many rows can this handle before scrolling starts to chug?',
 ];
 
-const HISTORY_ASST: string[][] = [
-  ['Yes — heights come from the text, font, and column width, so every row can differ and the list still knows its full scroll height up front.'],
-  ['It stays put. The height change is an O(log n) patch to the offset index and the visible slice is recomputed from the new offsets, so nothing under your cursor jumps.'],
-  ['No fixed heights. You describe each row as a tree of primitives and the walker derives the height analytically — one description feeds both the measure and the render.'],
-  ['Render the bubble as a VStack of Text. A one-word bubble measures to a single line, a paragraph wraps to many — both exact, because the column width drives the wrap.'],
-  ['scrollToItem resolves the row’s offset from the index without mounting anything in between, so it lands in one jump even for a row that has never rendered.'],
-  ['Exact. The header, body, and optional footer are primitives with gaps and padding the walker counts, so the total is their sum to the pixel.'],
-  [
-    'Keep the flag in useMugenState. Toggling re-measures just that row and patches the index; the rest of the list never re-renders.',
-    'Off-screen rows keep their state in the instance, so their heights are right before you ever scroll to them.',
-  ],
-  ['Cheap — a prepend shifts one entry in the Fenwick tree and re-anchors your scroll by the inserted height, so the bottom stays exactly where you left it.'],
-  ['Cheaper. A resize is pure arithmetic over the cached per-string metrics — no re-layout, no DOM reads — so it re-flows in a few milliseconds even for a big list.'],
-  ['The column width sets the wrap point. For code you cap the width and scroll horizontally inside the row; the measured height just follows whichever you pick.'],
-  ['On its own — swap the text in useMugenEffect, store it with useMugenState, and the affected rows re-measure to their new heights with zero layout shift.'],
-  ['Yes. Give the avatar a fixed width and let the text column take the remainder: fixed siblings keep their size, the rest share what’s left.'],
-  ['No flash. Heights are computed before paint, so the scrollbar and offsets are correct on the very first frame — there’s no mount-then-measure correction.'],
-  ['Comfortably into the hundreds of thousands. Only the visible slice mounts and everything hot is O(log n), so the row count stops being the bottleneck — your data is.'],
+const HISTORY_ASST: string[] = [
+  'Yes — heights come from the text, font, and column width, so **every row can differ** and the list still knows its full scroll height up front.',
+  'It stays put. The height change is an `O(log n)` patch to the offset index and the visible slice is recomputed from the new offsets, so nothing under your cursor jumps.',
+  'No fixed heights. You describe each row as a tree of primitives and the walker derives the height analytically — one description feeds both the measure and the render.',
+  'Render the bubble as a `VStack` of `Text`. A one-word bubble measures to a single line, a paragraph wraps to many — both exact, because the column width drives the wrap.',
+  '`scrollToItem` resolves the row’s offset from the index without mounting anything in between, so it lands in one jump even for a row that has never rendered.',
+  'Exact. The header, body, and optional footer are primitives with gaps and padding the walker counts, so the total is their sum **to the pixel**.',
+  'Keep the flag in `useMugenState`. Toggling re-measures just that row and patches the index; the rest of the list never re-renders.\n\nOff-screen rows keep their state in the instance, so their heights are right before you ever scroll to them.',
+  'Cheap — a prepend shifts one entry in the Fenwick tree and re-anchors your scroll by the inserted height, so the bottom stays exactly where you left it.',
+  'Cheaper. A resize is **pure arithmetic** over the cached per-string metrics — no re-layout, no DOM reads — so it re-flows in a few milliseconds even for a big list.',
+  'The column width sets the wrap point. For code you cap the width and scroll horizontally inside the row; the measured height just follows whichever you pick.',
+  'On its own — swap the text in `useMugenEffect`, store it with `useMugenState`, and the affected rows re-measure to their new heights with **zero layout shift**.',
+  'Yes. Give the avatar a fixed width and let the text column take the remainder: fixed siblings keep their size, the rest share what’s left.',
+  'No flash. Heights are computed before paint, so the scrollbar and offsets are correct on the very first frame — there’s no mount-then-measure correction.',
+  'Comfortably into the hundreds of thousands. Only the visible slice mounts and everything hot is `O(log n)`, so the row count stops being the bottleneck — your data is.',
 ];
 
 const HISTORY_THINK: string[] = [
@@ -692,7 +688,7 @@ const THOUGHT_FOR = ['1.4s', '2.1s', '1.8s', '2.6s', '0.9s', '3.0s'];
 function makeHistory(pairs: number): Turn[] {
   const out: Turn[] = [];
   for (let i = 0; i < pairs; i++) {
-    out.push({ id: `h${2 * i}`, role: 'user', body: [HISTORY_USER[i % HISTORY_USER.length]!] });
+    out.push({ id: `h${2 * i}`, role: 'user', body: HISTORY_USER[i % HISTORY_USER.length]! });
     const asst: Turn = {
       id: `h${2 * i + 1}`,
       role: 'assistant',
@@ -777,6 +773,113 @@ function ScrollToBottomButton({ list }: { list: MugenInstance<Turn> }): ReactNod
   );
 }
 
+// ── Real markdown (@wingleeio/mugen-markdown) ────────────────────────────────
+//
+// incremark parses each note; mugen-markdown renders it with mugen primitives,
+// so every row — headings, lists, fenced code, tables, inline bold/code/links —
+// is measured analytically by the walker. A typed `components` override (built
+// from the same primitives) gives h1 an accent rule, and a small theme aligns
+// fonts and the link colour with the docs.
+
+interface Doc {
+  id: string;
+  md: string;
+}
+
+const DOCS: Doc[] = [
+  {
+    id: '1',
+    md: 'Ship it 👍 — the renderer is **done**.',
+  },
+  {
+    id: '2',
+    md: `# Measurable markdown
+
+Each block is a **mugen primitive**, so the walker computes this row's height
+*before* it mounts — headings, paragraphs with \`inline code\`, and
+[links](https://www.incremark.com/) all included.
+
+- parsed with incremark
+- rendered with \`VStack\` / \`RichText\`
+- measured, never guessed`,
+  },
+  {
+    id: '3',
+    md: `## Inline rich text is the hard part
+
+A sentence mixing **bold**, *italic*, and \`code()\` is one wrapping flow of
+different fonts. mugen-markdown measures it as a single flow:
+
+\`\`\`ts
+const h = lines * lineHeight; // from pretext rich-inline
+\`\`\`
+
+> One description feeds both the measure and the render — they can't desync.`,
+  },
+  {
+    id: '4',
+    md: `### GFM, too
+
+| feature | status |
+|---------|--------|
+| tables  | ✓      |
+| tasks   | ✓      |
+
+1. off-screen rows have exact heights
+2. resizing is pure arithmetic
+3. no measure-on-mount shift
+
+---
+
+That's the whole idea.`,
+  },
+];
+
+const MD_THEME = {
+  fontFamily: 'Inter',
+  monoFamily: '"Geist Mono Variable", monospace',
+  fontSize: 15,
+  lineHeight: 24,
+  link: { color: 'var(--color-fd-primary)', underline: true },
+} as const;
+
+// A typed override: `node` is `Heading`, so `node.depth` is 1..6. Built from
+// mugen primitives, it stays measurable.
+const mdComponents = defineMarkdownComponents({
+  heading: ({ node, children }) =>
+    node.depth === 1 ? (
+      <VStack gap={6}>
+        {children}
+        <VStack height={2} style={{ background: 'var(--color-fd-primary)', borderRadius: 2 }} />
+      </VStack>
+    ) : (
+      children
+    ),
+});
+
+function DocRow(item: Doc): ReactNode {
+  return (
+    <VStack padding={18}>
+      <Markdown source={item.md} theme={MD_THEME} components={mdComponents} />
+    </VStack>
+  );
+}
+
+function MugenMarkdownExample(): ReactNode {
+  const list = useMugenVirtualizer({ items: DOCS });
+  return (
+    <MugenVList
+      instance={list}
+      getKey={(d) => d.id}
+      render={DocRow}
+      font="15px Inter, sans-serif"
+      lineHeight={24}
+      maxW={680}
+      className={scrollCls}
+    />
+  );
+}
+
 // ── Registry ────────────────────────────────────────────────────────────────
 
 export interface ExampleEntry {
@@ -791,6 +894,7 @@ export const EXAMPLES: Record<string, ExampleEntry> = {
   chat: { preview: () => <ChatExample />, codeHtml: chatHtml, height: 280 },
   accordion: { preview: () => <AccordionExample />, codeHtml: accordionHtml, height: 280 },
   markdown: { preview: () => <MarkdownExample />, codeHtml: markdownHtml, height: 320 },
+  'mugen-markdown': { preview: () => <MugenMarkdownExample />, codeHtml: mugenMarkdownHtml, height: 420 },
 };
 
 export type ExampleId = keyof typeof EXAMPLES;

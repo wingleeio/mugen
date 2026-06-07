@@ -117,13 +117,19 @@ export class ScrollController {
       return;
     }
     const dist = this.distanceFromBottom();
-    if (movedUp) {
-      // Scrolled up → break. Exception: a content-shrink clamp (e.g. replay)
-      // also drops scrollTop, but leaves us pinned at the bottom (dist ≈ 0).
-      if (dist > AT_BOTTOM_PX) this.release();
+    if (dist <= AT_BOTTOM_PX) {
+      // Pinned at the bottom — however we got here, including a content-shrink
+      // clamp from a replay/regenerate that drops scrollTop onto the new max.
+      // Being at the bottom *is* stuck, so (re-)engage even if we had escaped. A
+      // real scroll-up moves more than a hair before any at-bottom event, so
+      // this can't swallow one.
+      this.escaped = false;
+    } else if (movedUp) {
+      // Scrolled up away from the bottom → break the stick.
+      this.release();
     } else if (st > prev + 1 && dist <= threshold) {
-      // Re-engage only on a real *downward* move back into the bottom zone — not
-      // on a stationary/noise event, which would otherwise let a slow scroll-up
+      // A real *downward* move back into the bottom zone re-engages — but not a
+      // stationary/noise event, which would otherwise let a slow scroll-up
       // re-stick between its own steps.
       this.escaped = false;
     }

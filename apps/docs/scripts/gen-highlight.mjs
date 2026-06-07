@@ -154,29 +154,33 @@ function Notes({ items }: { items: Note[] }) {
 }`,
 
   aiChatHtml: `import {
-  MugenVList, Text, VStack, HStack, definePrimitive,
+  MugenVList, Text, VStack, definePrimitive,
   useMugenState, useMugenEffect, useMugenVirtualizer,
 } from '@wingleeio/mugen';
+import { Markdown } from '@wingleeio/mugen-markdown';
 
 interface Tool { kind: 'search' | 'read' | 'run' | 'web'; title: string; detail?: string }
 interface Turn {
   id: string;
   role: 'user' | 'assistant';
-  body: string[];
+  body: string;        // markdown
   thinking?: string;   // collapsed reasoning trace
   tools?: Tool[];      // tool-use cards
   live?: boolean;      // streams its answer in
 }
 
 const Disclosure = definePrimitive('button');
+const theme = { fontFamily: 'Inter', monoFamily: 'Geist Mono Variable', fontSize: 15, lineHeight: 24 };
 
-// A turn is a pure item -> tree. The three mugen hooks do the rest.
+// A turn is a pure item -> tree. The three mugen hooks do the rest; the body is
+// markdown, rendered with mugen primitives so the walker measures every block.
 function TurnRow(item: Turn) {
   // Collapse / expand the reasoning — re-measures just this row, O(log n).
   const [open, setOpen] = useMugenState(!!item.live);
 
-  // The live turn streams its answer in, word by word.
-  const words = item.body.join(' ').split(' ');
+  // The live turn streams its answer in, word by word. The growing markdown
+  // prefix is parsed incrementally (append-only) by <Markdown>.
+  const words = item.body.split(' ');
   const [shown, setShown] = useMugenState(item.live ? 0 : words.length);
   useMugenEffect(() => {
     if (!item.live) return;
@@ -191,6 +195,7 @@ function TurnRow(item: Turn) {
 
   if (item.role === 'user') return <UserBubble item={item} />;
   const streaming = item.live && shown < words.length;
+  const source = item.live ? words.slice(0, shown).join(' ') : item.body;
 
   return (
     <VStack gap={12} padding={20}>
@@ -209,9 +214,10 @@ function TurnRow(item: Turn) {
         <ToolCard key={i} tool={t} running={streaming && i === item.tools!.length - 1} />
       ))}
 
-      {item.live
-        ? <Text>{words.slice(0, shown).join(' ') + (streaming ? ' ▍' : '')}</Text>
-        : item.body.map((p, i) => <Text key={i}>{p}</Text>)}
+      <VStack gap={4}>
+        <Markdown source={source} theme={theme} />
+        {streaming ? <Text color="gray" className="mu-pulse">▍</Text> : null}
+      </VStack>
     </VStack>
   );
 }
@@ -226,6 +232,43 @@ function Chat({ turns }: { turns: Turn[] }) {
       initialScroll="bottom" stickToBottom
     />
   );
+}`,
+
+  mugenMarkdownHtml: `import { MugenVList, VStack, useMugenVirtualizer } from '@wingleeio/mugen';
+import { Markdown, defineMarkdownComponents } from '@wingleeio/mugen-markdown';
+
+interface Doc { id: string; md: string }
+
+// Inline marks are styled via the theme; block nodes via typed components.
+const theme = { fontFamily: 'Inter', monoFamily: 'Geist Mono Variable', fontSize: 15, lineHeight: 24 };
+
+// A typed override: node is Heading, so node.depth is 1..6. Built from mugen
+// primitives, so it stays measurable by the walker.
+const components = defineMarkdownComponents({
+  heading: ({ node, children }) =>
+    node.depth === 1 ? (
+      <VStack gap={6}>
+        {children}
+        <VStack height={2} style={{ background: 'var(--accent)' }} />
+      </VStack>
+    ) : (
+      children
+    ),
+});
+
+function DocRow(d: Doc) {
+  return (
+    <VStack padding={18}>
+      <Markdown source={d.md} theme={theme} components={components} />
+    </VStack>
+  );
+}
+
+function Notes({ docs }: { docs: Doc[] }) {
+  const list = useMugenVirtualizer({ items: docs });
+  // Every row — headings, lists, fenced code, tables, inline bold/code/links —
+  // is measured analytically: off-screen rows have exact heights, no shift.
+  return <MugenVList instance={list} getKey={(d) => d.id} render={DocRow} maxW={680} />;
 }`,
 };
 

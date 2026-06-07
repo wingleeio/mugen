@@ -1,0 +1,212 @@
+import {
+  createElement,
+  type CSSProperties,
+  type JSX,
+  type ReactElement,
+  type ReactNode,
+} from 'react';
+import {
+  markPrimitive,
+  assertMeasurableFont,
+  fontEpoch,
+  fontWithLineHeight,
+  type Font,
+  type MeasureContext,
+  type MeasurableStyle,
+  type SafeClassName,
+} from '@wingleeio/mugen';
+import {
+  prepareRichInline,
+  measureRichInlineStats,
+  type PreparedRichInline,
+  type RichInlineItem,
+} from '@chenglou/pretext/rich-inline';
+
+/**
+ * One styled span of inline text. A `RichText` is a sequence of runs that wrap
+ * together as a single flowing paragraph — the thing markdown inline content
+ * (bold, italic, code, links inside a sentence) needs and that a single-font
+ * `<Text>` can't express. Each run carries its own measurable `font`, so the
+ * mixed fonts on a line are measured exactly (via `@chenglou/pretext`'s
+ * rich-inline layout) and the painted spans use the identical fonts.
+ */
+export interface RichTextRun {
+  /** The run's text. Ignored when `break` is set. */
+  text: string;
+  /** Measurable font for this run; falls back to the `<RichText font>` prop. */
+  font?: Font;
+  color?: string;
+  /** Background (e.g. inline-code chip). Cosmetic — does not affect height. */
+  background?: string;
+  /** CSS `text-decoration` (e.g. `"underline"`, `"line-through"`). Cosmetic. */
+  decoration?: string;
+  /** Render as a link with this `href` (sets the tag to `<a>` unless `as` is given). */
+  href?: string;
+  title?: string;
+  onClick?: (e: unknown) => void;
+  /** The element tag for this run. Defaults to `a` when `href` is set, else `span`. */
+  as?: keyof JSX.IntrinsicElements;
+  /** Forbid line breaks inside this run. */
+  noBreak?: boolean;
+  letterSpacing?: number;
+  className?: string;
+  /** A hard line break (renders `<br>`, forces a new line in the measure). */
+  break?: boolean;
+}
+
+export interface RichTextProps<C extends string = string> {
+  /** The inline runs to flow together. */
+  runs: RichTextRun[];
+  /** Line height in px — the height of every wrapped line. Required. */
+  lineHeight: number;
+  /** Fallback font for runs that don't set their own. */
+  font?: Font;
+  color?: string;
+  align?: CSSProperties['textAlign'];
+  /** Inline styles, minus spacing/sizing (owned by the layout). */
+  style?: MeasurableStyle;
+  className?: SafeClassName<C>;
+}
+
+function resolveRunFont(run: RichTextRun, fallback: Font | undefined): Font {
+  const font = run.font ?? fallback;
+  if (font == null) {
+    throw new Error(
+      'mugen-markdown: <RichText> run needs a font — set `font` on the run or on <RichText>.',
+    );
+  }
+  assertMeasurableFont(font);
+  return font;
+}
+
+/** Split runs into hard-break-delimited segments, each a list of rich-inline items. */
+function segmentItems(runs: RichTextRun[], fallback: Font | undefined): RichInlineItem[][] {
+  const segments: RichInlineItem[][] = [];
+  let cur: RichInlineItem[] = [];
+  for (const run of runs) {
+    if (run.break) {
+      segments.push(cur);
+      cur = [];
+      continue;
+    }
+    if (run.text.length === 0) continue;
+    const item: RichInlineItem = { text: run.text, font: resolveRunFont(run, fallback) };
+    if (run.letterSpacing != null) item.letterSpacing = run.letterSpacing;
+    if (run.noBreak) item.break = 'never';
+    cur.push(item);
+  }
+  segments.push(cur);
+  return segments;
+}
+
+// Cache prepared rich-inline handles. Keyed on the segment's (font, spacing,
+// break, text) tuple — the inputs to the expensive canvas pass — and flushed
+// when web fonts settle (epoch bump), mirroring mugen's own text cache.
+const MAX_CACHE = 4096;
+const prepCache = new Map<string, PreparedRichInline>();
+let cacheEpoch = -1;
+
+function segmentKey(items: RichInlineItem[]): string {
+  let key = '';
+  for (const it of items) {
+    key += `${it.font}${it.letterSpacing ?? ''}${it.break ?? ''}${it.text}`;
+  }
+  return key;
+}
+
+function prepareCached(items: RichInlineItem[]): PreparedRichInline {
+  const epoch = fontEpoch();
+  if (epoch !== cacheEpoch) {
+    prepCache.clear();
+    cacheEpoch = epoch;
+  }
+  const key = segmentKey(items);
+  let prepared = prepCache.get(key);
+  if (prepared === undefined) {
+    if (prepCache.size >= MAX_CACHE) prepCache.clear();
+    prepared = prepareRichInline(items);
+    prepCache.set(key, prepared);
+  }
+  return prepared;
+}
+
+function measureRichText(props: RichTextProps, ctx: MeasureContext): number {
+  const { runs, lineHeight } = props;
+  if (runs.length === 0) return 0;
+  const segments = segmentItems(runs, props.font);
+  const hasText = segments.some((s) => s.length > 0);
+  const hasBreak = runs.some((r) => r.break);
+  if (!hasText && !hasBreak) return 0;
+
+  const width = Math.max(0, ctx.width);
+  let lines = 0;
+  for (const seg of segments) {
+    if (seg.length === 0) {
+      // A blank line — e.g. the line a trailing/standalone hard break opens.
+      lines += 1;
+      continue;
+    }
+    lines += Math.max(1, measureRichInlineStats(prepareCached(seg), width).lineCount);
+  }
+  return lines * lineHeight;
+}
+
+function renderRichText(props: RichTextProps): ReactElement {
+  const lh = props.lineHeight;
+  const containerStyle: CSSProperties = {
+    lineHeight: `${lh}px`,
+    whiteSpace: 'normal',
+    // Match pretext, which breaks a word that can't fit rather than overflow.
+    overflowWrap: 'anywhere',
+    margin: 0,
+    padding: 0,
+    ...(props.color != null ? { color: props.color } : null),
+    ...(props.align != null ? { textAlign: props.align } : null),
+    ...(props.style as CSSProperties | undefined),
+  };
+
+  const children: ReactNode[] = props.runs.map((run, i) => {
+    if (run.break) return createElement('br', { key: i });
+    const tag = run.as ?? (run.href != null ? 'a' : 'span');
+    // Line-height is folded into the `font` shorthand so every inline box keeps
+    // the paragraph's line height (the shorthand alone resets it to `normal`),
+    // without setting both `font` and a `lineHeight` longhand — which React
+    // warns about on re-render (e.g. while streaming).
+    const style: CSSProperties = {
+      font: fontWithLineHeight(resolveRunFont(run, props.font), lh),
+      ...(run.color != null ? { color: run.color } : null),
+      ...(run.background != null ? { background: run.background } : null),
+      ...(run.decoration != null ? { textDecoration: run.decoration } : null),
+      ...(run.letterSpacing != null ? { letterSpacing: `${run.letterSpacing}px` } : null),
+      ...(run.noBreak ? { whiteSpace: 'nowrap' } : null),
+    };
+    const elementProps: Record<string, unknown> = { key: i, style };
+    if (run.href != null) elementProps.href = run.href;
+    if (run.title != null) elementProps.title = run.title;
+    if (run.onClick != null) elementProps.onClick = run.onClick;
+    if (run.className != null) elementProps.className = run.className;
+    return createElement(tag, elementProps, run.text);
+  });
+
+  return createElement('div', { className: props.className as string | undefined, style: containerStyle }, children);
+}
+
+/**
+ * A measurable rich inline-text primitive: a paragraph of mixed-font runs that
+ * wrap as one flow. Its height is `lines × lineHeight`, where `lines` comes from
+ * pretext's rich-inline layout at the row's width — the same layout the browser
+ * performs over the rendered spans, so the analytic height matches the paint.
+ */
+export const RichText = markPrimitive(
+  renderRichText as <C extends string = string>(props: RichTextProps<C>) => ReactElement,
+  {
+    name: 'RichText',
+    measure: (props, ctx) => measureRichText(props as unknown as RichTextProps, ctx),
+  },
+);
+
+/** Drop the rich-inline prepare cache (tests / memory pressure). */
+export function clearRichTextCache(): void {
+  prepCache.clear();
+  cacheEpoch = -1;
+}

@@ -1,6 +1,7 @@
 import { useContext, type CSSProperties, type ReactElement } from 'react';
 import { markPrimitive, type MeasureContext } from './core';
 import { measureText, naturalWidth, prepareText, type PrepareOptions } from '../pretext/measure';
+import { fontWithLineHeight } from '../font';
 import {
   TextDefaultsContext,
   type Font,
@@ -57,11 +58,12 @@ function resolveText(props: TextProps, defaults: TextDefaults): ResolvedText {
 
 function TextComponent(props: TextProps): ReactElement {
   const r = resolveText(props, useContext(TextDefaultsContext));
-  // `font` first, then `lineHeight`: the CSS `font` shorthand resets line-height
-  // to `normal`, so the longhand must come after to win.
+  // Line-height is folded into the `font` shorthand (`16px/22px Inter`) so we
+  // don't set both `font` and a `lineHeight` longhand on one element — React
+  // warns about mixing them on re-render, and the shorthand alone would reset
+  // line-height to `normal`.
   const style: CSSProperties = {
-    font: r.font,
-    lineHeight: `${r.lineHeight}px`,
+    font: fontWithLineHeight(r.font, r.lineHeight),
     whiteSpace: r.whiteSpace,
     wordBreak: r.wordBreak,
     // Match pretext, which breaks a word that can't fit rather than overflow.

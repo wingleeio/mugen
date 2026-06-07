@@ -46,8 +46,16 @@ export type {
   DefinePrimitiveOptions,
 } from './primitives/box';
 
+// ── Defining custom measurable primitives ──
+// `definePrimitive` covers tag-backed layout boxes; `markPrimitive` is the
+// lower-level escape hatch for a primitive with a bespoke `measure()` (e.g. a
+// rich inline-text primitive that measures mixed fonts as one wrapping flow).
+export { markPrimitive, getPrimitiveDef } from './primitives/core';
+export type { MeasurableDef, MeasureContext } from './primitives/core';
+
 // ── Style + font types ──
 export type { MeasurableStyle, SafeClassName } from './style';
+export { fontWithLineHeight } from './font';
 export type { Font, FontSizeUnit, FontStyle, FontWeight } from './font';
 export type { TextDefaults, WhiteSpaceMode, WordBreakMode } from './text-defaults';
 
