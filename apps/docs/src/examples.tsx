@@ -633,25 +633,6 @@ const ICONS: Record<ToolKind, string> = {
 
 const mask = (svg: string) => `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 
-function Mark(): ReactNode {
-  return (
-    <VStack
-      width={22}
-      height={22}
-      align="center"
-      justify="center"
-      style={{
-        background: `linear-gradient(140deg, ${AC.fg}, color-mix(in oklab, ${AC.fg} 50%, ${AC.accent}))`,
-        borderRadius: 7,
-      }}
-    >
-      <Text font="600 12px Inter, sans-serif" lineHeight={14} color={AC.page}>
-        ✦
-      </Text>
-    </VStack>
-  );
-}
-
 function ToolIcon({ kind }: { kind: ToolKind }): ReactNode {
   return (
     <VStack
@@ -787,18 +768,6 @@ function TurnRow(item: Turn): ReactNode {
   // it keeps a *stable element reference* across ticks — React then bails out of
   // re-rendering it, and only the streaming body updates each tick. (React.memo
   // can't be used here: mugen's measure walker only handles plain components.)
-  const header = useMugenMemo(
-    () => (
-      <HStack gap={9} align="center">
-        <Mark />
-        <Text font={`500 11px ${MONO}`} lineHeight={14} letterSpacing={0.6} color={AC.muted}>
-          mugen
-        </Text>
-      </HStack>
-    ),
-    [],
-  );
-
   const thinkingEl = useMugenMemo(
     () =>
       item.thinking ? (
@@ -834,7 +803,6 @@ function TurnRow(item: Turn): ReactNode {
 
   return (
     <VStack gap={12} padding={20}>
-      {header}
       {thinkingEl}
       {toolsEl}
       <VStack gap={4}>
