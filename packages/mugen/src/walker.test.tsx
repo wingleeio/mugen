@@ -153,6 +153,24 @@ describe('walker: primitive measurement', () => {
     );
     expect(heightOf(<Row label="x" />, 600, defaults)).toBe(LH + 2 + LH);
   });
+
+  it('reads a fixed width through a composed component when distributing an HStack', () => {
+    // In the DOM the component's root primitive IS the flex item, so its
+    // `width` makes it `flex: 0 0 28px` and the sibling gets the rest. The
+    // measure pass must see that width too — treating the icon as a grow child
+    // would split the row in half and wrap the sibling's text where the DOM
+    // doesn't (the tool-card gap bug).
+    const Icon = () => <VStack width={28} height={28} />;
+    const row = (
+      <HStack gap={10}>
+        <Icon />
+        <Text>{'x'.repeat(30)}</Text>
+      </HStack>
+    );
+    // Inner 350 − gap 10 − icon 28 = 312 for the text; 30 chars × 10px = 300px
+    // → exactly 1 line. An equal split (170 each) would wrap it to 2.
+    expect(heightOf(row, 350, defaults)).toBe(28); // max(icon 28, one 20px line)
+  });
 });
 
 describe('walker: Portal (out-of-flow content)', () => {

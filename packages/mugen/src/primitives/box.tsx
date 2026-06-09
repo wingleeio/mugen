@@ -6,7 +6,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from 'react';
-import { markPrimitive, type MeasureContext } from './core';
+import { getPrimitiveDef, markPrimitive, type MeasureContext } from './core';
 import { toChildArray } from '../walker';
 import type { MeasurableStyle, SafeClassName } from '../style';
 
@@ -58,11 +58,24 @@ const LAYOUT_KEYS = new Set([
   'style',
 ]);
 
-/** Read a child's declared fixed width (`width` prop), if it has one. */
+/**
+ * Read a child's declared fixed width (`width` prop), if it has one. A plain
+ * (non-primitive) component is unwrapped to the tree it returns — the walker
+ * measures it through the same call, so a component whose root is a fixed-width
+ * primitive (an icon, an avatar) must distribute like that primitive: in the
+ * DOM its root *is* the flex item, `flex: 0 0 width` and all.
+ */
 function declaredWidth(node: ReactNode): number | null {
-  if (isValidElement(node)) {
-    const w = (node.props as { width?: unknown }).width;
+  let cur: ReactNode = node;
+  for (let depth = 0; depth < 32 && isValidElement(cur); depth++) {
+    const w = (cur.props as { width?: unknown }).width;
     if (typeof w === 'number') return w;
+    const type = cur.type;
+    if (typeof type === 'function' && !getPrimitiveDef(type)) {
+      cur = (type as (props: object) => ReactNode)(cur.props as object);
+      continue;
+    }
+    return null;
   }
   return null;
 }
