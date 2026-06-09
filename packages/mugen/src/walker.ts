@@ -1,4 +1,4 @@
-import { Children, isValidElement, type ReactElement, type ReactNode } from 'react';
+import { Children, Fragment, isValidElement, type ReactElement, type ReactNode } from 'react';
 import { getPrimitiveDef, typeName, type MeasureContext } from './primitives/core';
 import type { TextDefaults } from './text-defaults';
 
@@ -37,6 +37,14 @@ export function measureNode(node: ReactNode, width: number, defaults: TextDefaul
 
   if (isValidElement(node)) {
     const element = node as ReactElement;
+
+    // A Fragment is transparent — it paints no box, so its children render as
+    // direct siblings. Measure them in place (sum, like an array) at the same
+    // width; this can't change the height.
+    if (element.type === Fragment) {
+      return measureNode((element.props as { children?: ReactNode }).children, width, defaults);
+    }
+
     const def = getPrimitiveDef(element.type);
     if (def) {
       const ctx: MeasureContext = {
@@ -72,9 +80,35 @@ export function measureNode(node: ReactNode, width: number, defaults: TextDefaul
   throw new Error('mugen: encountered an unmeasurable node while walking a row tree.');
 }
 
-/** Flatten React children to an array, dropping null/booleans. */
+/**
+ * Flatten React children to an array, dropping null/booleans and splicing
+ * `Fragment` children in place. A Fragment paints no box — its children are
+ * direct flex siblings in the DOM — so flattening here keeps box chrome (gaps,
+ * `HStack` width distribution) counting the real children, matching the render.
+ */
 export function toChildArray(children: ReactNode): ReactNode[] {
-  return Children.toArray(children);
+  const out: ReactNode[] = [];
+  for (const child of Children.toArray(children)) {
+    if (isValidElement(child) && child.type === Fragment) {
+      out.push(...toChildArray((child.props as { children?: ReactNode }).children));
+    } else {
+      out.push(child);
+    }
+  }
+  return out;
+}
+
+/**
+ * Sum the heights of `children` at the current width — the vertical-stack
+ * measure used by `VStack`. Exposed so a custom primitive with a bespoke
+ * (hook-using) render can still measure its children the standard way, e.g. a
+ * `mugen-ui` overlay trigger that wraps the row's primitives in event handlers
+ * but should measure exactly as those primitives do.
+ */
+export function measureChildren(children: ReactNode, ctx: MeasureContext): number {
+  let sum = 0;
+  for (const child of toChildArray(children)) sum += ctx.measure(child, ctx.width);
+  return sum;
 }
 
 /** Append the failing component name to a measure error, building a path. */

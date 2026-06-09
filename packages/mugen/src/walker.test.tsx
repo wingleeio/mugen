@@ -10,9 +10,11 @@ vi.mock('@chenglou/pretext', () => ({
   clearCache: vi.fn(),
 }));
 
-import { heightOf } from './walker';
+import { heightOf, measureChildren } from './walker';
 import { Text } from './primitives/text';
+import { Portal } from './primitives/portal';
 import { VStack, HStack, definePrimitive } from './primitives/box';
+import { markPrimitive } from './primitives/core';
 import type { TextDefaults } from './text-defaults';
 
 const LH = 20;
@@ -99,6 +101,49 @@ describe('walker: primitive measurement', () => {
     expect(heightOf(<Text>{'hi'}</Text>, 600, { font: '16px Inter', lineHeight: 30 })).toBe(30);
   });
 
+  it('treats a Fragment as transparent — sums its children in place', () => {
+    // A standalone fragment sums like an array.
+    const h = heightOf(
+      <>
+        <Text>{'a'}</Text>
+        <Text>{'b'}</Text>
+      </>,
+      600,
+      defaults,
+    );
+    expect(h).toBe(LH + LH);
+  });
+
+  it('splices Fragment children into a VStack, so gaps count the real children', () => {
+    const h = heightOf(
+      <VStack gap={4}>
+        <Text>{'a'}</Text>
+        <>
+          <Text>{'b'}</Text>
+          <Text>{'c'}</Text>
+        </>
+      </VStack>,
+      600,
+      defaults,
+    );
+    // Three lines, two gaps — the fragment is transparent, not one child.
+    expect(h).toBe(LH + 4 + LH + 4 + LH);
+  });
+
+  it('splices Fragment children into an HStack (side-by-side, tallest wins)', () => {
+    const h = heightOf(
+      <HStack gap={4} padding={8}>
+        <>
+          <Text>{'a'}</Text>
+          <Text>{'b'}</Text>
+        </>
+      </HStack>,
+      600,
+      defaults,
+    );
+    expect(h).toBe(LH + 16); // max(line, line) + 2×padding
+  });
+
   it('invokes hook-free composed components', () => {
     const Row = ({ label }: { label: string }) => (
       <VStack gap={2}>
@@ -107,6 +152,70 @@ describe('walker: primitive measurement', () => {
       </VStack>
     );
     expect(heightOf(<Row label="x" />, 600, defaults)).toBe(LH + 2 + LH);
+  });
+});
+
+describe('walker: Portal (out-of-flow content)', () => {
+  it('measures as 0', () => {
+    expect(heightOf(<Portal>{<Text>{'tip'}</Text>}</Portal>, 600, defaults)).toBe(0);
+  });
+
+  it('contributes no height in a stack, while siblings still measure', () => {
+    const h = heightOf(
+      <VStack gap={4}>
+        <Text>{'trigger'}</Text>
+        <Portal>
+          <Text>{'x'.repeat(500)}</Text>
+        </Portal>
+      </VStack>,
+      200,
+      defaults,
+    );
+    // Only the trigger (one line) + no gap contribution worth counting beyond the
+    // single gap between the two children; the Portal adds 0 regardless of content.
+    expect(h).toBe(LH + 4);
+  });
+
+  it('does not walk its children — non-primitive content inside is allowed', () => {
+    // A raw host element / hook-using component would throw if walked. Inside a
+    // Portal it never is, because Portal.measure returns 0 without recursing.
+    const Popover = () => {
+      throw new Error('Portal children must never be walked');
+    };
+    expect(() =>
+      heightOf(
+        <VStack>
+          <Text>{'trigger'}</Text>
+          <Portal>
+            <div>
+              <Popover />
+            </div>
+          </Portal>
+        </VStack>,
+        600,
+        defaults,
+      ),
+    ).not.toThrow();
+  });
+});
+
+describe('measureChildren helper', () => {
+  it('sums children like a VStack, usable from a custom primitive', () => {
+    // A bespoke primitive that renders however it likes but measures its children
+    // the standard way — the shape mugen-ui's overlay triggers use.
+    const Trigger = markPrimitive((props: { children: React.ReactNode }) => <>{props.children}</>, {
+      name: 'Trigger',
+      measure: (props, ctx) => measureChildren((props as { children: React.ReactNode }).children, ctx),
+    });
+    const h = heightOf(
+      <Trigger>
+        <Text>{'a'}</Text>
+        <Text>{'b'}</Text>
+      </Trigger>,
+      600,
+      defaults,
+    );
+    expect(h).toBe(LH + LH);
   });
 });
 

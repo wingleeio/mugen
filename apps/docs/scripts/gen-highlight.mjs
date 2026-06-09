@@ -400,6 +400,52 @@ function Notes({ docs }: { docs: Doc[] }) {
   // is measured analytically: off-screen rows have exact heights, no shift.
   return <MugenVList instance={list} getKey={(d) => d.id} render={DocRow} maxW={680} />;
 }`,
+
+  overlaysHtml: `import { MugenVList, Text, VStack, HStack, useMugenVirtualizer } from '@wingleeio/mugen';
+import { Tooltip, Dropdown } from '@wingleeio/mugen-ui';
+
+// A row's trigger is measured like any primitive — it occupies real row space.
+// The popover / menu lives in a Portal: measured as 0 and never walked, so it
+// can be arbitrary React and never re-flows the 800-row list when it opens.
+function Member(m: Member) {
+  return (
+    <HStack gap={12} padding={12} align="center">
+      <VStack width={36} height={36} style={{ background: m.color }} />
+
+      <Tooltip>
+        <Tooltip.Trigger>
+          {/* measured: contributes the row's height */}
+          <VStack gap={2}>
+            <Text font="600 13px Inter">{m.name}</Text>
+            <Text>{m.role}</Text>
+          </VStack>
+        </Tooltip.Trigger>
+        <Tooltip.Content className="tooltip">
+          {/* portaled: any React, measured as 0 */}
+          {m.email}
+        </Tooltip.Content>
+      </Tooltip>
+
+      <Dropdown>
+        <Dropdown.Trigger><Text>Actions</Text></Dropdown.Trigger>
+        <Dropdown.Content className="menu">
+          <Dropdown.Item onSelect={() => view(m)}>View profile</Dropdown.Item>
+          <Dropdown.Item onSelect={() => remove(m)}>Remove</Dropdown.Item>
+        </Dropdown.Content>
+      </Dropdown>
+    </HStack>
+  );
+}
+
+function Members({ members }: { members: Member[] }) {
+  const list = useMugenVirtualizer({ items: members });
+  return (
+    <MugenVList
+      instance={list} getKey={(m) => m.id} render={Member}
+      font="14px Inter" lineHeight={20} maxW={760}
+    />
+  );
+}`,
 };
 
 const entries = await Promise.all(
