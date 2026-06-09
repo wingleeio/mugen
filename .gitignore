@@ -17,9 +17,6 @@ build/
 **/__screenshots__/
 test-results/
 
-# TanStack Router generated route tree
-**/routeTree.gen.ts
-
 # Env files
 .env
 .env.*
