@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   definePrimitive,
   HStack,
@@ -1090,7 +1090,47 @@ function AiChatExample(): ReactNode {
           className="mu-scroll"
         />
         <ScrollToBottomButton list={list} />
+        {import.meta.env.DEV ? <MeasureDebugBadge /> : null}
       </div>
+    </div>
+  );
+}
+
+// TEMP (dev only): live computed-vs-DOM delta for the row window, overlaid on
+// the demo so a real device can report measurement drift. Δ = computed height
+// minus painted height of the last rendered row; ~0 means heights are exact.
+function MeasureDebugBadge(): ReactNode {
+  const [text, setText] = useState('Δ …');
+  useEffect(() => {
+    const id = setInterval(() => {
+      const rows = [...document.querySelectorAll<HTMLElement>('[data-mugen-row]')].filter((r) =>
+        r.getAttribute('data-mugen-row')!.startsWith('live-'),
+      );
+      const row = rows[rows.length - 1];
+      if (!row) return setText('Δ no live row');
+      const spacer = row.parentElement!;
+      const top = parseFloat(row.style.top || '0');
+      const gap = spacer.getBoundingClientRect().height - top - row.getBoundingClientRect().height;
+      setText(`Δ ${gap.toFixed(1)}px`);
+    }, 500);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        top: 8,
+        right: 8,
+        zIndex: 10,
+        padding: '4px 8px',
+        borderRadius: 8,
+        background: 'rgba(220, 38, 38, 0.9)',
+        color: '#fff',
+        font: '600 11px ui-monospace, monospace',
+        pointerEvents: 'none',
+      }}
+    >
+      {text}
     </div>
   );
 }

@@ -18,6 +18,20 @@ export interface MeasureContext {
 export interface MeasurableDef {
   readonly name: string;
   measure(props: Record<string, unknown>, ctx: MeasureContext): number;
+  /**
+   * Max-content width of this primitive in px (the width it takes as a flex
+   * item when nothing forces it to wrap), or `null` when unknowable. An
+   * `HStack` uses it to distribute width the way CSS flex does — children at
+   * their content width, shrunk proportionally on overflow. A primitive
+   * without it makes the surrounding row fall back to an equal split.
+   */
+  naturalWidth?(props: Record<string, unknown>, ctx: MeasureContext): number | null;
+  /**
+   * True when the primitive renders outside the row's flow (e.g. `Portal`):
+   * it paints no flex item, so boxes must skip it when counting gaps and
+   * distributing width.
+   */
+  readonly outOfFlow?: boolean;
 }
 
 // Registered symbol so duplicate copies of mugen still recognize each other's

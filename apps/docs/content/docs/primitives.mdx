@@ -42,8 +42,11 @@ declare const item: { title: string; body: string; bubble: string };
 ## `VStack` / `HStack`
 
 The two layout boxes. `VStack` sums child heights plus gaps; `HStack` takes the
-max child height and distributes width — fixed-width siblings keep their `width`,
-the rest share the remainder (so a `Text` slot grows).
+max child height and distributes width the way flexbox paints it — fixed-width
+siblings keep their `width`, the rest take their *content* width and shrink
+proportionally when the row overflows (matching `flex: 0 1 auto`). A custom
+primitive without a `naturalWidth` makes its row fall back to an equal split
+of the remainder.
 
 ```tsx twoslash
 import { HStack, VStack, Text } from '@wingleeio/mugen';

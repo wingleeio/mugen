@@ -154,7 +154,14 @@ function measureRichText(props: RichTextProps, ctx: MeasureContext): number {
 function renderRichText(props: RichTextProps): ReactElement {
   const lh = props.lineHeight;
   const containerStyle: CSSProperties = {
-    lineHeight: `${lh}px`,
+    // The container needs the flow's base font, not whatever it inherits: every
+    // line box must fit the container's strut, and a strut built from a smaller
+    // inherited font-size sits on a different baseline than the runs — the
+    // union then exceeds `lineHeight` (a 32px heading inside a 16px page gains
+    // ~6px per line) and the painted height drifts from lines × lineHeight.
+    ...(props.font != null
+      ? { font: fontWithLineHeight(props.font, lh) }
+      : { lineHeight: `${lh}px` }),
     whiteSpace: 'normal',
     // Match pretext, which breaks a word that can't fit rather than overflow.
     overflowWrap: 'anywhere',
@@ -168,16 +175,24 @@ function renderRichText(props: RichTextProps): ReactElement {
   const children: ReactNode[] = props.runs.map((run, i) => {
     if (run.break) return createElement('br', { key: i });
     const tag = run.as ?? (run.href != null ? 'a' : 'span');
-    // Line-height is folded into the `font` shorthand so every inline box keeps
-    // the paragraph's line height (the shorthand alone resets it to `normal`),
-    // without setting both `font` and a `lineHeight` longhand — which React
-    // warns about on re-render (e.g. while streaming).
+    // Runs get `line-height: 0` (folded into the `font` shorthand, avoiding
+    // React's shorthand/longhand warning): a zero-leading inline box can never
+    // extend a line box, so the container's strut — base font + `lineHeight`,
+    // exactly what the measure models — solely defines every line's height.
+    // With the paragraph's line-height on each run instead, a run in another
+    // font (inline code) sits on the shared baseline with different
+    // ascent/descent, and the union grows the line ~0.5px past `lineHeight`.
     const style: CSSProperties = {
-      font: fontWithLineHeight(resolveRunFont(run, props.font), lh),
+      font: fontWithLineHeight(resolveRunFont(run, props.font), 0),
+      // Pin text shaping to the canvas defaults pretext measures with — page
+      // CSS targeting the run's tag (e.g. `code { font-feature-settings:
+      // 'liga' 0 }`) would otherwise change glyph widths and shift wrapping.
+      fontVariantLigatures: 'normal',
+      fontFeatureSettings: 'normal',
+      letterSpacing: run.letterSpacing != null ? `${run.letterSpacing}px` : 'normal',
       ...(run.color != null ? { color: run.color } : null),
       ...(run.background != null ? { background: run.background } : null),
       ...(run.decoration != null ? { textDecoration: run.decoration } : null),
-      ...(run.letterSpacing != null ? { letterSpacing: `${run.letterSpacing}px` } : null),
       ...(run.noBreak ? { whiteSpace: 'nowrap' } : null),
     };
     const elementProps: Record<string, unknown> = { key: i, style };
@@ -202,6 +217,20 @@ export const RichText = markPrimitive(
   {
     name: 'RichText',
     measure: (props, ctx) => measureRichText(props as unknown as RichTextProps, ctx),
+    // Max-content width: the widest hard-break segment laid out on one line —
+    // what the flow takes as a flex item when nothing forces it to wrap. Lets
+    // content-based HStack distribution (e.g. table cells) match the DOM.
+    naturalWidth: (props) => {
+      const p = props as unknown as RichTextProps;
+      if (p.runs.length === 0) return 0;
+      const segments = segmentItems(p.runs, p.font);
+      let max = 0;
+      for (const seg of segments) {
+        if (seg.length === 0) continue;
+        max = Math.max(max, measureRichInlineStats(prepareCached(seg), 1e7).maxLineWidth);
+      }
+      return max;
+    },
   },
 );
 
