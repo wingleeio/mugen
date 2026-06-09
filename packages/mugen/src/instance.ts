@@ -22,7 +22,7 @@ export interface MugenScrollState {
   scrollTop: number;
   /** Height of the scroll viewport, in px. */
   viewportHeight: number;
-  /** Total scrollable content height, in px. */
+  /** Total scrollable content height, including top/bottom slots, in px. */
   totalHeight: number;
   /** Distance from the bottom, in px (0 = pinned to the bottom). */
   distanceFromBottom: number;
@@ -32,6 +32,8 @@ export interface MugenScrollState {
 export interface MugenConfig<T> {
   getKey: (item: T, index: number) => string;
   render: (item: T) => ReactNode;
+  renderTop?: () => ReactNode;
+  renderBottom?: () => ReactNode;
   defaults: TextDefaults;
   maxW?: number | string;
 }
@@ -89,6 +91,8 @@ export class MugenInstance<T> implements SlotHost {
   private keyToIndex = new Map<string, number>();
   private rows = new Map<string, RowRecord>();
   private offset = new OffsetIndex();
+  private topSlotHeight = 0;
+  private bottomSlotHeight = 0;
 
   private viewportWidth = 0;
   private viewportHeight = 0;
@@ -105,6 +109,7 @@ export class MugenInstance<T> implements SlotHost {
 
   // Scroll element, wired by the list. Used by scrollToItem and re-anchoring.
   private scrollEl: HTMLElement | null = null;
+  private pendingScrollAnchorDelta = 0;
   /** Current scroll position, kept in sync by the list. */
   scrollTop = 0;
   /** Cached scroll-state snapshot — recreated only when an input changes, so
@@ -120,7 +125,7 @@ export class MugenInstance<T> implements SlotHost {
 
   /** Total scrollable height (the spacer height), in px. */
   totalHeight(): number {
-    return this.offset.total();
+    return this.topSlotHeight + this.offset.total() + this.bottomSlotHeight;
   }
 
   /**
@@ -178,21 +183,29 @@ export class MugenInstance<T> implements SlotHost {
   /** Scroll a row into view by index. */
   scrollToIndex(index: number, options: ScrollToOptions = {}): void {
     const el = this.scrollEl;
-    if (!el || index < 0 || index >= this.items.length) return;
-    const top = this.offset.offsetOf(index);
+    if (!el) return;
+    const target = this.scrollTargetForIndex(index, options.align);
+    if (target == null) return;
+    el.scrollTo({ top: target, behavior: options.behavior ?? 'auto' });
+  }
+
+  /** The scrollTop that would place a row according to `align`. */
+  scrollTargetForIndex(index: number, align: MugenScrollAlign = 'auto'): number | null {
+    const el = this.scrollEl;
+    if (!el || index < 0 || index >= this.items.length) return null;
+    const top = this.topSlotHeight + this.offset.offsetOf(index);
     const h = this.offset.heightAt(index);
     const vh = this.viewportHeight || el.clientHeight;
-    const align = options.align ?? 'auto';
     let target: number;
     if (align === 'start') target = top;
     else if (align === 'center') target = top - (vh - h) / 2;
     else if (align === 'end') target = top - (vh - h);
     else {
       const cur = el.scrollTop;
-      if (top >= cur && top + h <= cur + vh) return; // already fully visible
+      if (top >= cur && top + h <= cur + vh) return null; // already fully visible
       target = top < cur ? top : top - (vh - h); // scroll to the nearest edge
     }
-    el.scrollTo({ top: Math.max(0, target), behavior: options.behavior ?? 'auto' });
+    return Math.max(0, target);
   }
 
   // ── Wiring from <MugenVList> ────────────────────────────────────────────────
@@ -234,10 +247,35 @@ export class MugenInstance<T> implements SlotHost {
   /** Apply pending data/geometry changes as a single re-measure. Call once per render. */
   sync(): void {
     if (!this.ready()) return;
+    const anchor = this.itemsDirty ? this.captureScrollAnchor() : null;
     if (this.itemsDirty) this.recomputeKeys();
     if (this.itemsDirty || this.geometryDirty) this.remeasureAll();
+    else this.remeasureSlots();
+    if (anchor) this.queueScrollAnchor(anchor);
     this.itemsDirty = false;
     this.geometryDirty = false;
+  }
+
+  private captureScrollAnchor(): { key: string; top: number } | null {
+    if (this.keys.length === 0) return null;
+    const index = this.indexAt(this.scrollTop);
+    const key = this.keys[index];
+    if (key == null) return null;
+    return { key, top: this.offsetOf(index) };
+  }
+
+  private queueScrollAnchor(anchor: { key: string; top: number }): void {
+    const index = this.keyToIndex.get(anchor.key);
+    if (index == null) return;
+    const delta = this.offsetOf(index) - anchor.top;
+    if (delta !== 0) this.pendingScrollAnchorDelta += delta;
+  }
+
+  /** @internal Shift to apply after a data change to keep visible keyed content stable. */
+  takeScrollAnchorDelta(): number {
+    const delta = this.pendingScrollAnchorDelta;
+    this.pendingScrollAnchorDelta = 0;
+    return delta;
   }
 
   /** Re-measure everything (e.g. after web fonts settle). Compute-only. */
@@ -303,6 +341,18 @@ export class MugenInstance<T> implements SlotHost {
       heights[i] = this.measureRow(this.keys[i]!, this.items[i]!, width);
     }
     this.offset = new OffsetIndex(heights);
+    this.remeasureSlots();
+  }
+
+  private remeasureSlots(): void {
+    const width = this.contentWidth();
+    this.topSlotHeight = this.measureSlot(this.config?.renderTop, width);
+    this.bottomSlotHeight = this.measureSlot(this.config?.renderBottom, width);
+  }
+
+  private measureSlot(render: (() => ReactNode) | undefined, width: number): number {
+    if (!render || !this.config) return 0;
+    return runInert(() => heightOf(render(), width, this.config!.defaults));
   }
 
   // ── Measurement ─────────────────────────────────────────────────────────────
@@ -475,10 +525,18 @@ export class MugenInstance<T> implements SlotHost {
     return this.items[i]!;
   }
   offsetOf(i: number): number {
-    return this.offset.offsetOf(i);
+    return this.topSlotHeight + this.offset.offsetOf(i);
   }
   indexAt(y: number): number {
-    return this.offset.indexAt(y);
+    return this.offset.indexAt(Math.max(0, y - this.topSlotHeight));
+  }
+  /** @internal Height of the scrollable top slot. */
+  topHeight(): number {
+    return this.topSlotHeight;
+  }
+  /** @internal Height of the measured item content, excluding top/bottom slots. */
+  itemsHeight(): number {
+    return this.offset.total();
   }
 
   // ── Subscriptions ────────────────────────────────────────────────────────────

@@ -11,7 +11,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from 'react';
-import { MugenInstance } from './instance';
+import { MugenInstance, type MugenScrollAlign } from './instance';
 import { withSession, type MugenSession } from './session';
 import { TextDefaultsContext, type TextDefaults } from './text-defaults';
 import type { Font, WhiteSpaceMode, WordBreakMode } from './text-defaults';
@@ -32,11 +32,20 @@ const useIsoLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : use
 export type { MugenScrollEase, SpringOptions };
 
 /** Where the list sits on first measure, and how it gets there. */
-export interface InitialScrollOptions {
-  to: 'top' | 'bottom';
-  /** `'instant'` (default) jumps; `'smooth'` springs into place. */
-  behavior?: MugenScrollEase;
-}
+export type InitialScrollOptions =
+  | {
+      to: 'top' | 'bottom';
+      /** `'instant'` (default) jumps; `'smooth'` springs into place. */
+      behavior?: MugenScrollEase;
+    }
+  | {
+      to: 'index';
+      index: number;
+      /** Where the row lands in the viewport. Default `start`. */
+      align?: Exclude<MugenScrollAlign, 'auto'>;
+      /** `'instant'` (default) jumps; `'smooth'` uses native smooth scrolling. */
+      behavior?: MugenScrollEase;
+    };
 
 /** Keep the list pinned to the bottom as content grows (chat streaming). */
 export interface StickToBottomOptions extends Partial<SpringOptions> {
@@ -71,6 +80,10 @@ export interface MugenVListProps<T> {
   getKey: (item: T, index: number) => string;
   /** Author a row as a primitive tree; the mugen hooks may be used inside. */
   render: (item: T) => ReactNode;
+  /** Scrollable content rendered before the first row (loading older pages, headers). */
+  renderTop?: () => ReactNode;
+  /** Scrollable content rendered after the last row (loading newer pages, footers). */
+  renderBottom?: () => ReactNode;
 
   // ── Text defaults (a <Text> inherits these unless it sets its own) ──
   font?: Font;
@@ -87,7 +100,7 @@ export interface MugenVListProps<T> {
   /**
    * Where to place the scroll on first measure. `'bottom'` opens the list at
    * the end (e.g. a chat at the latest message); `'top'` (default) at the
-   * start. Pass an object to animate it in: `{ to: 'bottom', behavior: 'smooth' }`.
+   * start. Pass an object to animate it in, or to start at an item index.
    * Applied once.
    */
   initialScroll?: 'top' | 'bottom' | InitialScrollOptions;
@@ -101,6 +114,14 @@ export interface MugenVListProps<T> {
   width?: number;
   /** Extra px rendered above/below the viewport. Default 200. */
   overscan?: number;
+  /** Called once each time the scroll position enters the top threshold. */
+  onTopReached?: (index: number) => void;
+  /** Called once each time the scroll position enters the bottom threshold. */
+  onBottomReached?: (index: number) => void;
+  /** Px from the top that counts as reached. Default 0. */
+  topReachedThreshold?: number;
+  /** Px from the bottom that counts as reached. Default 0. */
+  bottomReachedThreshold?: number;
   className?: string;
   style?: CSSProperties;
 }
@@ -271,7 +292,24 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     const el = scrollRef.current;
     if (!el) return;
     ctl.attach(el);
+    instance.attachScroller(el);
     if (initial == null || initial.to === 'top') {
+      didInitialScroll.current = true;
+      return;
+    }
+    if (initial.to === 'index') {
+      if (vh <= 0 || cw <= 0) return; // not measured yet — retry next render
+      const target = instance.scrollTargetForIndex(initial.index, initial.align ?? 'start');
+      if (target == null) {
+        didInitialScroll.current = true;
+        return;
+      }
+      if (initial.behavior === 'smooth') {
+        el.scrollTo({ top: target, behavior: 'smooth' });
+      } else {
+        el.scrollTop = target;
+      }
+      syncWindowFromEl();
       didInitialScroll.current = true;
       return;
     }
@@ -339,14 +377,46 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
   const rootPx = rootFontSizePx();
   const vw = controlledWidth ?? measured.current.width;
   const vh = props.height ?? measured.current.height;
-  instance.configure({ getKey, render, defaults, maxW: props.maxW });
+  instance.configure({
+    getKey,
+    render,
+    renderTop: props.renderTop,
+    renderBottom: props.renderBottom,
+    defaults,
+    maxW: props.maxW,
+  });
   instance.setViewport(vw, vh, rootPx);
   instance.sync();
+
+  // Apply the pending scroll-anchor shift in a layout effect (post-commit), not
+  // during render. `sync()` queues the delta on the instance; consuming it here
+  // — rather than reading it during render — keeps it intact when React invokes
+  // the render function more than once before committing (concurrent re-render),
+  // which would otherwise drop the shift and let prepended content pin the
+  // viewport at the top, re-triggering `onTopReached` in a loop.
+  useIsoLayoutEffect(() => {
+    const scrollAnchorDelta = instance.takeScrollAnchorDelta();
+    if (scrollAnchorDelta === 0) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTop += scrollAnchorDelta;
+    instance.scrollTop = el.scrollTop;
+    setScrollTop(el.scrollTop);
+  });
 
   const total = instance.totalHeight();
   const overscan = props.overscan ?? 200;
   const cw = instance.contentWidth();
   const centered = instance.isCentered();
+  const topSlotHeight = instance.topHeight();
+  const bottomSlotTop = topSlotHeight + instance.itemsHeight();
+  const reachedRef = useRef<{ top: string | null; bottom: string | null }>({
+    top: null,
+    bottom: null,
+  });
+  const topEdgeKey = instance.length === 0 ? '__empty__' : instance.keyAt(0);
+  const bottomEdgeKey =
+    instance.length === 0 ? '__empty__' : instance.keyAt(instance.length - 1);
 
   const rows: ReactNode[] = [];
   if (instance.length > 0 && vh > 0 && cw > 0) {
@@ -367,6 +437,86 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
       );
     }
   }
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || vh <= 0) return;
+
+    const st = el.scrollTop;
+    const topThreshold = Math.max(0, props.topReachedThreshold ?? 0);
+    const bottomThreshold = Math.max(0, props.bottomReachedThreshold ?? 0);
+    const atTop = st <= topThreshold;
+    const atBottom = st + vh >= total - bottomThreshold;
+    const topIndex = instance.length === 0 ? -1 : 0;
+    const bottomIndex = instance.length === 0 ? -1 : instance.length - 1;
+
+    if (atTop) {
+      if (props.onTopReached && reachedRef.current.top !== topEdgeKey) {
+        props.onTopReached(topIndex);
+        reachedRef.current.top = topEdgeKey;
+      }
+    } else {
+      reachedRef.current.top = null;
+    }
+
+    if (atBottom) {
+      if (props.onBottomReached && reachedRef.current.bottom !== bottomEdgeKey) {
+        props.onBottomReached(bottomIndex);
+        reachedRef.current.bottom = bottomEdgeKey;
+      }
+    } else {
+      reachedRef.current.bottom = null;
+    }
+  }, [
+    bottomEdgeKey,
+    instance,
+    props.bottomReachedThreshold,
+    props.onBottomReached,
+    props.onTopReached,
+    props.topReachedThreshold,
+    scrollTop,
+    topEdgeKey,
+    total,
+    vh,
+  ]);
+
+  const topSlot =
+    props.renderTop && cw > 0 ? (
+      <div
+        data-mugen-top=""
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          display: 'flex',
+          justifyContent: centered ? 'center' : 'stretch',
+        }}
+      >
+        <div style={{ width: centered ? `${cw}px` : '100%', maxWidth: `${cw}px` }}>
+          {props.renderTop()}
+        </div>
+      </div>
+    ) : null;
+
+  const bottomSlot =
+    props.renderBottom && cw > 0 ? (
+      <div
+        data-mugen-bottom=""
+        style={{
+          position: 'absolute',
+          top: `${bottomSlotTop}px`,
+          left: 0,
+          right: 0,
+          display: 'flex',
+          justifyContent: centered ? 'center' : 'stretch',
+        }}
+      >
+        <div style={{ width: centered ? `${cw}px` : '100%', maxWidth: `${cw}px` }}>
+          {props.renderBottom()}
+        </div>
+      </div>
+    ) : null;
 
   return (
     <div
@@ -392,7 +542,11 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
       }}
     >
       <div style={{ position: 'relative', height: `${total}px`, width: '100%' }}>
-        <TextDefaultsContext.Provider value={defaults}>{rows}</TextDefaultsContext.Provider>
+        <TextDefaultsContext.Provider value={defaults}>
+          {topSlot}
+          {rows}
+          {bottomSlot}
+        </TextDefaultsContext.Provider>
       </div>
     </div>
   );
