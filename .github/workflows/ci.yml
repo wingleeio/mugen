@@ -34,7 +34,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Build packages
-        run: pnpm turbo run build --filter=@wingleeio/mugen --filter=@wingleeio/mugen-markdown
+        run: pnpm turbo run build --filter='./packages/*'
 
       - name: Typecheck
         run: pnpm check-types
