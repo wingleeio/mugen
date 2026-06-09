@@ -32,3 +32,6 @@ pnpm-debug.log*
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Vitest browser-mode attachments
+**/.vitest-attachments/
