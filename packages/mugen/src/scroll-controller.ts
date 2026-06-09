@@ -75,9 +75,12 @@ export class ScrollController {
 
   // ── Interrupting from user input (reliable mid-animation) ──────────────────
 
-  /** A wheel/trackpad gesture. Scrolling up (deltaY < 0) breaks the stick now. */
+  /** A wheel/trackpad gesture. Scrolling up (deltaY < 0) breaks the stick now.
+   *  Only once the list actually overflows: before that there's nothing to scroll
+   *  away from, no scroll event will ever fire to re-engage, and a stray wheel-up
+   *  would otherwise disable the stick for good. */
   handleWheel(deltaY: number): void {
-    if (deltaY < 0) this.release();
+    if (deltaY < 0 && this.hasOverflow()) this.release();
   }
 
   /** Finger down: stop the animation so it doesn't fight the drag. */
