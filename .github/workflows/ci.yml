@@ -1,0 +1,51 @@
+name: CI
+
+# Test gate for the library. The Release workflow publishes straight off main,
+# so everything it ships must be validated here first: build, typecheck, the
+# happy-dom unit suites, and the real-browser accuracy suites (which check that
+# analytic pretext heights match what Chromium actually lays out).
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4 # version comes from package.json#packageManager
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22 # repo engines require >=22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm turbo run build --filter=@wingleeio/mugen --filter=@wingleeio/mugen-markdown
+
+      - name: Typecheck
+        run: pnpm check-types
+
+      - name: Unit tests (happy-dom)
+        run: pnpm test
+
+      - name: Install Playwright Chromium
+        run: pnpm --filter @wingleeio/mugen exec playwright install chromium --with-deps
+
+      - name: Browser tests (Chromium)
+        run: |
+          pnpm --filter @wingleeio/mugen test:browser
+          pnpm --filter @wingleeio/mugen-markdown test:browser
