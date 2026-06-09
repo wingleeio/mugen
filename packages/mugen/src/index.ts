@@ -45,6 +45,8 @@ export type {
   PrimitiveComponent,
   DefinePrimitiveOptions,
 } from './primitives/box';
+export { Portal } from './primitives/portal';
+export type { PortalProps } from './primitives/portal';
 
 // ── Defining custom measurable primitives ──
 // `definePrimitive` covers tag-backed layout boxes; `markPrimitive` is the
@@ -52,6 +54,10 @@ export type {
 // rich inline-text primitive that measures mixed fonts as one wrapping flow).
 export { markPrimitive, getPrimitiveDef } from './primitives/core';
 export type { MeasurableDef, MeasureContext } from './primitives/core';
+// `measureChildren` is the standard vertical-stack measure, exposed so a custom
+// primitive can pair a bespoke render with the usual child measurement;
+// `toChildArray` flattens children the same way the walker does.
+export { measureChildren, toChildArray } from './walker';
 
 // ── Style + font types ──
 export type { MeasurableStyle, SafeClassName } from './style';

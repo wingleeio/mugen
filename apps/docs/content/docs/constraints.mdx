@@ -13,7 +13,8 @@ mugen runs `render(item)` to measure, calling it as a plain function. Therefore 
 row may not:
 
 - use `useEffect` / `useLayoutEffect` — they throw; use [`useMugenEffect`](/docs/effects),
-- render to a portal, or measure a child via a ref,
+- measure a child via a ref,
+- portal content that affects its height (out-of-flow content goes in [`Portal`](#out-of-flow-content-portal), which measures as 0),
 - depend on anything but its item and the [mugen hooks](/docs/state) for its height.
 
 Cosmetic `useState` is allowed (it can't change height). Height-affecting state —
@@ -35,7 +36,37 @@ declare const item: { text: string };
 <VStack><Text>{item.text}</Text></VStack>; // ✅
 ```
 
-Raw strings must be wrapped in `<Text>` so they can be measured.
+Raw strings must be wrapped in `<Text>` so they can be measured. Fragments
+(`<>…</>`) are fine — they paint no box, so the walker splices their children in
+place and measures them as ordinary siblings.
+
+## Out-of-flow content: `Portal`
+
+The one sanctioned exception to "only primitives are measurable" is `Portal`. It
+**measures as 0 and never walks its children**, so the subtree inside it may be
+arbitrary non-primitive React — a Radix popover, a floating-ui panel, anything.
+It renders that subtree out of the row's flow (portaled to `document.body` by
+default), so it genuinely occupies no row height.
+
+```tsx twoslash
+import { VStack, Text, Portal } from '@wingleeio/mugen';
+declare const item: { label: string };
+declare function Tooltip(props: { children: React.ReactNode }): React.ReactElement;
+// ---cut---
+<VStack>
+  <Text>{item.label}</Text> {/* the trigger — stays in flow, measured normally */}
+  <Portal>
+    <Tooltip>…rich, never-measured content…</Tooltip> {/* out of flow → height 0 */}
+  </Portal>
+</VStack>;
+```
+
+Use it for the *portaled half* of an overlay — the popover, menu, or dialog
+panel — while the trigger that anchors it stays in the row and is measured like
+any other primitive. This is the primitive [`@wingleeio/mugen-ui`](/docs)
+builds dialogs, dropdowns, popovers, and tooltips on. The rule it relaxes is
+narrow: content in a `Portal` must be genuinely out of flow (portaled or
+absolutely positioned), because mugen counts it as zero.
 
 ## Layout goes through props, not CSS
 

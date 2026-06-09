@@ -24,6 +24,7 @@
     "fumadocs-twoslash": "^3.2.0",
     "@wingleeio/mugen": "workspace:*",
     "@wingleeio/mugen-markdown": "workspace:*",
+    "@wingleeio/mugen-ui": "workspace:*",
     "fumadocs-ui": "^16.9.3",
     "lucide-react": "^1.17.0",
     "react": "^19.2.6",

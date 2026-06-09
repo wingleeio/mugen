@@ -44,6 +44,25 @@ they stay measurable:
 
 <Showcase example="mugen-markdown" filename="notes.tsx" />
 
+## Tooltips, popovers & dialogs in rows
+
+Overlays are the case that breaks a virtualizer: a tooltip or dropdown is a real
+React component (hooks) whose popover is *portaled*, so it can't be measured
+analytically — and the walker would throw if it tried. [`@wingleeio/mugen-ui`](https://www.npmjs.com/package/@wingleeio/mugen-ui)
+splits the two halves. The **trigger** is measured like any primitive, so it
+contributes its real height to the row; the **content** lives in a [`Portal`](/docs/constraints#out-of-flow-content-portal)
+— measured as 0 and never walked — so it can be arbitrary React and never re-flows
+the list when it opens. This 800-row directory gives every row a `Tooltip` (hover
+the name), a `Popover` (React), a `Dropdown` (arrow-key menu), and a modal
+`Dialog` (Details) — open any of them and the row heights never budge:
+
+<Showcase example="overlays" filename="directory.tsx" />
+
+Each widget is a compound component — `<Tooltip>` / `<Tooltip.Trigger>` /
+`<Tooltip.Content>`, and likewise for `Popover`, `Dropdown`, and `Dialog`.
+Positioning, dismissal, focus, and keyboard nav are handled for you; mugen core
+stays a pure measurement engine.
+
 ## Chat / message list
 
 Avatar on the left, author + message on the right. The avatar is a fixed-size box
