@@ -67,6 +67,29 @@ interface ScrollToOptions {
 Call these from anywhere you hold the instance — an effect, an event handler, a
 deep-link router. The instance is stable across renders.
 
+## Reach callbacks
+
+Use edge callbacks for pagination. They fire once when the scroll position enters
+the configured pixel threshold, then arm again after the user leaves that edge:
+
+```tsx
+<MugenVList
+  instance={list}
+  getKey={(row) => row.id}
+  render={Row}
+  renderTop={() => <TopLoader loading={loadingPrevious} />}
+  renderBottom={() => <BottomLoader loading={loadingNext} />}
+  onTopReached={loadPreviousPage}
+  onBottomReached={loadNextPage}
+  topReachedThreshold={24}
+  bottomReachedThreshold={24}
+/>
+```
+
+`renderTop` and `renderBottom` are scrollable slots, not sticky overlays. Their
+heights are measured with the same primitive walker as rows, so `scrollToItem`,
+`totalHeight()`, and `distanceFromBottom` stay in the same coordinate system.
+
 ## Start at the bottom
 
 Chat-style lists open at the newest message, not the oldest. Pass
@@ -84,6 +107,17 @@ the landing is exact even though those rows have never mounted. The default is
 ```tsx
 <MugenVList … initialScroll={{ to: 'bottom', behavior: 'smooth' }} />
 ```
+
+You can also open on a measured row by index:
+
+```tsx
+<MugenVList … initialScroll={{ to: 'index', index: 40, align: 'center' }} />
+```
+
+This is applied before paint, like `top` and `bottom`. If later data changes
+insert rows above the visible keyed content, mugen preserves the current visual
+anchor by shifting `scrollTop` by the inserted height. That keeps top pagination
+from dumping the user onto the newly prepended page.
 
 ## Stick to the bottom while streaming
 

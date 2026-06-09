@@ -17,6 +17,19 @@ a reasoning trace and watch the list re-flow without losing your place:
 
 <Showcase example="ai-chat" filename="ai-chat.tsx" />
 
+## Bidirectional pagination
+
+Top and bottom slots are measured like row content, so skeleton loaders can live
+inside the scrollable coordinate system without throwing off row offsets.
+`onTopReached` and `onBottomReached` fire once when the scroll position enters
+their threshold, which is a clean fit for cursor pagination in either direction.
+This audit-log feed opens in the middle of a loaded page; hit either edge and the
+slot swaps in shimmering skeletons while the page resolves, then settles to the
+exact height of the prepended/appended variable-height rows — no jump. Idle edges
+show a soft hint, exhausted edges an end-cap:
+
+<Showcase example="bidirectional-pagination" filename="pagination.tsx" />
+
 ## Rich markdown rows
 
 [`@wingleeio/mugen-markdown`](https://www.npmjs.com/package/@wingleeio/mugen-markdown)

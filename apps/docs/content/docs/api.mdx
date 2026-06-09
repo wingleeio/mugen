@@ -51,13 +51,19 @@ const instance = useMugenVirtualizer({ items });
 | `instance` | `MugenInstance<T>` | — | From `useMugenVirtualizer`. |
 | `getKey` | `(item, index) => string` | — | Stable key per item. |
 | `render` | `(item) => ReactNode` | — | The row as a primitive tree. |
+| `renderTop` | `() => ReactNode` | — | Scrollable content before the first row. |
+| `renderBottom` | `() => ReactNode` | — | Scrollable content after the last row. |
 | `font` | [`Font`](/docs/fonts#fonts-are-typed) | — | Default font for every `Text`. |
 | `lineHeight` | `number` | — | Default line height (px). |
 | `maxW` | `number \| string` | ∞ | Content width cap (px / rem / named). |
 | `letterSpacing` / `whiteSpace` / `wordBreak` | | | `Text` defaults. |
 | `height` | `number` | fills parent | Viewport height (px). |
+| `initialScroll` | `'top' \| 'bottom' \| { to: 'index', index, align? }` | `'top'` | Initial scroll target. |
 | `width` | `number` | ResizeObserver | Override the measured width (SSR/tests). |
 | `overscan` | `number` | `200` | Extra px rendered above/below the viewport. |
+| `onTopReached` | `(index) => void` | — | Fires once when the scroll enters the top threshold. |
+| `onBottomReached` | `(index) => void` | — | Fires once when the scroll enters the bottom threshold. |
+| `topReachedThreshold` / `bottomReachedThreshold` | `number` | `0` | Pixel distance from the edge that counts as reached. |
 | `className` / `style` | | | On the scroll container. |
 
 ## Row hooks

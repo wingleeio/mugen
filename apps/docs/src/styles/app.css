@@ -115,6 +115,34 @@ kbd,
   animation: mu-pulse 1.5s ease-in-out infinite;
 }
 
+/* ── Skeleton loaders (pagination slots) ── A base tint with a sweeping
+   highlight, so a loading page reads as placeholder content, not chrome. The
+   ::after overlay is purely decorative; the bar's box (width/height) is owned by
+   primitive props so it stays measurable. */
+.mu-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: color-mix(in oklab, var(--color-fd-foreground) 8%, transparent);
+}
+.mu-skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--color-fd-foreground) 9%, transparent),
+    transparent
+  );
+  animation: mu-shimmer 1.5s ease-in-out infinite;
+}
+@keyframes mu-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
 /* ── Staggered load reveal ── */
 @keyframes mu-rise {
   from {
@@ -138,6 +166,9 @@ kbd,
     animation: none;
   }
   .mu-pulse {
+    animation: none;
+  }
+  .mu-skeleton::after {
     animation: none;
   }
 }

@@ -13,7 +13,14 @@ import {
   VStack,
 } from '@wingleeio/mugen';
 import { Markdown, defineMarkdownComponents } from '@wingleeio/mugen-markdown';
-import { chatHtml, accordionHtml, markdownHtml, mugenMarkdownHtml, aiChatHtml } from './components/highlighted';
+import {
+  chatHtml,
+  accordionHtml,
+  markdownHtml,
+  mugenMarkdownHtml,
+  aiChatHtml,
+  bidirectionalPaginationHtml,
+} from './components/highlighted';
 
 const scrollCls = 'mu-scroll [&>div>div>div]:border-b [&>div>div>div]:border-fd-border/50';
 
@@ -138,6 +145,351 @@ function AccordionExample() {
       lineHeight={21}
       maxW={560}
       className={scrollCls}
+    />
+  );
+}
+
+// ── Bidirectional pagination ────────────────────────────────────────────────
+//
+// An audit-log feed paged in both directions. Rows are quiet, full-bleed,
+// divider-separated entries (a kind dot + mono meta line + optional note rule);
+// the top/bottom slots are measured like row content, so reaching either edge
+// swaps in real shimmer skeletons while the page resolves, then settles to an
+// exact height with no jump. Idle edges show a soft hint; exhausted edges an
+// end-cap.
+
+interface Activity {
+  id: string;
+  index: number;
+  kind: 'deploy' | 'incident' | 'handoff' | 'maintenance';
+  service: string;
+  region: string;
+  duration: string;
+  title: string;
+  body?: string;
+  note?: string;
+}
+
+// One palette derived from the foreground, so the feed reads in both themes and
+// stays consistent with the other recipes — no hard-coded slate/blue chrome.
+const FEED = {
+  fg: 'var(--color-fd-foreground)',
+  muted: 'var(--color-fd-muted-foreground)',
+  faint: 'color-mix(in oklab, var(--color-fd-foreground) 42%, transparent)',
+  hairline: 'var(--color-fd-border)',
+  rail: 'color-mix(in oklab, var(--color-fd-foreground) 16%, transparent)',
+} as const;
+const FEED_MONO = "'Geist Mono Variable', monospace";
+
+// Full-bleed hairline between rows — a measured 1px line (not a CSS border, which
+// the walker can't see), so real rows and skeletons separate the same way.
+function Divider(): ReactNode {
+  return <VStack height={1} style={{ background: FEED.hairline }} />;
+}
+
+// Each kind is one accent colour, carried by a small dot — not a filled badge.
+const ACTIVITY_KINDS: Activity['kind'][] = ['deploy', 'handoff', 'incident', 'maintenance'];
+const KINDS: Record<Activity['kind'], { label: string; color: string }> = {
+  deploy: { label: 'DEPLOY', color: '#3b82f6' },
+  incident: { label: 'INCIDENT', color: '#ef4444' },
+  handoff: { label: 'HANDOFF', color: '#22c55e' },
+  maintenance: { label: 'MAINT', color: '#f59e0b' },
+};
+
+const ACTIVITY_SERVICES = ['Billing API', 'Search workers', 'Edge cache', 'Model gateway', 'Docs deploy'];
+const ACTIVITY_REGIONS = ['iad1', 'sfo3', 'fra1', 'sin2'];
+
+// Bodies bucketed by length, so a row can be anything from a single compact line
+// to a multi-paragraph entry — that height spread is the whole point of the demo.
+const BODIES_SHORT = [
+  'Promoted to 100%; no regressions in the canary window.',
+  'Rolled back after the first synthetic probe failed.',
+  'Acknowledged — no customer-facing impact.',
+  'Cache warmed, then traffic shifted inside the window.',
+];
+const BODIES_MEDIUM = [
+  'Canary traffic moved from 5% to 40% once the synthetic checkout path held inside the latency budget for ten consecutive minutes.',
+  'The read replica rotated and the cache warmed before traffic shifted over, so the cutover stayed well inside the maintenance window.',
+  'Release engineering handed the runbook to support at shift change, with the rollback window left open as a precaution.',
+];
+const BODIES_LONG = [
+  'The retry queue crossed its warning threshold during a burst of webhook deliveries. Operators acknowledged the alert, drained the oldest partition by hand, and left the incident open until downstream delivery had fully caught up.',
+  'The model gateway rejected a malformed batch, retried against the corrected schema, and attached the trace id for follow-up. Because the entry runs several clauses across multiple sentences, its measured height changes visibly as the column narrows — exactly the case a fixed-height virtualiser gets wrong.',
+  'A long-running migration backfilled the new index in the background while reads continued against the old one. The cutover flipped a single feature flag, the verification suite went green on the second pass, and the rollback path stayed warm for the rest of the shift in case p99 latency drifted afterward.',
+];
+const ACTIVITY_NOTES = [
+  'Follow-up: compare p95 search latency after the next index compaction.',
+  'Customer-facing status stayed green; only the internal retry queue crossed threshold.',
+  'Rollback stayed available for 14 minutes after the final probe.',
+  'Paging policy updated: route gateway timeouts to the on-call SRE first, then the service owner if unacknowledged within five minutes — the previous order added a full handoff hop during the last incident.',
+];
+
+// A repeating rhythm of row shapes so adjacent rows differ a lot in height: some
+// are just a header, some a one-liner, some a paragraph, some a paragraph plus a
+// follow-up note. Cycled by index (no Math.random, so SSR and client agree).
+const ROW_SHAPES: { body: 'none' | 'short' | 'medium' | 'long'; note: boolean }[] = [
+  { body: 'medium', note: false },
+  { body: 'none', note: false },
+  { body: 'long', note: true },
+  { body: 'short', note: false },
+  { body: 'none', note: true },
+  { body: 'long', note: false },
+  { body: 'medium', note: true },
+  { body: 'short', note: false },
+  { body: 'long', note: true },
+  { body: 'medium', note: false },
+  { body: 'short', note: true },
+];
+
+function pickBody(shape: 'none' | 'short' | 'medium' | 'long', index: number): string | undefined {
+  switch (shape) {
+    case 'none':
+      return undefined;
+    case 'short':
+      return BODIES_SHORT[index % BODIES_SHORT.length];
+    case 'medium':
+      return BODIES_MEDIUM[index % BODIES_MEDIUM.length];
+    case 'long':
+      return BODIES_LONG[index % BODIES_LONG.length];
+  }
+}
+
+function makeActivity(index: number): Activity {
+  const kind = ACTIVITY_KINDS[index % ACTIVITY_KINDS.length]!;
+  const service = ACTIVITY_SERVICES[index % ACTIVITY_SERVICES.length]!;
+  const shape = ROW_SHAPES[index % ROW_SHAPES.length]!;
+  return {
+    id: `event-${index}`,
+    index,
+    kind,
+    service,
+    region: ACTIVITY_REGIONS[index % ACTIVITY_REGIONS.length]!,
+    duration: `${(index % 7) + 2}m ${((index * 11) % 60).toString().padStart(2, '0')}s`,
+    title:
+      kind === 'deploy'
+        ? `${service} release #${index} promoted`
+        : kind === 'incident'
+          ? `${service} alert #${index} acknowledged`
+          : kind === 'handoff'
+            ? `${service} handoff recorded`
+            : `${service} maintenance window`,
+    body: pickBody(shape.body, index),
+    note: shape.note ? ACTIVITY_NOTES[index % ACTIVITY_NOTES.length] : undefined,
+  };
+}
+
+function makeActivityRange(start: number, end: number): Activity[] {
+  return Array.from({ length: end - start + 1 }, (_, i) => makeActivity(start + i));
+}
+
+function ActivityRow(item: Activity): ReactNode {
+  const tone = KINDS[item.kind];
+  return (
+    <VStack>
+      <VStack gap={9} padding={16}>
+        {/* title (grows) + index pinned right — one flexible child keeps the
+            measured width equal to the painted one. */}
+        <HStack gap={12} align="flex-start" justify="space-between">
+          <Text font="600 14px Inter, sans-serif" lineHeight={20} color={FEED.fg}>
+            {item.title}
+          </Text>
+          <VStack width={46} align="flex-end">
+            <Text font={`500 11px ${FEED_MONO}`} lineHeight={20} color={FEED.faint}>
+              {`#${item.index}`}
+            </Text>
+          </VStack>
+        </HStack>
+        {/* kind dot + a single mono meta line (the colour lives in the dot). */}
+        <HStack gap={9} align="center">
+          <VStack
+            width={8}
+            height={8}
+            style={{
+              borderRadius: 999,
+              background: tone.color,
+              boxShadow: `0 0 0 4px color-mix(in oklab, ${tone.color} 18%, transparent)`,
+            }}
+          />
+          <Text
+            font={`500 11px ${FEED_MONO}`}
+            lineHeight={15}
+            letterSpacing={0.2}
+            color={FEED.muted}
+          >
+            {`${tone.label} · ${item.service} · ${item.region} · ${item.duration}`}
+          </Text>
+        </HStack>
+        {item.body ? <Text color={FEED.muted}>{item.body}</Text> : null}
+        {item.note ? (
+          <HStack gap={11} align="stretch">
+            <VStack width={2} style={{ borderRadius: 2, background: FEED.rail }} />
+            <Text font="500 12.5px Inter, sans-serif" lineHeight={18} color={FEED.muted}>
+              {item.note}
+            </Text>
+          </HStack>
+        ) : null}
+      </VStack>
+      <Divider />
+    </VStack>
+  );
+}
+
+/** A shimmering placeholder bar. Box (width/height) is owned by props so it
+ *  measures exactly; the sweep is a decorative CSS overlay (`.mu-skeleton`).
+ *  A fixed `w` renders `flex: 0 0 w` on the main axis — so a width-bearing Bar
+ *  must sit inside an `HStack` (where the main axis is horizontal). In a column
+ *  it would pin the *height* instead; `SkeletonLine` handles that wrap. */
+function Bar({ w, h, radius = 6 }: { w?: number; h: number; radius?: number }): ReactNode {
+  return (
+    <VStack {...(w != null ? { width: w } : null)} height={h} className="mu-skeleton" style={{ borderRadius: radius }} />
+  );
+}
+
+/** A body placeholder line, safe to stack in a column. A full-width line is a
+ *  bare Bar; a partial line is wrapped in an `HStack` so its width applies to
+ *  the horizontal axis (not the height). */
+function SkeletonLine({ w }: { w?: number }): ReactNode {
+  return w == null ? (
+    <Bar h={9} />
+  ) : (
+    <HStack>
+      <Bar w={w} h={9} />
+    </HStack>
+  );
+}
+
+// A few placeholder rows of varied shape, so a loading page reads as content.
+const SKELETON_ROWS: { title: number; lines: (number | undefined)[] }[] = [
+  { title: 188, lines: [undefined, undefined, 236] },
+  { title: 142, lines: [undefined, 272] },
+];
+
+function SkeletonRow({ title, lines }: { title: number; lines: (number | undefined)[] }): ReactNode {
+  return (
+    <VStack>
+      <VStack gap={11} padding={16}>
+        <HStack gap={12} align="center" justify="space-between">
+          <Bar w={title} h={12} />
+          <Bar w={30} h={10} />
+        </HStack>
+        <HStack gap={9} align="center">
+          <Bar w={8} h={8} radius={999} />
+          <Bar w={156} h={9} />
+        </HStack>
+        <VStack gap={9}>
+          {lines.map((w, i) => (
+            <SkeletonLine key={i} w={w} />
+          ))}
+        </VStack>
+      </VStack>
+      <Divider />
+    </VStack>
+  );
+}
+
+function PaginationSlot({
+  edge,
+  loading,
+  done,
+}: {
+  edge: 'top' | 'bottom';
+  loading: boolean;
+  done: boolean;
+}): ReactNode {
+  const isTop = edge === 'top';
+  if (loading) {
+    // Real skeletons fill the incoming page while it resolves. Each one draws its
+    // own trailing divider, so they separate cleanly from the rows on either side.
+    return (
+      <VStack>
+        {SKELETON_ROWS.map((s, i) => (
+          <SkeletonRow key={i} title={s.title} lines={s.lines} />
+        ))}
+      </VStack>
+    );
+  }
+  const label = done
+    ? isTop
+      ? 'BEGINNING OF HISTORY'
+      : 'YOU’RE ALL CAUGHT UP'
+    : isTop
+      ? '↑  Scroll up for older events'
+      : '↓  Scroll down for newer events';
+  const band = (
+    <VStack padding={done ? 18 : 14} align="center">
+      <Text font={`500 11px ${FEED_MONO}`} lineHeight={15} letterSpacing={done ? 0.6 : 0.2} color={FEED.faint}>
+        {label}
+      </Text>
+    </VStack>
+  );
+  // Only the top band draws a divider (below itself, to split from the first
+  // row). A bottom band sits under a row that already drew its trailing divider —
+  // adding another here is the double line.
+  return isTop ? (
+    <VStack>
+      {band}
+      <Divider />
+    </VStack>
+  ) : (
+    band
+  );
+}
+
+// The full event history the feed pages through (indices 0…LAST_INDEX). The list
+// only ever holds the loaded window — scrolling to an edge fetches the next page
+// in that direction until the history is exhausted.
+const LAST_INDEX = 959;
+
+function BidirectionalPaginationExample() {
+  // Open on a window in the middle of the history, so there are hundreds of
+  // events to page through in either direction.
+  const [range, setRange] = useState({ start: 480, end: 511 });
+  const [loadingTop, setLoadingTop] = useState(false);
+  const [loadingBottom, setLoadingBottom] = useState(false);
+  const items = useMemo(() => makeActivityRange(range.start, range.end), [range]);
+  const list = useMugenVirtualizer({ items });
+  const canLoadOlder = range.start > 0;
+  const canLoadNewer = range.end < LAST_INDEX;
+
+  const loadOlder = () => {
+    if (loadingTop || !canLoadOlder) return;
+    setLoadingTop(true);
+    setTimeout(() => {
+      setRange((r) => ({ ...r, start: Math.max(0, r.start - 12) }));
+      setLoadingTop(false);
+    }, 650);
+  };
+
+  const loadNewer = () => {
+    if (loadingBottom || !canLoadNewer) return;
+    setLoadingBottom(true);
+    setTimeout(() => {
+      setRange((r) => ({ ...r, end: Math.min(LAST_INDEX, r.end + 12) }));
+      setLoadingBottom(false);
+    }, 650);
+  };
+
+  return (
+    <MugenVList
+      instance={list}
+      getKey={(item) => item.id}
+      render={ActivityRow}
+      renderTop={() => (
+        <PaginationSlot edge="top" loading={loadingTop} done={!canLoadOlder} />
+      )}
+      renderBottom={() => (
+        <PaginationSlot edge="bottom" loading={loadingBottom} done={!canLoadNewer} />
+      )}
+      onTopReached={loadOlder}
+      onBottomReached={loadNewer}
+      topReachedThreshold={24}
+      bottomReachedThreshold={24}
+      initialScroll={{ to: 'index', index: 10, align: 'center' }}
+      font="13.5px Inter, sans-serif"
+      lineHeight={20}
+      overscan={360}
+      className="mu-scroll"
+      style={{ background: 'var(--color-fd-background)' }}
     />
   );
 }
@@ -913,6 +1265,11 @@ export interface ExampleEntry {
 
 export const EXAMPLES: Record<string, ExampleEntry> = {
   'ai-chat': { preview: () => <AiChatExample />, codeHtml: aiChatHtml, height: 560 },
+  'bidirectional-pagination': {
+    preview: () => <BidirectionalPaginationExample />,
+    codeHtml: bidirectionalPaginationHtml,
+    height: 440,
+  },
   chat: { preview: () => <ChatExample />, codeHtml: chatHtml, height: 280 },
   accordion: { preview: () => <AccordionExample />, codeHtml: accordionHtml, height: 280 },
   markdown: { preview: () => <MarkdownExample />, codeHtml: markdownHtml, height: 320 },

@@ -4,8 +4,8 @@
   "type": "module",
   "sideEffects": false,
   "scripts": {
-    "dev": "DISABLE_NITRO=1 portless run vite dev",
-    "dev:vite": "DISABLE_NITRO=1 vite dev",
+    "dev": "DISABLE_NITRO=1 portless run vite dev --host 0.0.0.0",
+    "dev:vite": "DISABLE_NITRO=1 vite dev --host 0.0.0.0",
     "build": "vite build",
     "start": "vite preview",
     "preview": "vite preview",

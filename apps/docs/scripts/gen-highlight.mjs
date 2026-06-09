@@ -117,6 +117,136 @@ function Faqs({ items }: { items: Faq[] }) {
   );
 }`,
 
+  bidirectionalPaginationHtml: `import { useMemo, useState } from 'react';
+import { HStack, MugenVList, Text, VStack, useMugenVirtualizer } from '@wingleeio/mugen';
+
+interface Event { id: string; n: number; title: string; meta: string; body?: string; note?: string }
+
+function page(start: number, end: number): Event[] {
+  return Array.from({ length: end - start + 1 }, (_, i) => fetchEvent(start + i));
+}
+
+// A full-bleed hairline between rows — a measured 1px line, not a CSS border
+// (the walker can't see borders), so rows and skeletons separate the same way.
+const Divider = () => <VStack height={1} style={{ background: 'var(--line)' }} />;
+
+// A shimmering placeholder bar — the box is owned by props (so it measures
+// exactly); '.mu-skeleton' adds the decorative sweep.
+function Bar({ w, h }: { w?: number; h: number }) {
+  return <VStack {...(w ? { width: w } : null)} height={h} className="mu-skeleton" style={{ borderRadius: 6 }} />;
+}
+
+// A body line. Width renders as 'flex: 0 0 w' on the main axis, so a partial
+// line must sit in an HStack (horizontal) — in a column it would pin the height.
+const Line = ({ w }: { w?: number }) =>
+  w == null ? <Bar h={9} /> : <HStack><Bar w={w} h={9} /></HStack>;
+
+function Skeleton() {
+  return (
+    <VStack>
+      <VStack gap={11} padding={16}>
+        <HStack gap={12} align="center" justify="space-between">
+          <Bar w={180} h={12} />
+          <Bar w={30} h={10} />
+        </HStack>
+        <HStack gap={9} align="center">
+          <Bar w={8} h={8} />
+          <Bar w={156} h={9} />
+        </HStack>
+        <VStack gap={9}>
+          <Line />
+          <Line />
+          <Line w={240} />
+        </VStack>
+      </VStack>
+      <Divider />
+    </VStack>
+  );
+}
+
+// The slot is measured like a row, so it can hold skeletons while a page loads,
+// a soft hint when idle, or an end-cap once a direction is exhausted.
+function Slot({ edge, loading, done }: { edge: 'top' | 'bottom'; loading: boolean; done: boolean }) {
+  if (loading) return <VStack><Skeleton /><Skeleton /></VStack>;
+  const top = edge === 'top';
+  return (
+    <VStack padding={14} align="center">
+      <Text font="500 11px 'Geist Mono Variable'" color="var(--faint)">
+        {done
+          ? top ? 'BEGINNING OF HISTORY' : 'YOU’RE ALL CAUGHT UP'
+          : top ? '↑  Scroll up for older events' : '↓  Scroll down for newer events'}
+      </Text>
+    </VStack>
+  );
+}
+
+function Row(event: Event) {
+  return (
+    <VStack>
+      <VStack gap={9} padding={16}>
+        <HStack gap={12} align="flex-start" justify="space-between">
+          <Text font="600 14px Inter">{event.title}</Text>
+          <VStack width={46} align="flex-end">
+            <Text font="500 11px 'Geist Mono Variable'" color="var(--faint)">{\`#\${event.n}\`}</Text>
+          </VStack>
+        </HStack>
+        <Text font="500 11px 'Geist Mono Variable'" color="var(--muted)">{event.meta}</Text>
+        {event.body ? <Text color="var(--muted)">{event.body}</Text> : null}
+        {event.note ? (
+          <HStack gap={11} align="stretch">
+            <VStack width={2} style={{ borderRadius: 2, background: 'var(--rail)' }} />
+            <Text font="500 12.5px Inter" color="var(--muted)">{event.note}</Text>
+          </HStack>
+        ) : null}
+      </VStack>
+      <Divider />
+    </VStack>
+  );
+}
+
+function AuditTrail() {
+  const [range, setRange] = useState({ start: 480, end: 511 });
+  const [loadingTop, setLoadingTop] = useState(false);
+  const [loadingBottom, setLoadingBottom] = useState(false);
+  const items = useMemo(() => page(range.start, range.end), [range]);
+  const list = useMugenVirtualizer({ items });
+
+  const loadOlder = () => {
+    if (loadingTop || range.start === 0) return;
+    setLoadingTop(true);
+    fetchPage().then(() => {
+      setRange((r) => ({ ...r, start: Math.max(0, r.start - 12) }));
+      setLoadingTop(false);
+    });
+  };
+
+  const loadNewer = () => {
+    if (loadingBottom || range.end === 959) return;
+    setLoadingBottom(true);
+    fetchPage().then(() => {
+      setRange((r) => ({ ...r, end: Math.min(959, r.end + 12) }));
+      setLoadingBottom(false);
+    });
+  };
+
+  return (
+    <MugenVList
+      instance={list}
+      getKey={(event) => event.id}
+      render={Row}
+      renderTop={() => <Slot edge="top" loading={loadingTop} done={range.start === 0} />}
+      renderBottom={() => <Slot edge="bottom" loading={loadingBottom} done={range.end === 959} />}
+      onTopReached={loadOlder}
+      onBottomReached={loadNewer}
+      topReachedThreshold={24}
+      bottomReachedThreshold={24}
+      initialScroll={{ to: 'index', index: 10, align: 'center' }}
+      font="13.5px Inter"
+      lineHeight={20}
+    />
+  );
+}`,
+
   markdownHtml: `import {
   MugenVList, Text, VStack,
   useMugenEffect, useMugenState, useMugenVirtualizer,

@@ -23,6 +23,11 @@ export default defineConfig({
     // localhost-only, so the dev server is reachable over LAN / Tailscale.
     host: true,
     port: 3000,
+    // Vite only auto-allows `localhost` and IP literals; a request by hostname is
+    // rejected with "Blocked request. This host is not allowed." Allow Tailscale
+    // MagicDNS names (`<machine>.<tailnet>.ts.net`) so a phone on the tailnet can
+    // load the dev server by name, not just by 100.x IP.
+    allowedHosts: ['.ts.net'],
   },
   plugins: [
     mdx(),
