@@ -111,6 +111,58 @@ export function measureChildren(children: ReactNode, ctx: MeasureContext): numbe
   return sum;
 }
 
+/**
+ * Max-content width of a node in px — the width it takes as a flex item when
+ * nothing forces it to wrap — or `null` when it can't be known (a custom
+ * primitive without `naturalWidth`, a host element). Plain components are
+ * unwrapped to the tree they return, exactly as `measureNode` measures them.
+ */
+export function naturalWidthOf(node: ReactNode, ctx: MeasureContext): number | null {
+  let cur: ReactNode = node;
+  for (let depth = 0; depth < 32; depth++) {
+    if (cur == null || typeof cur === 'boolean') return 0;
+    if (!isValidElement(cur)) return null;
+    const element = cur as ReactElement;
+    if (element.type === Fragment) return null; // fragments are spliced before this is called
+    const def = getPrimitiveDef(element.type);
+    if (def) {
+      return def.naturalWidth
+        ? def.naturalWidth(element.props as Record<string, unknown>, ctx)
+        : null;
+    }
+    if (typeof element.type !== 'function') return null;
+    try {
+      cur = (element.type as (props: object) => ReactNode)(element.props as object);
+    } catch {
+      return null; // let measureNode surface the real error with its component path
+    }
+  }
+  return null;
+}
+
+/**
+ * Whether a node renders outside the row's flow (its primitive is marked
+ * `outOfFlow`, e.g. `Portal`) — it paints no flex item, so boxes skip it when
+ * counting gaps and distributing width. Unwraps plain components like the
+ * walker does.
+ */
+export function isOutOfFlow(node: ReactNode): boolean {
+  let cur: ReactNode = node;
+  for (let depth = 0; depth < 32; depth++) {
+    if (!isValidElement(cur)) return false;
+    const element = cur as ReactElement;
+    const def = getPrimitiveDef(element.type);
+    if (def) return def.outOfFlow === true;
+    if (typeof element.type !== 'function') return false;
+    try {
+      cur = (element.type as (props: object) => ReactNode)(element.props as object);
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
 /** Append the failing component name to a measure error, building a path. */
 function annotateComponent(err: unknown, name: string): unknown {
   if (err instanceof Error) {

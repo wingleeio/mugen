@@ -70,8 +70,13 @@ function TextComponent(props: TextProps): ReactElement {
     overflowWrap: 'anywhere',
     margin: 0,
     padding: 0,
+    // Pin text shaping to the canvas defaults pretext measures with, so page
+    // CSS (e.g. a global `code { font-feature-settings: 'liga' 0 }`) can't
+    // change glyph widths under the measured text and shift its wrapping.
+    fontVariantLigatures: 'normal',
+    fontFeatureSettings: 'normal',
+    letterSpacing: r.letterSpacing != null ? `${r.letterSpacing}px` : 'normal',
     ...(props.shrink ? { width: 'fit-content', maxWidth: '100%' } : null),
-    ...(r.letterSpacing != null ? { letterSpacing: `${r.letterSpacing}px` } : null),
     ...(props.color != null ? { color: props.color } : null),
     ...(props.style as CSSProperties | undefined),
   };
@@ -103,6 +108,12 @@ export const Text = markPrimitive(
         ? Math.min(ctx.width, Math.ceil(naturalWidth(p.children, r.font, r.opts)))
         : ctx.width;
       return measureText(prepareText(p.children, r.font, r.opts), width, r.lineHeight).height;
+    },
+    naturalWidth(props, ctx: MeasureContext) {
+      const p = props as unknown as TextProps;
+      if (typeof p.children !== 'string') return null;
+      const r = resolveText(p, ctx.defaults);
+      return naturalWidth(p.children, r.font, r.opts);
     },
   },
 );

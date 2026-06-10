@@ -39,5 +39,9 @@ export const Portal = markPrimitive(
     // Out of row flow → no height, and children are never walked (so the usual
     // "only primitives are measurable" rule does not apply inside a Portal).
     measure: () => 0,
+    naturalWidth: () => 0,
+    // Paints no flex item in the row, so boxes skip it when counting gaps and
+    // distributing width.
+    outOfFlow: true,
   },
 );

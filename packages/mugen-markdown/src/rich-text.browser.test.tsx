@@ -39,7 +39,9 @@ function domRich(runs: RichTextRun[], lineHeight: number, width: number): number
     const tag = run.as ?? (run.href != null ? 'a' : 'span');
     const span = document.createElement(tag);
     span.style.font = run.font ?? '';
-    span.style.lineHeight = `${lineHeight}px`;
+    // Mirror the render: zero-leading runs never extend a line box, so the
+    // container's strut alone defines line height.
+    span.style.lineHeight = '0';
     if (run.noBreak) span.style.whiteSpace = 'nowrap';
     span.textContent = run.text;
     el.appendChild(span);

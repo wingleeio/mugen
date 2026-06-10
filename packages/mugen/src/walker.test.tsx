@@ -3,10 +3,12 @@ import { describe, expect, it, vi } from 'vitest';
 const CHAR_W = 10;
 vi.mock('@chenglou/pretext', () => ({
   prepare: vi.fn((text: string) => ({ __text: text })),
+  prepareWithSegments: vi.fn((text: string) => ({ __text: text })),
   layout: vi.fn((prepared: { __text: string }, width: number, lineHeight: number) => {
     const lineCount = Math.max(1, Math.ceil((prepared.__text.length * CHAR_W) / Math.max(1, width)));
     return { height: lineCount * lineHeight, lineCount };
   }),
+  measureNaturalWidth: vi.fn((prepared: { __text: string }) => prepared.__text.length * CHAR_W),
   clearCache: vi.fn(),
 }));
 
@@ -153,6 +155,72 @@ describe('walker: primitive measurement', () => {
     );
     expect(heightOf(<Row label="x" />, 600, defaults)).toBe(LH + 2 + LH);
   });
+
+  it('sizes HStack children to their content like flex, not an equal split', () => {
+    // DOM flex items default to `flex: 0 1 auto` — content width. A short
+    // marker beside a long label must leave the label its content width
+    // (no wrap), not half the row.
+    const h = heightOf(
+      <HStack gap={10}>
+        <Text>{'+'}</Text>
+        <Text>{'x'.repeat(50)}</Text>
+      </HStack>,
+      600,
+      defaults,
+    );
+    // marker 10px + label 500px + gap ≤ 600 → both single-line.
+    expect(h).toBe(LH);
+  });
+
+  it('shrinks HStack children proportionally to their content on overflow', () => {
+    // naturals: 200px and 600px in a 400px row (no gap) → scale 0.5 → 100/300.
+    // The long text wraps to 2 lines at 300 (600/300); equal split (200 each)
+    // would give 3 lines.
+    const h = heightOf(
+      <HStack>
+        <Text>{'x'.repeat(20)}</Text>
+        <Text>{'y'.repeat(60)}</Text>
+      </HStack>,
+      400,
+      defaults,
+    );
+    expect(h).toBe(2 * LH);
+  });
+
+  it('falls back to an equal split when a child’s natural width is unknowable', () => {
+    // A custom primitive with measure() but no naturalWidth() — the row can't
+    // know its content width, so the remainder splits equally (the documented
+    // fallback).
+    const Opaque = markPrimitive(() => null, { name: 'Opaque', measure: () => 10 });
+    const h = heightOf(
+      <HStack>
+        <Opaque />
+        <Text>{'x'.repeat(40)}</Text>
+      </HStack>,
+      400,
+      defaults,
+    );
+    // 400/2 = 200 each → 400px of text wraps to 2 lines.
+    expect(h).toBe(2 * LH);
+  });
+
+  it('reads a fixed width through a composed component when distributing an HStack', () => {
+    // In the DOM the component's root primitive IS the flex item, so its
+    // `width` makes it `flex: 0 0 28px` and the sibling gets the rest. The
+    // measure pass must see that width too — treating the icon as a grow child
+    // would split the row in half and wrap the sibling's text where the DOM
+    // doesn't (the tool-card gap bug).
+    const Icon = () => <VStack width={28} height={28} />;
+    const row = (
+      <HStack gap={10}>
+        <Icon />
+        <Text>{'x'.repeat(30)}</Text>
+      </HStack>
+    );
+    // Inner 350 − gap 10 − icon 28 = 312 for the text; 30 chars × 10px = 300px
+    // → exactly 1 line. An equal split (170 each) would wrap it to 2.
+    expect(heightOf(row, 350, defaults)).toBe(28); // max(icon 28, one 20px line)
+  });
 });
 
 describe('walker: Portal (out-of-flow content)', () => {
@@ -160,7 +228,7 @@ describe('walker: Portal (out-of-flow content)', () => {
     expect(heightOf(<Portal>{<Text>{'tip'}</Text>}</Portal>, 600, defaults)).toBe(0);
   });
 
-  it('contributes no height in a stack, while siblings still measure', () => {
+  it('contributes no height and no gap in a stack, while siblings still measure', () => {
     const h = heightOf(
       <VStack gap={4}>
         <Text>{'trigger'}</Text>
@@ -171,9 +239,25 @@ describe('walker: Portal (out-of-flow content)', () => {
       200,
       defaults,
     );
-    // Only the trigger (one line) + no gap contribution worth counting beyond the
-    // single gap between the two children; the Portal adds 0 regardless of content.
-    expect(h).toBe(LH + 4);
+    // The Portal paints no flex item, so it adds neither height nor a gap —
+    // the stack is exactly the trigger's one line.
+    expect(h).toBe(LH);
+  });
+
+  it('takes no width share in an HStack (siblings are sized as if it were absent)', () => {
+    const h = heightOf(
+      <HStack gap={10}>
+        <Text>{'x'.repeat(58)}</Text>
+        <Portal>
+          <Text>{'overlay content'}</Text>
+        </Portal>
+      </HStack>,
+      600,
+      defaults,
+    );
+    // 58 chars × 10px = 580px ≤ 600 with no gap (the Portal is not a flex
+    // item) → one line. Sharing width with the Portal would wrap it.
+    expect(h).toBe(LH);
   });
 
   it('does not walk its children — non-primitive content inside is allowed', () => {

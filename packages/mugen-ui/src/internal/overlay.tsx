@@ -8,7 +8,24 @@ import {
   type ReactElement,
   type ReactNode,
 } from 'react';
-import { markPrimitive, measureChildren, type MeasureContext } from '@wingleeio/mugen';
+import {
+  markPrimitive,
+  measureChildren,
+  naturalWidthOf,
+  toChildArray,
+  type MeasureContext,
+} from '@wingleeio/mugen';
+
+/** Max-content width of `children` stacked as a column: the widest child. */
+function naturalChildrenWidth(children: ReactNode, ctx: MeasureContext): number | null {
+  let max = 0;
+  for (const child of toChildArray(children)) {
+    const w = naturalWidthOf(child, ctx);
+    if (w == null) return null;
+    max = Math.max(max, w);
+  }
+  return max;
+}
 
 /**
  * Shared open-state for one overlay. `anchor` is the trigger's DOM element,
@@ -57,6 +74,10 @@ export function createRoot(
     name,
     measure: (props: Record<string, unknown>, ctx: MeasureContext) =>
       measureChildren((props as unknown as { children: ReactNode }).children, ctx),
+    // The provider paints no box; in a row, the trigger is the only flex item
+    // (the content is portaled), so the Root's content width is its widest child.
+    naturalWidth: (props: Record<string, unknown>, ctx: MeasureContext) =>
+      naturalChildrenWidth((props as unknown as { children: ReactNode }).children, ctx),
   });
 }
 
@@ -71,7 +92,13 @@ export function markZeroMeasure<T extends (props: never) => ReactElement | null>
   name: string,
 ): T {
   (component as { displayName?: string }).displayName = name;
-  return markPrimitive(component, { name, measure: () => 0 });
+  // Portaled out of the row: no height, no width, no flex item.
+  return markPrimitive(component, {
+    name,
+    measure: () => 0,
+    naturalWidth: () => 0,
+    outOfFlow: true,
+  });
 }
 
 /** The state hook a Root provider uses to back its context. */
@@ -134,5 +161,9 @@ export function createTrigger(
     name,
     measure: (props: Record<string, unknown>, ctx: MeasureContext) =>
       measureChildren((props as unknown as TriggerProps).children, ctx),
+    // The wrapper renders `width: fit-content` — its flex-item width is its
+    // widest child, which is what content-based HStack distribution needs.
+    naturalWidth: (props: Record<string, unknown>, ctx: MeasureContext) =>
+      naturalChildrenWidth((props as unknown as TriggerProps).children, ctx),
   });
 }

@@ -56,8 +56,10 @@ export { markPrimitive, getPrimitiveDef } from './primitives/core';
 export type { MeasurableDef, MeasureContext } from './primitives/core';
 // `measureChildren` is the standard vertical-stack measure, exposed so a custom
 // primitive can pair a bespoke render with the usual child measurement;
-// `toChildArray` flattens children the same way the walker does.
-export { measureChildren, toChildArray } from './walker';
+// `toChildArray` flattens children the same way the walker does;
+// `naturalWidthOf`/`isOutOfFlow` let a custom primitive implement
+// `naturalWidth` (content-based HStack distribution) over its children.
+export { measureChildren, toChildArray, naturalWidthOf, isOutOfFlow } from './walker';
 
 // ── Style + font types ──
 export type { MeasurableStyle, SafeClassName } from './style';

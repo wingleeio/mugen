@@ -132,6 +132,20 @@ describe('ScrollController', () => {
     expect(c.escaped).toBe(true);
   });
 
+  it('ignores an upward wheel while the list does not overflow yet', () => {
+    const c = new ScrollController();
+    const el = fakeEl(300, 400, 0); // a short chat: content shorter than the viewport
+    c.attach(el);
+    // Nothing can scroll, so no scroll event will ever fire to re-engage; an
+    // idle wheel-up here must not break the stick for the rest of the session.
+    c.handleWheel(-40);
+    expect(c.escaped).toBe(false);
+    // Once content streams past the viewport, an upward wheel breaks as usual.
+    (el as unknown as { scrollHeight: number }).scrollHeight = 1000;
+    c.handleWheel(-40);
+    expect(c.escaped).toBe(true);
+  });
+
   it('a touch drag suppresses sticking; releasing away from the bottom stays escaped', () => {
     const c = new ScrollController();
     const el = fakeEl(1000, 400, 600);

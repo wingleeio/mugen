@@ -120,7 +120,10 @@ export const defaultComponents: ResolvedMarkdownComponents = {
       {
         padding: bq.padding,
         style: {
-          borderLeft: `${bq.borderWidth}px solid ${bq.borderColor}`,
+          // The rule is painted with an inset shadow, not a border: a border
+          // consumes content width the walker doesn't know about, so the quote
+          // would wrap earlier in the DOM than in the measure.
+          boxShadow: `inset ${bq.borderWidth}px 0 0 ${bq.borderColor}`,
           ...(bq.color !== 'inherit' ? { color: bq.color } : null),
         },
       },

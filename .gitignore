@@ -17,9 +17,6 @@ build/
 **/__screenshots__/
 test-results/
 
-# TanStack Router generated route tree
-**/routeTree.gen.ts
-
 # Env files
 .env
 .env.*
@@ -35,3 +32,6 @@ pnpm-debug.log*
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Vitest browser-mode attachments
+**/.vitest-attachments/

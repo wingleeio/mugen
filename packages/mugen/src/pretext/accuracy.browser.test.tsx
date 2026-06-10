@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { render, cleanup } from '@testing-library/react';
 import { heightOf } from '../walker';
-import { VStack } from '../primitives/box';
+import { HStack, VStack } from '../primitives/box';
 import { Text } from '../primitives/text';
 import type { TextDefaults } from '../text-defaults';
 
@@ -71,5 +72,29 @@ describe('pretext height ≈ DOM (Phase 3 accuracy gate)', () => {
     const inner = width - 16;
     const actual = domHeight('Ada Lovelace', inner) + domHeight(body, inner) + 4 + 16;
     expect(Math.abs(computed - actual)).toBeLessThanOrEqual(2);
+  });
+
+  it('a fixed-width icon component beside text matches the DOM (width distribution)', () => {
+    // The icon's width lives on the primitive its component returns; the walker
+    // must distribute the row as the DOM does — icon fixed, text gets the rest.
+    // Treating the icon as a grow child halves the text column and wraps a
+    // title the DOM keeps on one line (the tool-card gap bug).
+    const Icon = () => <VStack width={28} height={28} />;
+    const card = (
+      <HStack gap={11} padding={10} align="center">
+        <Icon />
+        <Text font="13px Arial" lineHeight={18}>
+          {'Computed the centered scroll target'}
+        </Text>
+      </HStack>
+    );
+    const width = 316;
+    const computed = heightOf(card, width, defaults);
+    const { container } = render(<div style={{ width: `${width}px` }}>{card}</div>);
+    const actual = (
+      container.firstElementChild!.firstElementChild as HTMLElement
+    ).getBoundingClientRect().height;
+    cleanup();
+    expect(Math.abs(computed - actual)).toBeLessThanOrEqual(1.5);
   });
 });
