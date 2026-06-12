@@ -3,6 +3,7 @@ import { VStack, HStack, definePrimitive, type Font } from '@wingleeio/mugen';
 import type { Image, List, Table } from 'mdast';
 import { RichText, type RichTextRun } from './primitives/rich-text';
 import { CodeBlock } from './primitives/code-block';
+import { TableBlock } from './primitives/table-block';
 import type {
   MarkdownComponent,
   MarkdownComponents,
@@ -57,34 +58,29 @@ function renderTable(node: Table, ctx: MarkdownRenderContext): ReactNode {
   const theme = ctx.theme;
   const align = node.align ?? [];
 
-  const rows = node.children.map((row, ri) => {
-    const isHeader = ri === 0;
-    // Memoize each row (and cell) so completed rows don't re-render while a later
-    // row streams in.
-    return ctx.memo(row, `tr:${ri}`, () => {
-      const cells = row.children.map((cell, ci) =>
-        ctx.memo(cell, `td:${ri}:${ci}:${isHeader ? 'h' : ''}:${align[ci] ?? ''}`, () => {
-          const content = ctx.inlineText(cell.children, {
-            lineHeight: theme.lineHeight,
-            weight: isHeader ? theme.table.headerWeight : undefined,
-            align: align[ci] ?? undefined,
-          });
-          return createElement(
-            VStack,
-            {
-              key: ci,
-              padding: theme.table.cellPadding,
-              ...(isHeader ? { style: { background: theme.table.headerBackground } } : null),
-            },
-            content,
-          );
+  // Memoize each cell so completed rows don't re-render while a later row
+  // streams in. TableBlock derives shared column widths across all rows, so
+  // the columns line up — rows are not independent flex rows.
+  const rows = node.children.map((row, ri) =>
+    row.children.map((cell, ci) =>
+      ctx.memo(cell, `td:${ri}:${ci}:${ri === 0 ? 'h' : ''}:${align[ci] ?? ''}`, () =>
+        ctx.inlineText(cell.children, {
+          lineHeight: theme.lineHeight,
+          weight: ri === 0 ? theme.table.headerWeight : undefined,
+          align: align[ci] ?? undefined,
         }),
-      );
-      return createElement(HStack, { key: ri }, cells);
-    });
-  });
+      ),
+    ),
+  );
 
-  return createElement(VStack, { gap: theme.table.gap }, rows);
+  return createElement(TableBlock, {
+    rows,
+    cellPadding: theme.table.cellPadding,
+    divider: theme.table.gap,
+    borderColor: theme.table.borderColor,
+    headerBackground: theme.table.headerBackground,
+    radius: theme.table.radius,
+  });
 }
 
 function renderImage(node: Image, ctx: MarkdownRenderContext): ReactNode {

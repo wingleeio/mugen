@@ -167,6 +167,9 @@ text; override `image` for real images with known dimensions.
   `lines × lineHeight` from pretext's rich-inline layout.
 - **`CodeBlock`** — non-wrapping code; height is `lines × lineHeight + padding`.
   Highlights known languages via the non-blocking canvas overlay (see above).
+- **`TableBlock`** — GFM tables with columns aligned across rows (widths
+  proportional to content, identical in measure and paint), header background,
+  hairline dividers, and a rounded outer ring — all height-neutral.
 
 Both are built with mugen's `markPrimitive`, the same way you'd build your own.
 

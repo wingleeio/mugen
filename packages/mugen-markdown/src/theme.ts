@@ -85,11 +85,15 @@ export interface MarkdownTheme {
   table: {
     /** Uniform cell padding in px (uniform so the analytic height stays exact). */
     cellPadding: number;
-    /** Gap between rows in px. */
+    /** Hairline between rows (and the outer ring) in px; 0 disables both. */
     gap: number;
     headerWeight: number;
     /** Background behind the header row. */
     headerBackground: string;
+    /** Hairline / outer-ring colour. */
+    borderColor: string;
+    /** Corner radius in px (clip only — no height impact). */
+    radius: number;
   };
 
   rule: { thickness: number; color: string; gap: number };
@@ -158,6 +162,8 @@ export const defaultTheme: MarkdownTheme = {
     gap: 1,
     headerWeight: 650,
     headerBackground: 'rgba(127, 127, 127, 0.12)',
+    borderColor: 'rgba(127, 127, 127, 0.35)',
+    radius: 8,
   },
 
   rule: { thickness: 1, color: 'rgba(127, 127, 127, 0.4)', gap: 8 },
