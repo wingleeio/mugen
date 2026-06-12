@@ -46,6 +46,12 @@ export type { RichTextProps, RichTextRun } from './primitives/rich-text';
 export { CodeBlock } from './primitives/code-block';
 export type { CodeBlockProps } from './primitives/code-block';
 
+// ── Code-block syntax highlighting (non-blocking canvas overlay) ──
+export { defaultTokenColors } from './highlight/types';
+export type { TokenType, CodeTokenColors } from './highlight/types';
+export { registerLanguage, profileFor } from './highlight/languages';
+export type { LanguageProfile } from './highlight/languages';
+
 // ── Inline pipeline (advanced) ──
 export { flattenInline, baseFormat, composeFont } from './inline';
 export type { InlineFormat } from './inline';

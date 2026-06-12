@@ -1,3 +1,5 @@
+import { defaultTokenColors, type CodeTokenColors } from './highlight/types';
+
 /**
  * The markdown theme. Every value that affects a box's height — fonts, line
  * heights, paddings, gaps — lives here as a concrete number/family, because the
@@ -56,6 +58,12 @@ export interface MarkdownTheme {
     background: string;
     color: string;
     radius: number;
+    /**
+     * Token palette for the built-in non-blocking canvas highlighter, or
+     * `false` to disable highlighting. Colours are paint-only — they can never
+     * change a block's measured height.
+     */
+    highlight: CodeTokenColors | false;
   };
 
   blockquote: {
@@ -132,6 +140,7 @@ export const defaultTheme: MarkdownTheme = {
     background: 'rgba(127, 127, 127, 0.12)',
     color: 'inherit',
     radius: 8,
+    highlight: defaultTokenColors,
   },
 
   blockquote: {

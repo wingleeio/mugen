@@ -84,6 +84,38 @@ Families must be measurable — a named web font (`"Inter"`) or a canvas-safe
 generic (`"sans-serif"`, `"monospace"`). `"system-ui"` is rejected, because its
 canvas metrics drift from what CSS paints.
 
+## Syntax highlighting
+
+Fenced code blocks are syntax-highlighted by default — without ever touching
+layout, and without ever blocking a frame. The `<pre><code>` renders its plain
+text immediately (selectable, searchable, accessible) and stays the layout
+source of truth; the language is tokenized off the critical path in time-sliced
+chunks; and token colours are painted onto canvas tiles overlaying the text, at
+which point the DOM text flips to `color: transparent` in the same frame.
+Because highlighting is pure paint, it can't change a block's measured height —
+`lines × lineHeight + padding` stays exact, tokens or not — and streaming
+appends re-tokenize and repaint only the changed tail. Tiles allocate canvas
+memory only while near the viewport, so huge blocks stay cheap.
+
+Tune the palette (or turn it off) through the theme:
+
+```tsx
+<Markdown
+  source={md}
+  theme={{
+    code: {
+      highlight: { keyword: '#c678dd', string: '#98c379' }, // deep-partial
+      // highlight: false,                                  // or disable
+    },
+  }}
+/>
+```
+
+A compact built-in tokenizer covers the common fence languages (ts/js, python,
+rust, go, c/c++/c#, java, php, ruby, swift, kotlin, shell, sql, css/scss, html,
+json, yaml, toml, dockerfile, …); unknown languages simply stay plain. Register
+your own with `registerLanguage(['mylang'], profile)`.
+
 ## Extending: typed components
 
 Override any block-level node with a typed component. The `node` is the matching
@@ -134,6 +166,7 @@ text; override `image` for real images with known dimensions.
 - **`RichText`** — mixed-font inline that wraps as one flow; height is
   `lines × lineHeight` from pretext's rich-inline layout.
 - **`CodeBlock`** — non-wrapping code; height is `lines × lineHeight + padding`.
+  Highlights known languages via the non-blocking canvas overlay (see above).
 
 Both are built with mugen's `markPrimitive`, the same way you'd build your own.
 

@@ -142,6 +142,7 @@ export const defaultComponents: ResolvedMarkdownComponents = {
       padding: c.padding,
       background: c.background,
       radius: c.radius,
+      highlight: c.highlight,
       ...(c.color !== 'inherit' ? { color: c.color } : null),
     });
   },
