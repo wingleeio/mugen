@@ -19,47 +19,47 @@
 
 /* ── The drafting-table palette ─────────────────────────────────────────────
    mugen measures things, so the site is set like an engineering drawing:
-   warm ink, bone-paper foreground, and a single vermilion accent (the seal
-   red — mugen is 無限). Overrides the fumadocs neutral theme. */
+   violet-cast ink, one refined purple accent, hairlines everywhere.
+   Overrides the fumadocs neutral theme. */
 :root {
-  --color-fd-background: oklch(0.977 0.0035 85);
-  --color-fd-foreground: oklch(0.245 0.009 60);
-  --color-fd-card: oklch(0.962 0.0045 85);
-  --color-fd-card-foreground: oklch(0.245 0.009 60);
-  --color-fd-popover: oklch(0.985 0.003 85);
-  --color-fd-popover-foreground: oklch(0.245 0.009 60);
-  --color-fd-muted: oklch(0.945 0.0045 85);
-  --color-fd-muted-foreground: oklch(0.49 0.012 60);
-  --color-fd-border: oklch(0.245 0.009 60 / 13%);
-  --color-fd-accent: oklch(0.245 0.009 60 / 6%);
-  --color-fd-accent-foreground: oklch(0.245 0.009 60);
-  --color-fd-secondary: oklch(0.94 0.0045 85);
-  --color-fd-secondary-foreground: oklch(0.245 0.009 60);
-  --color-fd-primary: oklch(0.575 0.196 31);
-  --color-fd-primary-foreground: oklch(0.982 0.004 85);
-  --color-fd-ring: oklch(0.575 0.196 31);
+  --color-fd-background: oklch(0.977 0.0025 300);
+  --color-fd-foreground: oklch(0.25 0.012 300);
+  --color-fd-card: oklch(0.962 0.0035 300);
+  --color-fd-card-foreground: oklch(0.25 0.012 300);
+  --color-fd-popover: oklch(0.985 0.002 300);
+  --color-fd-popover-foreground: oklch(0.25 0.012 300);
+  --color-fd-muted: oklch(0.945 0.0035 300);
+  --color-fd-muted-foreground: oklch(0.49 0.014 300);
+  --color-fd-border: oklch(0.25 0.012 300 / 13%);
+  --color-fd-accent: oklch(0.25 0.012 300 / 6%);
+  --color-fd-accent-foreground: oklch(0.25 0.012 300);
+  --color-fd-secondary: oklch(0.94 0.0035 300);
+  --color-fd-secondary-foreground: oklch(0.25 0.012 300);
+  --color-fd-primary: oklch(0.5 0.21 296);
+  --color-fd-primary-foreground: oklch(0.982 0.002 300);
+  --color-fd-ring: oklch(0.5 0.21 296);
   /* drawing-sheet decoration strengths (ink on paper reads heavier) */
   --mu-grid-strength: 5%;
   --mu-cross-strength: 10%;
 }
 
 .dark {
-  --color-fd-background: oklch(0.157 0.0048 70);
-  --color-fd-foreground: oklch(0.924 0.0085 84);
-  --color-fd-card: oklch(0.183 0.005 72);
-  --color-fd-card-foreground: oklch(0.924 0.0085 84);
-  --color-fd-popover: oklch(0.205 0.0055 72);
-  --color-fd-popover-foreground: oklch(0.924 0.0085 84);
-  --color-fd-muted: oklch(0.212 0.0055 72);
-  --color-fd-muted-foreground: oklch(0.63 0.01 78);
-  --color-fd-border: oklch(0.924 0.0085 84 / 10%);
-  --color-fd-accent: oklch(0.924 0.0085 84 / 7%);
-  --color-fd-accent-foreground: oklch(0.924 0.0085 84);
-  --color-fd-secondary: oklch(0.224 0.0055 72);
-  --color-fd-secondary-foreground: oklch(0.924 0.0085 84);
-  --color-fd-primary: oklch(0.671 0.193 32.5);
-  --color-fd-primary-foreground: oklch(0.147 0.0045 70);
-  --color-fd-ring: oklch(0.671 0.193 32.5);
+  --color-fd-background: oklch(0.158 0.009 300);
+  --color-fd-foreground: oklch(0.925 0.006 300);
+  --color-fd-card: oklch(0.184 0.01 300);
+  --color-fd-card-foreground: oklch(0.925 0.006 300);
+  --color-fd-popover: oklch(0.206 0.011 300);
+  --color-fd-popover-foreground: oklch(0.925 0.006 300);
+  --color-fd-muted: oklch(0.213 0.011 300);
+  --color-fd-muted-foreground: oklch(0.64 0.014 300);
+  --color-fd-border: oklch(0.925 0.006 300 / 10%);
+  --color-fd-accent: oklch(0.925 0.006 300 / 7%);
+  --color-fd-accent-foreground: oklch(0.925 0.006 300);
+  --color-fd-secondary: oklch(0.225 0.011 300);
+  --color-fd-secondary-foreground: oklch(0.925 0.006 300);
+  --color-fd-primary: oklch(0.73 0.145 295);
+  --color-fd-primary-foreground: oklch(0.15 0.01 300);
+  --color-fd-ring: oklch(0.73 0.145 295);
   --mu-grid-strength: 5.5%;
   --mu-cross-strength: 16%;
 }
@@ -119,43 +119,43 @@ html > body[data-scroll-locked] {
 .prose h2 {
   font-size: 1.85rem;
   line-height: 1.18;
-  margin-top: 2.2em;
-}
-.prose h2:not(:first-child)::before {
-  content: '';
-  display: block;
-  width: 2rem;
-  height: 1px;
-  margin-bottom: 1.1rem;
-  background: color-mix(in oklab, var(--color-fd-primary) 65%, transparent);
+  margin-top: 2.4em;
 }
 .prose h1 em,
 .prose h2 em {
   color: var(--color-fd-primary);
 }
-
-/* ── Refined thin scrollbar for embedded scrollers (e.g. the demo list) ── */
-.mu-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in oklab, var(--color-fd-foreground) 20%, transparent) transparent;
-  overscroll-behavior: contain;
+/* The page's title block reads like a drawing's: serif title, muted
+   description, then a hairline before the body starts. */
+.prose h1 + p {
+  padding-bottom: 1.6rem;
+  border-bottom: 1px solid var(--color-fd-border);
 }
-.mu-scroll::-webkit-scrollbar {
+
+/* ── Thin themed scrollbars, everywhere — default chrome breaks the sheet ── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--color-fd-foreground) 22%, transparent) transparent;
+}
+::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
-.mu-scroll::-webkit-scrollbar-track {
+::-webkit-scrollbar-track {
   background: transparent;
 }
-.mu-scroll::-webkit-scrollbar-thumb {
+::-webkit-scrollbar-thumb {
   background: color-mix(in oklab, var(--color-fd-foreground) 16%, transparent);
   border-radius: 9999px;
   border: 3px solid transparent;
   background-clip: padding-box;
 }
-.mu-scroll::-webkit-scrollbar-thumb:hover {
+::-webkit-scrollbar-thumb:hover {
   background: color-mix(in oklab, var(--color-fd-foreground) 30%, transparent);
   background-clip: padding-box;
+}
+.mu-scroll {
+  overscroll-behavior: contain;
 }
 
 /* ── Drawing-sheet backdrop: fine grid + registration crosshairs ────────── */
@@ -226,24 +226,6 @@ html > body[data-scroll-locked] {
   -webkit-text-stroke: 1px color-mix(in oklab, var(--color-fd-foreground) 13%, transparent);
 }
 
-/* Registration-mark frame: vermilion corner brackets on a hairline box. */
-.mu-frame {
-  position: relative;
-  border: 1px solid var(--color-fd-border);
-}
-.mu-corner {
-  position: absolute;
-  width: 14px;
-  height: 14px;
-  border-color: var(--color-fd-primary);
-  border-style: solid;
-  border-width: 0;
-}
-.mu-corner[data-pos='tl'] { top: -1px; left: -1px; border-top-width: 1.5px; border-left-width: 1.5px; }
-.mu-corner[data-pos='tr'] { top: -1px; right: -1px; border-top-width: 1.5px; border-right-width: 1.5px; }
-.mu-corner[data-pos='bl'] { bottom: -1px; left: -1px; border-bottom-width: 1.5px; border-left-width: 1.5px; }
-.mu-corner[data-pos='br'] { bottom: -1px; right: -1px; border-bottom-width: 1.5px; border-right-width: 1.5px; }
-
 /* Dimension line for figure captions: ⊢———— label ————⊣ */
 .mu-dim {
   display: flex;
@@ -296,14 +278,64 @@ kbd,
   font-feature-settings: 'liga' 0, 'calt' 0;
 }
 
-/* ── Sidebar section labels → mono eyebrows (matches the landing aesthetic) ── */
-[class~='mt-6'] > .fd-page-tree-item-name {
+/* ── De-fumadocs the docs chrome: everything sits on one sheet ──────────── */
+
+/* Sidebar: no surface of its own — transparent on the page, hairline divider. */
+#nd-sidebar {
+  background: transparent;
+  border-right: 1px solid var(--color-fd-border);
+}
+#nd-sidebar [data-radix-scroll-area-viewport] {
+  padding-top: 0.5rem;
+}
+
+/* Sidebar section labels → mono eyebrows (matches the landing aesthetic) */
+[class~='mt-6'] > .fd-page-tree-item-name,
+#nd-sidebar p.fd-page-tree-folder-name {
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--color-fd-muted-foreground);
+}
+
+/* Navbar: glass over the sheet, hairline below. */
+#nd-nav,
+#nd-subnav {
+  background: color-mix(in srgb, var(--color-fd-background) 78%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--color-fd-border);
+}
+
+/* TOC: a mono annotation column. */
+#nd-toc {
+  font-family: var(--font-mono);
+}
+#nd-toc a {
+  font-size: 12px;
+  letter-spacing: 0.01em;
+}
+#nd-toc h3,
+#nd-toc p:first-of-type {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-fd-muted-foreground);
+}
+
+/* Prose links carry the accent with a quiet underline. */
+.prose a:not([data-card]) {
+  color: var(--color-fd-primary);
+  text-decoration-line: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: color-mix(in oklab, var(--color-fd-primary) 40%, transparent);
+}
+.prose a:not([data-card]):hover {
+  text-decoration-color: var(--color-fd-primary);
 }
 
 /* ── Soft pulse for "live" affordances (active step, streaming caption) ── */

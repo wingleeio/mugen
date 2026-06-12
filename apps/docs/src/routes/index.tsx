@@ -37,17 +37,9 @@ const FEATURES = [
   },
 ];
 
-/** Vermilion corner brackets on a hairline box — a drawing's registration frame. */
+/** A plate on the sheet: hairline box with the content inside. */
 function Frame({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return (
-    <div className={`mu-frame ${className}`}>
-      <span aria-hidden className="mu-corner" data-pos="tl" />
-      <span aria-hidden className="mu-corner" data-pos="tr" />
-      <span aria-hidden className="mu-corner" data-pos="bl" />
-      <span aria-hidden className="mu-corner" data-pos="br" />
-      {children}
-    </div>
-  );
+  return <div className={`overflow-hidden rounded-lg border border-fd-border ${className}`}>{children}</div>;
 }
 
 function Figure({ n, label }: { n: string; label: string }) {
@@ -55,7 +47,7 @@ function Figure({ n, label }: { n: string; label: string }) {
     <div className="mu-dim mt-4">
       <span className="shrink-0">
         <span className="text-fd-primary">fig. {n}</span>
-        <span className="mx-2 opacity-40">—</span>
+        <span className="mx-2">—</span>
         {label}
       </span>
     </div>
@@ -86,10 +78,8 @@ function Home() {
 
           <div className="mx-auto w-full max-w-5xl px-6 pt-20 pb-12 text-center">
             <span className="mu-rise inline-flex items-center gap-2.5 font-mono text-[11px] uppercase tracking-[0.22em] text-fd-muted-foreground">
-              <span aria-hidden className="select-none opacity-50">[</span>
               <span className="size-1.5 rounded-full bg-fd-primary" />
               powered by pretext
-              <span aria-hidden className="select-none opacity-50">]</span>
             </span>
 
             <h1
@@ -98,14 +88,7 @@ function Home() {
             >
               Virtualized lists with heights
               <br className="hidden sm:block" /> you{' '}
-              <em className="relative whitespace-nowrap text-fd-primary">
-                compute
-                <span
-                  aria-hidden
-                  className="absolute -bottom-1 left-0 right-0 h-px bg-fd-primary/50"
-                />
-              </em>
-              , not measure.
+              <em className="whitespace-nowrap text-fd-primary">compute</em>, not measure.
             </h1>
 
             <p
@@ -146,7 +129,7 @@ function Home() {
                 {STATS.map(([v, k], i) => (
                   <span key={k} className="inline-flex items-center">
                     {i > 0 ? (
-                      <span aria-hidden className="mx-6 select-none text-fd-primary/60">
+                      <span aria-hidden className="mx-6 select-none text-fd-primary">
                         +
                       </span>
                     ) : null}
@@ -188,7 +171,7 @@ function Home() {
                 key={f.title}
                 className="group grid gap-2 border-b border-fd-border py-6 sm:grid-cols-[7rem_1fr] sm:gap-6"
               >
-                <div className="font-mono text-xs tabular-nums text-fd-muted-foreground/60 transition-colors group-hover:text-fd-primary">
+                <div className="font-mono text-xs tabular-nums text-fd-muted-foreground transition-colors group-hover:text-fd-primary">
                   № {String(i + 1).padStart(2, '0')}
                 </div>
                 <div>

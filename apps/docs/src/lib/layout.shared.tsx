@@ -9,7 +9,7 @@ export function baseOptions(): BaseLayoutProps {
           <span className="font-serif text-[19px] leading-none tracking-[0.01em]">{appName}</span>
           <span
             aria-hidden
-            className="font-serif text-[11px] leading-none text-fd-muted-foreground/70"
+            className="font-serif text-[11px] leading-none text-fd-muted-foreground"
           >
             無限
           </span>
