@@ -550,6 +550,10 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
         position: 'relative',
         overflowY: 'auto',
         overflowX: 'hidden',
+        // mugen does its own scroll anchoring (prepend compensation, the
+        // stick-to-bottom spring); native scroll anchoring reacting to the
+        // same height changes would double-adjust scrollTop and jitter.
+        overflowAnchor: 'none',
         height: props.height != null ? `${props.height}px` : '100%',
         ...props.style,
       }}

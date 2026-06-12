@@ -34,11 +34,24 @@ const AT_BOTTOM_PX = 2;
 
 const FRAME_MS = 1000 / 60;
 
+/** Cap on simulated frames per tick — a long main-thread hitch catches up over
+ *  a couple of writes instead of teleporting. */
+const MAX_CATCHUP_FRAMES = 8;
+
+/** After reaching the bottom, keep the spring loop warm this long. Streaming
+ *  growth arrives in discrete steps (a wrapped line at a time); if the loop
+ *  parked between steps, every step would re-accelerate from velocity 0 — a
+ *  stop-go pulse that reads as vertical jitter, worst on narrow (mobile)
+ *  viewports where lines wrap often. Warm, the next step resumes from cruise. */
+const SETTLE_GRACE_MS = 500;
+
 export class ScrollController {
   private el: HTMLElement | null = null;
   private raf: number | null = null;
   private velocity = 0;
   private lastTick = 0;
+  /** When the spring first found itself pinned at the bottom (0 = moving). */
+  private settledSince = 0;
   /** scrollTop our animation last wrote — lets onScroll tell us from the user. */
   private expectedTop = 0;
   private lastScrollTop = 0;
@@ -179,20 +192,42 @@ export class ScrollController {
     this.raf = null;
     if (!el || this.escaped || this.pointerActive) return;
     const target = el.scrollHeight - el.clientHeight;
-    const diff = target - el.scrollTop;
-    if (diff <= 0.5) {
-      el.scrollTop = target;
-      this.expectedTop = target;
-      this.velocity = 0;
-      return;
-    }
     const now = typeof performance !== 'undefined' ? performance.now() : 0;
-    const tickDelta = this.lastTick ? Math.min(4, (now - this.lastTick) / FRAME_MS) : 1;
+    let frames = this.lastTick ? Math.min(MAX_CATCHUP_FRAMES, (now - this.lastTick) / FRAME_MS) : 1;
     this.lastTick = now;
-    this.velocity = (spring.damping * this.velocity + spring.stiffness * diff) / spring.mass;
-    const next = Math.min(target, el.scrollTop + this.velocity * tickDelta);
+    // Integrate the spring in (fractional) frame-sized substeps so it is
+    // frame-rate independent: a dropped frame advances the same dynamics
+    // further, instead of warping them. The old once-per-rAF recurrence
+    // alternated lag (one velocity update for 3 frames of time) and surge
+    // (the grown diff over-accelerating the next update) under load — which
+    // reads as vertical jitter on mobile. At a steady 60Hz (h = 1) this is
+    // exactly the original recurrence.
+    let pos = el.scrollTop;
+    let v = this.velocity;
+    while (frames > 0) {
+      const h = Math.min(1, frames);
+      frames -= h;
+      const diff = Math.max(0, target - pos);
+      v += h * ((spring.damping * v + spring.stiffness * diff) / spring.mass - v);
+      pos = Math.min(target, pos + v * h);
+    }
+    this.velocity = v;
+    const next = target - pos <= 0.5 ? target : pos;
     el.scrollTop = next;
     this.expectedTop = next;
+    if (next >= target) {
+      // At the bottom. Idle for a grace window (velocity decaying through the
+      // same dynamics) so a growth step landing mid-stream resumes from speed;
+      // park only once the content has stopped growing for a while.
+      if (this.settledSince === 0) this.settledSince = now;
+      if (now - this.settledSince >= SETTLE_GRACE_MS && v < 0.05) {
+        this.velocity = 0;
+        this.settledSince = 0;
+        return;
+      }
+    } else {
+      this.settledSince = 0;
+    }
     this.raf = requestAnimationFrame(() => this.tick(spring));
   }
 
@@ -202,5 +237,6 @@ export class ScrollController {
       this.raf = null;
     }
     this.velocity = 0;
+    this.settledSince = 0;
   }
 }
