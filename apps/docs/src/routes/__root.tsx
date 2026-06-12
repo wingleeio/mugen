@@ -46,7 +46,8 @@ function RootComponent() {
         <HeadContent />
       </head>
       <body className="flex flex-col min-h-screen">
-        <RootProvider>
+        {/* The drafting-table look is designed dark-first; light stays available. */}
+        <RootProvider theme={{ defaultTheme: 'dark' }}>
           <Outlet />
         </RootProvider>
         <Scripts />

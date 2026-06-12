@@ -3,6 +3,8 @@
 @import 'fumadocs-ui/css/preset.css';
 @import '@fontsource-variable/geist';
 @import '@fontsource-variable/geist-mono';
+@import '@fontsource/instrument-serif/400.css';
+@import '@fontsource/instrument-serif/400-italic.css';
 @import '@fontsource/inter/400.css';
 @import '@fontsource/inter/500.css';
 @import '@fontsource/inter/600.css';
@@ -12,6 +14,54 @@
 @theme {
   --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', SFMono-Regular, monospace;
+  --font-serif: 'Instrument Serif', Georgia, 'Times New Roman', serif;
+}
+
+/* ── The drafting-table palette ─────────────────────────────────────────────
+   mugen measures things, so the site is set like an engineering drawing:
+   warm ink, bone-paper foreground, and a single vermilion accent (the seal
+   red — mugen is 無限). Overrides the fumadocs neutral theme. */
+:root {
+  --color-fd-background: oklch(0.977 0.0035 85);
+  --color-fd-foreground: oklch(0.245 0.009 60);
+  --color-fd-card: oklch(0.962 0.0045 85);
+  --color-fd-card-foreground: oklch(0.245 0.009 60);
+  --color-fd-popover: oklch(0.985 0.003 85);
+  --color-fd-popover-foreground: oklch(0.245 0.009 60);
+  --color-fd-muted: oklch(0.945 0.0045 85);
+  --color-fd-muted-foreground: oklch(0.49 0.012 60);
+  --color-fd-border: oklch(0.245 0.009 60 / 13%);
+  --color-fd-accent: oklch(0.245 0.009 60 / 6%);
+  --color-fd-accent-foreground: oklch(0.245 0.009 60);
+  --color-fd-secondary: oklch(0.94 0.0045 85);
+  --color-fd-secondary-foreground: oklch(0.245 0.009 60);
+  --color-fd-primary: oklch(0.575 0.196 31);
+  --color-fd-primary-foreground: oklch(0.982 0.004 85);
+  --color-fd-ring: oklch(0.575 0.196 31);
+  /* drawing-sheet decoration strengths (ink on paper reads heavier) */
+  --mu-grid-strength: 5%;
+  --mu-cross-strength: 10%;
+}
+
+.dark {
+  --color-fd-background: oklch(0.157 0.0048 70);
+  --color-fd-foreground: oklch(0.924 0.0085 84);
+  --color-fd-card: oklch(0.183 0.005 72);
+  --color-fd-card-foreground: oklch(0.924 0.0085 84);
+  --color-fd-popover: oklch(0.205 0.0055 72);
+  --color-fd-popover-foreground: oklch(0.924 0.0085 84);
+  --color-fd-muted: oklch(0.212 0.0055 72);
+  --color-fd-muted-foreground: oklch(0.63 0.01 78);
+  --color-fd-border: oklch(0.924 0.0085 84 / 10%);
+  --color-fd-accent: oklch(0.924 0.0085 84 / 7%);
+  --color-fd-accent-foreground: oklch(0.924 0.0085 84);
+  --color-fd-secondary: oklch(0.224 0.0055 72);
+  --color-fd-secondary-foreground: oklch(0.924 0.0085 84);
+  --color-fd-primary: oklch(0.671 0.193 32.5);
+  --color-fd-primary-foreground: oklch(0.147 0.0045 70);
+  --color-fd-ring: oklch(0.671 0.193 32.5);
+  --mu-grid-strength: 5.5%;
+  --mu-cross-strength: 16%;
 }
 
 /* shadcn/ui token names, mapped onto the fumadocs theme so the components in
@@ -46,6 +96,44 @@ html > body[data-scroll-locked] {
   --removed-body-scroll-bar-size: 0px !important;
 }
 
+/* Seal-red selection — the one accent, everywhere. */
+::selection {
+  background: color-mix(in oklab, var(--color-fd-primary) 90%, transparent);
+  color: var(--color-fd-primary-foreground);
+}
+
+/* ── Docs typography: serif display over mono annotation ──────────────────
+   What separates this from a default fumadocs site: page titles and section
+   headings are set in Instrument Serif, like figure titles on a drawing. */
+.prose h1,
+.prose h2,
+#nd-page article > div:first-child h1 {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  letter-spacing: 0.005em;
+}
+.prose h1 {
+  font-size: 2.65rem;
+  line-height: 1.08;
+}
+.prose h2 {
+  font-size: 1.85rem;
+  line-height: 1.18;
+  margin-top: 2.2em;
+}
+.prose h2:not(:first-child)::before {
+  content: '';
+  display: block;
+  width: 2rem;
+  height: 1px;
+  margin-bottom: 1.1rem;
+  background: color-mix(in oklab, var(--color-fd-primary) 65%, transparent);
+}
+.prose h1 em,
+.prose h2 em {
+  color: var(--color-fd-primary);
+}
+
 /* ── Refined thin scrollbar for embedded scrollers (e.g. the demo list) ── */
 .mu-scroll {
   scrollbar-width: thin;
@@ -70,15 +158,109 @@ html > body[data-scroll-locked] {
   background-clip: padding-box;
 }
 
-/* ── Blueprint grid backdrop (the product measures things — lean into it) ── */
+/* ── Drawing-sheet backdrop: fine grid + registration crosshairs ────────── */
 .mu-grid {
-  --mu-grid-line: color-mix(in oklab, var(--color-fd-foreground) 6%, transparent);
+  --mu-grid-line: color-mix(
+    in oklab,
+    var(--color-fd-foreground) var(--mu-grid-strength, 5.5%),
+    transparent
+  );
+  --mu-cross: color-mix(
+    in oklab,
+    var(--color-fd-foreground) var(--mu-cross-strength, 16%),
+    transparent
+  );
   background-image:
+    /* crosshairs every 4th intersection */
+    repeating-linear-gradient(
+      to right,
+      transparent 0 70px,
+      var(--mu-cross) 70px 74px,
+      transparent 74px 144px
+    ),
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0 70px,
+      var(--mu-cross) 70px 74px,
+      transparent 74px 144px
+    ),
     linear-gradient(to right, var(--mu-grid-line) 1px, transparent 1px),
     linear-gradient(to bottom, var(--mu-grid-line) 1px, transparent 1px);
-  background-size: 36px 36px;
-  -webkit-mask-image: radial-gradient(ellipse 75% 55% at 50% 0%, #000 35%, transparent 78%);
-  mask-image: radial-gradient(ellipse 75% 55% at 50% 0%, #000 35%, transparent 78%);
+  background-size:
+    144px 1px,
+    1px 144px,
+    36px 36px,
+    36px 36px;
+  background-repeat: repeat;
+  background-position:
+    0 72px,
+    72px 0,
+    0 0,
+    0 0;
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 30%, transparent 76%);
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 30%, transparent 76%);
+}
+
+/* Vertical ruler ticks for the hero's edges. */
+.mu-ruler-y {
+  width: 10px;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    color-mix(in oklab, var(--color-fd-foreground) 22%, transparent) 0 1px,
+    transparent 1px 12px
+  );
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 15%, #000 85%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 15%, #000 85%, transparent);
+}
+
+/* 無限 — the watermark glyphs, drawn as outlines like an unfilled plot. */
+.mu-kanji {
+  position: absolute;
+  pointer-events: none;
+  user-select: none;
+  writing-mode: vertical-rl;
+  font-family: var(--font-serif);
+  line-height: 1;
+  letter-spacing: 0.12em;
+  color: transparent;
+  -webkit-text-stroke: 1px color-mix(in oklab, var(--color-fd-foreground) 13%, transparent);
+}
+
+/* Registration-mark frame: vermilion corner brackets on a hairline box. */
+.mu-frame {
+  position: relative;
+  border: 1px solid var(--color-fd-border);
+}
+.mu-corner {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-color: var(--color-fd-primary);
+  border-style: solid;
+  border-width: 0;
+}
+.mu-corner[data-pos='tl'] { top: -1px; left: -1px; border-top-width: 1.5px; border-left-width: 1.5px; }
+.mu-corner[data-pos='tr'] { top: -1px; right: -1px; border-top-width: 1.5px; border-right-width: 1.5px; }
+.mu-corner[data-pos='bl'] { bottom: -1px; left: -1px; border-bottom-width: 1.5px; border-left-width: 1.5px; }
+.mu-corner[data-pos='br'] { bottom: -1px; right: -1px; border-bottom-width: 1.5px; border-right-width: 1.5px; }
+
+/* Dimension line for figure captions: ⊢———— label ————⊣ */
+.mu-dim {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-fd-muted-foreground);
+}
+.mu-dim::before,
+.mu-dim::after {
+  content: '';
+  height: 1px;
+  flex: 1;
+  background: var(--color-fd-border);
 }
 
 /* ── Pre-highlighted Shiki code (dual theme via CSS vars) ── */

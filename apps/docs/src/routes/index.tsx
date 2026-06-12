@@ -37,11 +37,28 @@ const FEATURES = [
   },
 ];
 
-function Eyebrow({ children }: { children: ReactNode }) {
+/** Vermilion corner brackets on a hairline box — a drawing's registration frame. */
+function Frame({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.18em] text-fd-muted-foreground">
+    <div className={`mu-frame ${className}`}>
+      <span aria-hidden className="mu-corner" data-pos="tl" />
+      <span aria-hidden className="mu-corner" data-pos="tr" />
+      <span aria-hidden className="mu-corner" data-pos="bl" />
+      <span aria-hidden className="mu-corner" data-pos="br" />
       {children}
-    </p>
+    </div>
+  );
+}
+
+function Figure({ n, label }: { n: string; label: string }) {
+  return (
+    <div className="mu-dim mt-4">
+      <span className="shrink-0">
+        <span className="text-fd-primary">fig. {n}</span>
+        <span className="mx-2 opacity-40">—</span>
+        {label}
+      </span>
+    </div>
   );
 }
 
@@ -49,117 +66,158 @@ function Home() {
   return (
     <HomeLayout {...baseOptions()}>
       <main className="flex flex-1 flex-col">
-        {/* ── Hero ── */}
+        {/* ── Hero: the title block of a drawing sheet ── */}
         <section className="relative overflow-hidden">
           <div aria-hidden className="mu-grid pointer-events-none absolute inset-0 -z-10" />
-          <div className="mx-auto w-full max-w-5xl px-6 pt-20 pb-14 text-center">
-            <span
-              className="mu-rise inline-flex items-center gap-2 rounded-full border bg-fd-background/70 px-3 py-1 font-mono text-[11px] tracking-wide text-fd-muted-foreground backdrop-blur"
-            >
-              <span className="size-1.5 rounded-full bg-emerald-500" />
+          <div
+            aria-hidden
+            className="mu-kanji -z-10 top-10 right-[max(1rem,calc(50%-44rem))] hidden text-[200px] md:block"
+          >
+            無限
+          </div>
+          <div
+            aria-hidden
+            className="mu-ruler-y pointer-events-none absolute inset-y-0 left-4 hidden xl:block"
+          />
+          <div
+            aria-hidden
+            className="mu-ruler-y pointer-events-none absolute inset-y-0 right-4 hidden xl:block"
+          />
+
+          <div className="mx-auto w-full max-w-5xl px-6 pt-20 pb-12 text-center">
+            <span className="mu-rise inline-flex items-center gap-2.5 font-mono text-[11px] uppercase tracking-[0.22em] text-fd-muted-foreground">
+              <span aria-hidden className="select-none opacity-50">[</span>
+              <span className="size-1.5 rounded-full bg-fd-primary" />
               powered by pretext
+              <span aria-hidden className="select-none opacity-50">]</span>
             </span>
 
             <h1
-              className="mu-rise mx-auto mt-7 max-w-4xl text-balance text-5xl font-semibold leading-[1.05] tracking-[-0.03em] sm:text-6xl"
+              className="mu-rise mx-auto mt-8 max-w-4xl text-balance font-serif text-[2.9rem] font-normal leading-[1.04] tracking-[-0.005em] sm:text-[4.3rem]"
               style={{ animationDelay: '60ms' }}
             >
-              Virtualized lists with heights you{' '}
-              <span className="text-fd-primary underline decoration-fd-primary/25 decoration-dotted underline-offset-[8px]">
+              Virtualized lists with heights
+              <br className="hidden sm:block" /> you{' '}
+              <em className="relative whitespace-nowrap text-fd-primary">
                 compute
-              </span>
+                <span
+                  aria-hidden
+                  className="absolute -bottom-1 left-0 right-0 h-px bg-fd-primary/50"
+                />
+              </em>
               , not measure.
             </h1>
 
             <p
-              className="mu-rise mx-auto mt-6 max-w-2xl text-balance text-lg leading-relaxed text-fd-muted-foreground"
+              className="mu-rise mx-auto mt-7 max-w-2xl text-balance text-lg leading-relaxed text-fd-muted-foreground"
               style={{ animationDelay: '110ms' }}
             >
               <strong className="font-semibold text-fd-foreground">mugen</strong> derives every
               row&rsquo;s height arithmetically and renders the same description to the DOM — no
-              measure-on-mount, no layout shift, and exact heights even for rows that never mounted.
+              measure-on-mount, no layout shift, and exact heights even for rows that never
+              mounted.
             </p>
 
             <div
-              className="mu-rise mt-9 flex flex-wrap items-center justify-center gap-3"
+              className="mu-rise mt-10 flex flex-wrap items-center justify-center gap-3"
               style={{ animationDelay: '160ms' }}
             >
               <Link
                 to="/docs/$"
                 params={{ _splat: '' }}
-                className="rounded-lg bg-fd-primary px-5 py-2.5 text-sm font-medium text-fd-primary-foreground transition-transform hover:-translate-y-0.5"
+                className="rounded-[3px] bg-fd-primary px-6 py-3 font-mono text-[12px] font-medium uppercase tracking-[0.16em] text-fd-primary-foreground transition-transform hover:-translate-y-0.5"
               >
                 Get started
               </Link>
               <a
                 href={`https://github.com/${gitConfig.user}/${gitConfig.repo}`}
-                className="rounded-lg border px-5 py-2.5 text-sm font-medium transition-colors hover:bg-fd-accent"
+                className="rounded-[3px] border border-fd-border px-6 py-3 font-mono text-[12px] font-medium uppercase tracking-[0.16em] text-fd-foreground transition-colors hover:border-fd-primary/60 hover:text-fd-primary"
               >
                 GitHub
               </a>
             </div>
 
+            {/* Spec strip — the sheet's data row */}
             <div
-              className="mu-rise mx-auto mt-11 flex max-w-2xl flex-wrap items-center justify-center gap-x-7 gap-y-2 font-mono text-xs text-fd-muted-foreground"
+              className="mu-rise mx-auto mt-12 max-w-3xl border-y border-fd-border"
               style={{ animationDelay: '220ms' }}
             >
-              {STATS.map(([v, k], i) => (
-                <span key={k} className="inline-flex items-center gap-2">
-                  {i > 0 ? <span className="mr-5 select-none opacity-25">/</span> : null}
-                  <span className="tabular-nums text-fd-foreground">{v}</span>
-                  <span>{k}</span>
-                </span>
-              ))}
+              <div className="flex flex-wrap items-center justify-center gap-x-0 gap-y-2 px-2 py-3 font-mono text-xs text-fd-muted-foreground">
+                {STATS.map(([v, k], i) => (
+                  <span key={k} className="inline-flex items-center">
+                    {i > 0 ? (
+                      <span aria-hidden className="mx-6 select-none text-fd-primary/60">
+                        +
+                      </span>
+                    ) : null}
+                    <span className="tabular-nums text-fd-foreground">{v}</span>
+                    <span className="ml-2 uppercase tracking-[0.1em] text-[10.5px]">{k}</span>
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
         </section>
 
-        {/* ── Live demo ── */}
-        <section className="mx-auto w-full max-w-3xl px-6 pb-8">
+        {/* ── Fig. 01 — the live demo, plated like a drawing ── */}
+        <section className="mx-auto w-full max-w-3xl px-6 pb-6">
           <div className="mu-rise" style={{ animationDelay: '280ms' }}>
-            <ClientOnly
-              fallback={
-                <div className="flex h-[560px] items-center justify-center rounded-xl border bg-fd-card font-mono text-sm text-fd-muted-foreground">
-                  booting the list…
-                </div>
-              }
-            >
-              {() => <DemoShowcase />}
-            </ClientOnly>
+            <Frame className="bg-fd-background">
+              <ClientOnly
+                fallback={
+                  <div className="flex h-[560px] items-center justify-center font-mono text-sm text-fd-muted-foreground">
+                    booting the list…
+                  </div>
+                }
+              >
+                {() => <DemoShowcase />}
+              </ClientOnly>
+            </Frame>
+            <Figure n="01" label="live — every row a different height, none of them measured" />
           </div>
         </section>
 
-        {/* ── Features ── */}
-        <section className="mx-auto w-full max-w-5xl px-6 py-16">
-          <Eyebrow>Why it&rsquo;s different</Eyebrow>
-          <div className="grid gap-px overflow-hidden rounded-xl border bg-fd-border/60 sm:grid-cols-2">
+        {/* ── Spec rows: why it's different ── */}
+        <section className="mx-auto w-full max-w-3xl px-6 py-16">
+          <h2 className="font-serif text-3xl">
+            Why it&rsquo;s <em className="text-fd-primary">different</em>
+          </h2>
+          <div className="mt-8 border-t border-fd-border">
             {FEATURES.map((f, i) => (
               <div
                 key={f.title}
-                className="group bg-fd-background p-6 transition-colors hover:bg-fd-card"
+                className="group grid gap-2 border-b border-fd-border py-6 sm:grid-cols-[7rem_1fr] sm:gap-6"
               >
-                <div className="font-mono text-xs text-fd-muted-foreground/70">
-                  {String(i + 1).padStart(2, '0')}
+                <div className="font-mono text-xs tabular-nums text-fd-muted-foreground/60 transition-colors group-hover:text-fd-primary">
+                  № {String(i + 1).padStart(2, '0')}
                 </div>
-                <h3 className="mt-3 font-medium tracking-tight">{f.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-fd-muted-foreground">{f.body}</p>
+                <div>
+                  <h3 className="font-medium tracking-tight">{f.title}</h3>
+                  <p className="mt-2 max-w-xl text-sm leading-relaxed text-fd-muted-foreground">
+                    {f.body}
+                  </p>
+                </div>
               </div>
             ))}
           </div>
         </section>
 
-        {/* ── Contract ── */}
+        {/* ── Fig. 02 — the contract ── */}
         <section className="mx-auto w-full max-w-3xl px-6 pb-24">
-          <Eyebrow>A list is one contract</Eyebrow>
-          <div
-            className="mu-code overflow-x-auto rounded-xl border bg-fd-card"
-            dangerouslySetInnerHTML={{ __html: contractHtml }}
-          />
-          <div className="mt-10 text-center">
+          <h2 className="font-serif text-3xl">
+            A list is one <em className="text-fd-primary">contract</em>
+          </h2>
+          <div className="mt-8">
+            <Frame className="mu-code overflow-x-auto bg-fd-card">
+              <div dangerouslySetInnerHTML={{ __html: contractHtml }} />
+            </Frame>
+            <Figure n="02" label="the same tree measures and paints — they cannot desync" />
+          </div>
+          <div className="mt-12 text-center">
             <Link
               to="/docs/$"
               params={{ _splat: '' }}
-              className="font-mono text-sm font-medium text-fd-primary hover:underline"
+              className="font-mono text-[12px] font-medium uppercase tracking-[0.18em] text-fd-primary hover:underline hover:underline-offset-4"
             >
               read the docs →
             </Link>
