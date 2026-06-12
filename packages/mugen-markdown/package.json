@@ -1,6 +1,6 @@
 {
   "name": "@wingleeio/mugen-markdown",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Measurable markdown for mugen — incremark-parsed, rendered with mugen primitives so the virtualizer's tree walker computes exact row heights.",
   "license": "MIT",
   "author": "Wing Lee <contact@winglee.io>",
