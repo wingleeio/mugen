@@ -14,6 +14,7 @@ import {
 } from '@wingleeio/mugen';
 import { Markdown, defineMarkdownComponents } from '@wingleeio/mugen-markdown';
 import { Tooltip, Popover, Dropdown, Dialog } from '@wingleeio/mugen-ui';
+import { StreamFadeOverlay } from '@/components/stream-fade';
 import {
   chatHtml,
   accordionHtml,
@@ -808,7 +809,11 @@ function TurnRow(item: Turn): ReactNode {
       {thinkingEl}
       {toolsEl}
       <VStack gap={4}>
-        <Markdown source={source} theme={CHAT_MD_THEME} />
+        {/* While streaming, mark the body so the StreamFadeOverlay can veil
+            newly arrived text — canvas paint only, the row never animates. */}
+        <VStack className={streaming ? 'mu-stream-fade' : undefined}>
+          <Markdown source={source} theme={CHAT_MD_THEME} />
+        </VStack>
         {streaming ? (
           <Text font="600 15px Inter, sans-serif" lineHeight={24} color={AC.accent} className="mu-pulse">
             ▍
@@ -1278,6 +1283,7 @@ function AiChatExample(): ReactNode {
           stickToBottom
           className="mu-scroll"
         />
+        <StreamFadeOverlay />
         <ScrollToBottomButton list={list} />
       </div>
     </div>
