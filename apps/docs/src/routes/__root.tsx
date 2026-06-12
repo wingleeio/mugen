@@ -3,6 +3,12 @@ import * as React from 'react';
 import appCss from '@/styles/app.css?url';
 import { RootProvider } from 'fumadocs-ui/provider/tanstack';
 
+// react-scan in dev only: render highlighting + the FPS meter in its toolbar.
+// Client-only dynamic import so the SSR pass and production builds never see it.
+if (typeof window !== 'undefined' && import.meta.env.DEV) {
+  void import('react-scan').then(({ scan }) => scan({ enabled: true }));
+}
+
 export const Route = createRootRoute({
   head: () => ({
     meta: [
