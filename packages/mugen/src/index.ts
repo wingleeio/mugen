@@ -45,6 +45,8 @@ export type {
   PrimitiveComponent,
   DefinePrimitiveOptions,
 } from './primitives/box';
+export { Escape } from './primitives/escape';
+export type { EscapeProps } from './primitives/escape';
 export { Portal } from './primitives/portal';
 export type { PortalProps } from './primitives/portal';
 

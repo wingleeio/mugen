@@ -14,7 +14,7 @@ row may not:
 
 - use `useEffect` / `useLayoutEffect` — they throw; use [`useMugenEffect`](/docs/effects),
 - measure a child via a ref,
-- portal content that affects its height (out-of-flow content goes in [`Portal`](#out-of-flow-content-portal), which measures as 0),
+- contain content whose height the walker can't derive (unmeasurable content goes in an [`Escape`](#escaping-the-walker-escape), which has a declared height),
 - depend on anything but its item and the [mugen hooks](/docs/state) for its height.
 
 Cosmetic `useState` is allowed (it can't change height). Height-affecting state —
@@ -40,33 +40,43 @@ Raw strings must be wrapped in `<Text>` so they can be measured. Fragments
 (`<>…</>`) are fine — they paint no box, so the walker splices their children in
 place and measures them as ordinary siblings.
 
-## Out-of-flow content: `Portal`
+## Escaping the walker: `Escape`
 
-The one sanctioned exception to "only primitives are measurable" is `Portal`. It
-**measures as 0 and never walks its children**, so the subtree inside it may be
-arbitrary non-primitive React — a Radix popover, a floating-ui panel, anything.
-It renders that subtree out of the row's flow (portaled to `document.body` by
-default), so it genuinely occupies no row height.
+The sanctioned exception to "only primitives are measurable" is `Escape` — a
+fixed-size box that stays in the row's flow at a **declared `height`** (and
+optional `width`) but whose children are **never walked**. Inside it, anything
+goes: hooks, raw `<div>`s, a stock [shadcn/ui](https://ui.shadcn.com) or Radix
+Tooltip, a chart, an `<img>`. The contract is `foreignObject`'s — mugen reserves
+exactly the box you declare, and you design the children within it. The render
+pins the same height inline and clips overflow, so the painted row can't desync
+from the computed one even if the children misbehave.
 
 ```tsx twoslash
-import { VStack, Text, Portal } from '@wingleeio/mugen';
-declare const item: { label: string };
-declare function Tooltip(props: { children: React.ReactNode }): React.ReactElement;
+import { HStack, Text, Escape } from '@wingleeio/mugen';
+declare const item: { body: string; email: string };
+declare function ShadcnTooltipButton(props: { email: string }): React.ReactElement;
 // ---cut---
-<VStack>
-  <Text>{item.label}</Text> {/* the trigger — stays in flow, measured normally */}
-  <Portal>
-    <Tooltip>…rich, never-measured content…</Tooltip> {/* out of flow → height 0 */}
-  </Portal>
-</VStack>;
+<HStack gap={10} align="center">
+  <Text>{item.body}</Text> {/* measured normally — wraps, drives the row height */}
+  <Escape height={32} width={38}>
+    <ShadcnTooltipButton email={item.email} /> {/* any React — never walked */}
+  </Escape>
+</HStack>;
 ```
 
-Use it for the *portaled half* of an overlay — the popover, menu, or dialog
-panel — while the trigger that anchors it stays in the row and is measured like
-any other primitive. This is the primitive [`@wingleeio/mugen-ui`](/docs)
-builds dialogs, dropdowns, popovers, and tooltips on. The rule it relaxes is
-narrow: content in a `Portal` must be genuinely out of flow (portaled or
-absolutely positioned), because mugen counts it as zero.
+This is also the overlay story: a complete shadcn Tooltip / Popover /
+DropdownMenu / Dialog drops inside an `Escape` — trigger included — because
+those libraries portal their floating panels to `document.body`, where mugen's
+layout never sees them. Use `Escape` for anything with a *known* footprint
+(icon buttons, avatars, badges, embeds, toolbars); content whose height must
+come from the text itself — wrapping paragraphs, markdown — still belongs to
+measured primitives. In an `HStack` whose other children wrap, give the
+`Escape` a `width` so the row distributes width exactly.
+
+The older escape hatch, `Portal` (an out-of-flow subtree measured as 0, the
+base of `@wingleeio/mugen-ui`), is **deprecated**: overlay libraries portal
+their own content, so the split-trigger pattern is no longer needed. Both keep
+working, but new code should reach for `Escape`.
 
 ## Layout goes through props, not CSS
 
@@ -100,7 +110,9 @@ thin map from data to primitives.
 ## The fit test
 
 mugen pays off when a row's height is *text (measured by pretext) + declared
-chrome*. If your rows are dominated by content mugen can't measure analytically —
-charts, arbitrary embeds, media of unknown aspect — you've left the regime where
-analytic measurement wins, and a DOM-measuring virtualizer may fit better. Before
-committing, try rebuilding your ugliest real row purely in primitives.
+chrome*. Fixed-footprint extras — charts, embeds, widgets of known size — ride
+along in an [`Escape`](#escaping-the-walker-escape). But if your rows are
+*dominated* by content of genuinely unknown height (media of unknown aspect,
+arbitrary CSS), you've left the regime where analytic measurement wins, and a
+DOM-measuring virtualizer may fit better. Before committing, try rebuilding
+your ugliest real row in primitives plus declared `Escape` boxes.

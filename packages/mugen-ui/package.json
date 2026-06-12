@@ -1,7 +1,7 @@
 {
   "name": "@wingleeio/mugen-ui",
   "version": "0.0.0",
-  "description": "Measurable overlay primitives for mugen — tooltips, popovers, dropdowns, and dialogs whose triggers are measured by the virtualizer while their portaled content escapes the measure tree.",
+  "description": "[DEPRECATED — use mugen core's Escape primitive with shadcn/Radix overlays instead] Measurable overlay primitives for mugen — tooltips, popovers, dropdowns, and dialogs whose triggers are measured by the virtualizer while their portaled content escapes the measure tree.",
   "license": "MIT",
   "type": "module",
   "sideEffects": false,

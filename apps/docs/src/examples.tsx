@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import {
   definePrimitive,
+  Escape,
   HStack,
   MugenVList,
   type MugenInstance,
@@ -13,8 +14,28 @@ import {
   VStack,
 } from '@wingleeio/mugen';
 import { Markdown, defineMarkdownComponents } from '@wingleeio/mugen-markdown';
-import { Tooltip, Popover, Dropdown, Dialog } from '@wingleeio/mugen-ui';
 import { StreamFadeOverlay } from '@/components/stream-fade';
+import { MoreHorizontalIcon } from 'lucide-react';
+import { Button } from './components/ui/button';
+import { Tooltip, TooltipTrigger, TooltipContent } from './components/ui/tooltip';
+import { Popover, PopoverTrigger, PopoverContent } from './components/ui/popover';
+import {
+  Dialog,
+  DialogTrigger,
+  DialogClose,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from './components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from './components/ui/dropdown-menu';
 import {
   chatHtml,
   accordionHtml,
@@ -1419,7 +1440,15 @@ function MugenMarkdownExample(): ReactNode {
   );
 }
 
-// ── mugen-ui overlays ─────────────────────────────────────────────────────
+// ── shadcn overlays in an Escape ──────────────────────────────────────────
+//
+// Overlays no longer need a bespoke split-trigger library: `Escape` reserves a
+// fixed-size box in the row that the walker never looks inside, and a stock
+// shadcn/Radix Tooltip, Popover, Dialog, or DropdownMenu drops in — trigger
+// included. Radix portals the floating half to document.body, so opening it
+// never re-flows the 800-row list. And short labels like a name or a role
+// never wrap, so they don't need pretext either — plain styled DOM inside the
+// declared box is exact by construction.
 
 interface Member {
   id: string;
@@ -1461,119 +1490,93 @@ function makeMembers(n: number): Member[] {
   return out;
 }
 
-// A ghost action button. The declared `height` is authoritative, so the box is
-// exactly 32px tall in both the walk and the paint and can never stretch to the
-// row height (like the avatar). The visual — fill, hover, radius — lives on this
-// measured box itself, so what you see and what you hover are the same 32px box;
-// `padding` sets the horizontal breathing room and is counted by the walker.
-const ActionBox = definePrimitive('div', { name: 'ActionBox' });
-
-// `: string` so it bypasses the SafeClassName literal check; only visual
-// utilities, so measurement is unaffected. Text color is inherited by the inner
-// <Text>, so hover recolors the label too.
-const actionBtnCls: string =
-  'rounded-[9px] text-fd-muted-foreground transition-colors duration-150 ' +
-  'hover:bg-fd-accent hover:text-fd-foreground';
-
-function ActionLabel({ label }: { label: string }): ReactNode {
-  return (
-    <ActionBox height={32} padding={13} align="center" justify="center" className={actionBtnCls}>
-      <Text font="500 12.5px Inter, sans-serif" lineHeight={16}>
-        {label}
-      </Text>
-    </ActionBox>
-  );
-}
-
-// Hover focuses the item (see Dropdown.Item), so a single `focus:` highlight
-// covers both mouse and keyboard — no double-highlight on adjacent items.
-const menuItemCls =
-  'flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-fd-foreground ' +
-  'transition-colors focus:bg-fd-accent focus:outline-none';
-
+// The action cluster is one Escape: a 32px frame the walker reads without ever
+// looking inside. Everything in it is stock shadcn/ui — Button triggers and
+// all — and each widget portals its floating panel to document.body itself, so
+// opening one never touches the row's layout.
 function MemberActions({ m }: { m: Member }): ReactNode {
   return (
-    <HStack gap={4} align="center">
-      {/* Popover — a reaction bar, dismissed on outside press / Escape */}
-      <Popover>
-        <Popover.Trigger>
-          <ActionLabel label="React" />
-        </Popover.Trigger>
-        <Popover.Content
-          align="end"
-          className="flex gap-0.5 rounded-2xl border border-fd-border bg-fd-popover p-1.5 shadow-2xl shadow-black/40"
-        >
-          {REACTIONS.map((e) => (
-            <button
-              key={e}
-              type="button"
-              className="rounded-xl px-2 py-1.5 text-base leading-none transition-transform duration-150 hover:scale-125 hover:bg-fd-accent"
-            >
-              {e}
-            </button>
-          ))}
-        </Popover.Content>
-      </Popover>
+    <Escape height={32}>
+      <div className="flex h-full items-center gap-1">
+        {/* Popover — a reaction bar, dismissed on outside press / Escape */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="ghost" size="sm" className="text-muted-foreground">
+              React
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="flex w-auto gap-0.5 p-1.5">
+            {REACTIONS.map((e) => (
+              <button
+                key={e}
+                type="button"
+                className="rounded-md px-2 py-1.5 text-base leading-none transition-transform duration-150 hover:scale-125 hover:bg-accent"
+              >
+                {e}
+              </button>
+            ))}
+          </PopoverContent>
+        </Popover>
 
-      {/* Dialog — a modal card, focus-managed, Escape / backdrop to dismiss */}
-      <Dialog>
-        <Dialog.Trigger>
-          <ActionLabel label="Details" />
-        </Dialog.Trigger>
-        <Dialog.Content className="w-[340px] rounded-2xl border border-fd-border bg-fd-popover p-5 shadow-2xl shadow-black/50">
-          <div className="flex items-center gap-3">
-            <div
-              className="flex size-11 items-center justify-center rounded-[14px] text-base font-semibold text-white"
-              style={{
-                background: m.color,
-                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.22), inset 0 0 0 1px rgba(255,255,255,0.08)',
-              }}
-            >
-              {m.initial}
-            </div>
-            <div className="min-w-0">
-              <div className="truncate text-sm font-semibold">{m.name}</div>
-              <div className="text-[11px] font-medium uppercase tracking-wider text-fd-muted-foreground">
-                {m.role}
+        {/* Dialog — a modal card, focus-managed, Escape / backdrop to dismiss */}
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button variant="ghost" size="sm" className="text-muted-foreground">
+              Details
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[400px]">
+            <DialogHeader>
+              <div className="flex items-center gap-3">
+                <div
+                  className="flex size-11 shrink-0 items-center justify-center rounded-xl text-base font-semibold text-white"
+                  style={{
+                    background: m.color,
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.22), inset 0 0 0 1px rgba(255,255,255,0.08)',
+                  }}
+                >
+                  {m.initial}
+                </div>
+                <div className="min-w-0 text-left">
+                  <DialogTitle className="truncate text-base">{m.name}</DialogTitle>
+                  <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                    {m.role}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-          <p className="mt-4 text-[13px] leading-relaxed text-fd-muted-foreground">
-            This whole card is portaled out of the row and measured as 0 — so opening it never
-            re-flows the 800-row list. Reach{' '}
-            <span className="font-medium text-fd-foreground">{m.email}</span>.
-          </p>
-          <div className="mt-5 flex justify-end gap-2">
-            <Dialog.Close className="rounded-lg px-3 py-1.5 text-sm font-medium text-fd-muted-foreground transition-colors hover:bg-fd-accent hover:text-fd-foreground">
-              Close
-            </Dialog.Close>
-            <Dialog.Close className="rounded-lg bg-fd-primary px-3 py-1.5 text-sm font-medium text-fd-primary-foreground transition-opacity hover:opacity-90">
-              Message
-            </Dialog.Close>
-          </div>
-        </Dialog.Content>
-      </Dialog>
+              <DialogDescription className="text-left">
+                This whole card is portaled out of the row by Radix and never measured — so
+                opening it never re-flows the 800-row list. Reach{' '}
+                <span className="font-medium text-foreground">{m.email}</span>.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button variant="outline">Close</Button>
+              </DialogClose>
+              <DialogClose asChild>
+                <Button>Message</Button>
+              </DialogClose>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-      {/* Dropdown — a "more" menu with arrow-key roving focus */}
-      <Dropdown>
-        <Dropdown.Trigger>
-          <ActionBox width={38} height={32} align="center" justify="center" className={actionBtnCls}>
-            <Text font="600 16px Inter, sans-serif" lineHeight={16}>
-              ⋯
-            </Text>
-          </ActionBox>
-        </Dropdown.Trigger>
-        <Dropdown.Content
-          align="end"
-          className="min-w-[184px] rounded-2xl border border-fd-border bg-fd-popover p-1.5 shadow-2xl shadow-black/40"
-        >
-          <Dropdown.Item className={menuItemCls}>View profile</Dropdown.Item>
-          <Dropdown.Item className={menuItemCls}>Mute notifications</Dropdown.Item>
-          <div className="my-1 h-px bg-fd-border" />
-          <Dropdown.Item className={menuItemCls + ' text-fd-destructive'}>Remove from team</Dropdown.Item>
-        </Dropdown.Content>
-      </Dropdown>
-    </HStack>
+        {/* Dropdown — a "more" menu with Radix's arrow-key roving focus */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="size-8 text-muted-foreground">
+              <MoreHorizontalIcon />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-[184px]">
+            <DropdownMenuItem>View profile</DropdownMenuItem>
+            <DropdownMenuItem>Mute notifications</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive">Remove from team</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </Escape>
   );
 }
 
@@ -1603,42 +1606,36 @@ function Avatar({ m }: { m: Member }): ReactNode {
 // visual utilities (no spacing/sizing), so measurement is unaffected.
 const rowCls: string = 'transition-colors duration-150 hover:bg-fd-muted/30';
 
+// A name and a role never wrap, so they don't need pretext: a 35px Escape frame
+// holds plain styled DOM, and a stock shadcn Tooltip wraps it — trigger and
+// floating bubble both. The walker reads 35 and moves on.
+function MemberName({ m }: { m: Member }): ReactNode {
+  return (
+    <Escape height={35}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="flex h-full w-fit cursor-default flex-col justify-between">
+            <div className="text-sm font-semibold leading-[18px] text-foreground">{m.name}</div>
+            <div className="text-[10.5px] font-semibold uppercase leading-[14px] tracking-[0.6px] text-muted-foreground">
+              {`${m.role}   ·   #${m.id}`}
+            </div>
+          </div>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" align="start">
+          <div className="font-semibold">{m.name}</div>
+          <div className="mt-0.5 opacity-80">{m.email}</div>
+        </TooltipContent>
+      </Tooltip>
+    </Escape>
+  );
+}
+
 function MemberRow(m: Member): ReactNode {
   return (
     <HStack gap={14} padding={14} align="center" className={rowCls}>
       <Avatar m={m} />
 
-      {/* The trigger is measured like any primitive; it stays sized to the name,
-          so the portaled bubble anchors right beside it. */}
-      <Tooltip>
-        <Tooltip.Trigger>
-          <VStack gap={3}>
-            {/* `shrink` measures each line at its natural one-line width — matching
-                the fit-content render — so a long name can't wrap in the analytic
-                pass and leave the row over-tall. */}
-            <Text shrink font="600 14px Inter, sans-serif" lineHeight={18} color="var(--color-fd-foreground)">
-              {m.name}
-            </Text>
-            <Text
-              shrink
-              font="600 10.5px Inter, sans-serif"
-              lineHeight={14}
-              letterSpacing={0.6}
-              color="var(--color-fd-muted-foreground)"
-            >
-              {`${m.role.toUpperCase()}   ·   #${m.id}`}
-            </Text>
-          </VStack>
-        </Tooltip.Trigger>
-        <Tooltip.Content
-          side="bottom"
-          align="start"
-          className="rounded-xl border border-fd-border bg-fd-popover px-3 py-2 text-xs shadow-2xl shadow-black/40"
-        >
-          <div className="font-semibold text-fd-foreground">{m.name}</div>
-          <div className="mt-0.5 text-fd-muted-foreground">{m.email}</div>
-        </Tooltip.Content>
-      </Tooltip>
+      <MemberName m={m} />
 
       {/* An empty flex spacer fills the gap, pinning the actions to the right. */}
       <VStack style={{ flex: 1 }} />

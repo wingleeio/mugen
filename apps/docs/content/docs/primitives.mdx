@@ -6,8 +6,9 @@ description: The measurable vocabulary rows are built from.
 A row is built from **primitives** — each one carries both an analytic `measure`
 and a DOM `render`, so mugen can compute its height and paint it from one
 description. A raw `<div>` has no `measure`, so it breaks the walk and throws in
-development. There are three built-ins — `Text`, `VStack`, `HStack` — and
-`definePrimitive(tag)` to make your own from any HTML element.
+development. There are three built-ins — `Text`, `VStack`, `HStack` — plus
+`definePrimitive(tag)` to make your own from any HTML element, and
+[`Escape`](#escape) for content the walker shouldn't measure at all.
 
 > Every snippet below is type-checked — hover a primitive or prop to see its type,
 > and the ✗ lines show the actual compiler error.
@@ -98,6 +99,36 @@ const Toolbar = definePrimitive('div', { direction: 'horizontal' });
 
 This replaces the old `Pressable` (use a `button` and its `onClick`) and `Fixed`
 (use `width`/`height` on a box).
+
+## `Escape`
+
+The escape hatch: a fixed-size box that stays in the row's flow at a declared
+`height` (and optional `width`), but whose children are **never walked** — so
+they can be arbitrary non-primitive React. A shadcn/Radix tooltip (trigger and
+all), a chart, an `<img>`: anything with a known footprint drops in, and any
+floating content it portals never touches the row's layout. The walker reads
+`height` without recursing; the render pins the same height inline and clips
+overflow, so the children can't desync the row even if they misbehave.
+
+```tsx twoslash
+import { Escape } from '@wingleeio/mugen';
+declare function ShadcnTooltipButton(): React.ReactElement;
+// ---cut---
+<Escape height={32} width={38} className="flex items-center justify-center">
+  <ShadcnTooltipButton /> {/* any React — hooks, raw divs, portals */}
+</Escape>;
+```
+
+| Prop | Type | Notes |
+| --- | --- | --- |
+| `height` | `number` | Required. Border-box height — authoritative for walk *and* paint. |
+| `width` | `number` | Lays out as a fixed `HStack` sibling; reported as the natural width. |
+| `style` / `className` | unrestricted | The interior is yours; the frame's height is pinned inline. |
+
+Inside an `HStack` whose other children wrap, give the `Escape` a `width` —
+without one its painted width is unknowable, so the row falls back to an equal
+split. See [Constraints](/docs/constraints#escaping-the-walker-escape) for the
+full contract.
 
 ## Measurability is enforced by types
 

@@ -1,5 +1,16 @@
 # @wingleeio/mugen-ui
 
+> [!WARNING]
+> **Deprecated.** Use mugen core's [`Escape`](../mugen) primitive instead: an
+> in-flow box with a declared height whose children are never walked, so an
+> off-the-shelf [shadcn/ui](https://ui.shadcn.com) or Radix Tooltip / Popover /
+> DropdownMenu / Dialog drops straight into a row — trigger included. Those
+> libraries portal their own floating content to `document.body`, so it never
+> touches mugen's layout. This package keeps working but will not receive new
+> features and will be removed in a future major. The pattern here is only
+> still relevant when a trigger's height must come from measured, wrapping
+> text (e.g. a tooltip on a word inside a paragraph).
+
 Measurable overlay primitives for [`@wingleeio/mugen`](../mugen) — **Tooltip**,
 **Popover**, **Dropdown**, and **Dialog**.
 

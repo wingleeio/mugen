@@ -14,6 +14,7 @@ vi.mock('@chenglou/pretext', () => ({
 
 import { heightOf, measureChildren } from './walker';
 import { Text } from './primitives/text';
+import { Escape } from './primitives/escape';
 import { Portal } from './primitives/portal';
 import { VStack, HStack, definePrimitive } from './primitives/box';
 import { markPrimitive } from './primitives/core';
@@ -280,6 +281,85 @@ describe('walker: Portal (out-of-flow content)', () => {
         defaults,
       ),
     ).not.toThrow();
+  });
+});
+
+describe('walker: Escape (in-flow, unwalked content)', () => {
+  it('measures as its declared height, ignoring children', () => {
+    expect(
+      heightOf(
+        <Escape height={48}>
+          <div>{'anything'}</div>
+        </Escape>,
+        600,
+        defaults,
+      ),
+    ).toBe(48);
+  });
+
+  it('stays in flow — contributes its height and a gap in a stack', () => {
+    const h = heightOf(
+      <VStack gap={4}>
+        <Text>{'label'}</Text>
+        <Escape height={48}>
+          <div />
+        </Escape>
+      </VStack>,
+      200,
+      defaults,
+    );
+    // Unlike Portal, the Escape is a real flex item: one line + gap + frame.
+    expect(h).toBe(LH + 4 + 48);
+  });
+
+  it('does not walk its children — non-primitive content inside is allowed', () => {
+    // A raw host element / hook-using component would throw if walked. Inside
+    // an Escape it never is — measure reads `height` without recursing.
+    const ShadcnTooltip = () => {
+      throw new Error('Escape children must never be walked');
+    };
+    expect(() =>
+      heightOf(
+        <Escape height={32}>
+          <div>
+            <ShadcnTooltip />
+          </div>
+        </Escape>,
+        600,
+        defaults,
+      ),
+    ).not.toThrow();
+  });
+
+  it('a declared width lays out as a fixed HStack sibling', () => {
+    const h = heightOf(
+      <HStack gap={10}>
+        <Escape height={28} width={28}>
+          <svg />
+        </Escape>
+        <Text>{'x'.repeat(30)}</Text>
+      </HStack>,
+      350,
+      defaults,
+    );
+    // Inner 350 − gap 10 − frame 28 = 312 for the text; 30 chars × 10px =
+    // 300px → exactly 1 line. An equal split (170 each) would wrap it.
+    expect(h).toBe(28); // max(frame 28, one 20px line)
+  });
+
+  it('without a width its natural width is unknowable — the row falls back to an equal split', () => {
+    const h = heightOf(
+      <HStack gap={10}>
+        <Escape height={10}>
+          <div />
+        </Escape>
+        <Text>{'x'.repeat(58)}</Text>
+      </HStack>,
+      600,
+      defaults,
+    );
+    // Equal split: (600 − 10) / 2 = 295 each → 580px of text wraps to 2 lines.
+    expect(h).toBe(2 * LH);
   });
 });
 

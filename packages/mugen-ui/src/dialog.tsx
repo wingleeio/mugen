@@ -103,5 +103,6 @@ function Close(props: DialogCloseProps) {
 }
 Close.displayName = 'Dialog.Close';
 
+/** @deprecated Use a shadcn/Radix Dialog inside mugen's `Escape` primitive. */
 const DialogNamespace = Object.assign(Dialog, { Trigger, Content, Close });
 export { DialogNamespace as Dialog };

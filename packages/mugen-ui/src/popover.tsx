@@ -49,5 +49,6 @@ const Content = markZeroMeasure(function Content(props: PopoverContentProps) {
   );
 }, 'Popover.Content');
 
+/** @deprecated Use a shadcn/Radix Popover inside mugen's `Escape` primitive. */
 const PopoverNamespace = Object.assign(Popover, { Trigger, Content });
 export { PopoverNamespace as Popover };

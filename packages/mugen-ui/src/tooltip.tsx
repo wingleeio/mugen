@@ -56,5 +56,6 @@ const Content = markZeroMeasure(function Content(props: TooltipContentProps) {
   );
 }, 'Tooltip.Content');
 
+/** @deprecated Use a shadcn/Radix Tooltip inside mugen's `Escape` primitive. */
 const TooltipNamespace = Object.assign(Tooltip, { Trigger, Content });
 export { TooltipNamespace as Tooltip };

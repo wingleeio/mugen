@@ -117,7 +117,9 @@ See [Scrolling](/docs/scrolling).
 `Text` is the pretext leaf; `VStack`/`HStack` are the layout boxes;
 `definePrimitive(tag, { direction? })` makes a measurable box from any HTML tag.
 `style` is `MeasurableStyle` and `className` is `SafeClassName` — spacing/sizing
-through either is a type error. See [Primitives](/docs/primitives).
+through either is a type error. `Escape` is the exception: a declared-height box
+whose children are never walked (arbitrary React, e.g. a shadcn tooltip), with
+unrestricted `style`/`className` inside. See [Primitives](/docs/primitives).
 
 ## Fonts
 

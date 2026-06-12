@@ -2,6 +2,7 @@ import { Fragment, createElement, type ReactElement, type ReactNode } from 'reac
 import { createPortal } from 'react-dom';
 import { markPrimitive } from './core';
 
+/** @deprecated See {@link Portal}'s deprecation note — use `Escape` instead. */
 export interface PortalProps {
   children: ReactNode;
   /**
@@ -29,8 +30,12 @@ PortalComponent.displayName = 'Portal';
  * overlay stays in the row and is measured normally; only the portaled half
  * goes inside `Portal`.
  *
- * This is the core primitive `@wingleeio/mugen-ui` builds dialogs, dropdowns,
- * popovers, and tooltips on.
+ * @deprecated Use `Escape` instead: an in-flow box with a declared height whose
+ * children are never walked. Overlay libraries (Radix, shadcn/ui) portal their
+ * own floating content out of the row, so a whole tooltip/popover/menu — trigger
+ * included — drops inside an `Escape`; a separate measured-as-0 half is no
+ * longer needed. `Portal` (and `@wingleeio/mugen-ui`, which builds on it) keeps
+ * working but will be removed in a future major.
  */
 export const Portal = markPrimitive(
   PortalComponent as (props: PortalProps) => ReactElement | null,

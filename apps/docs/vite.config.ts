@@ -56,4 +56,11 @@ export default defineConfig({
       tslib: 'tslib/tslib.es6.js',
     },
   },
+  ssr: {
+    // Bundle Radix into the server build instead of leaving it external:
+    // Nitro's node-file-trace misses the `tslib/modules` ESM subpath Radix's
+    // dist imports, so the externalized copy 500s at prerender. Inlining lets
+    // the `tslib` alias above resolve it at build time instead.
+    noExternal: ['radix-ui', /^@radix-ui\//],
+  },
 });

@@ -47,21 +47,26 @@ they stay measurable:
 ## Tooltips, popovers & dialogs in rows
 
 Overlays are the case that breaks a virtualizer: a tooltip or dropdown is a real
-React component (hooks) whose popover is *portaled*, so it can't be measured
-analytically — and the walker would throw if it tried. [`@wingleeio/mugen-ui`](https://www.npmjs.com/package/@wingleeio/mugen-ui)
-splits the two halves. The **trigger** is measured like any primitive, so it
-contributes its real height to the row; the **content** lives in a [`Portal`](/docs/constraints#out-of-flow-content-portal)
-— measured as 0 and never walked — so it can be arbitrary React and never re-flows
-the list when it opens. This 800-row directory gives every row a `Tooltip` (hover
-the name), a `Popover` (React), a `Dropdown` (arrow-key menu), and a modal
+React component (hooks, raw DOM, a portal), so the walker can't measure it — and
+would throw if it tried. [`Escape`](/docs/constraints#escaping-the-walker-escape)
+makes that a non-issue: it reserves a fixed-size box in the row that the walker
+**never looks inside**, so a stock [shadcn/ui](https://ui.shadcn.com) or Radix
+widget drops in — *trigger included* — with no mugen-specific wrapper. The
+floating half is portaled to `document.body` by Radix itself, where mugen's
+layout never sees it. And short labels like a name or a role never wrap, so they
+don't need pretext either: plain styled DOM inside the declared box is exact by
+construction. This 800-row directory gives every row a shadcn `Tooltip` (hover
+the name), `Popover` (React), `DropdownMenu` (arrow-key menu), and a modal
 `Dialog` (Details) — open any of them and the row heights never budge:
 
 <Showcase example="overlays" filename="directory.tsx" />
 
-Each widget is a compound component — `<Tooltip>` / `<Tooltip.Trigger>` /
-`<Tooltip.Content>`, and likewise for `Popover`, `Dropdown`, and `Dialog`.
-Positioning, dismissal, focus, and keyboard nav are handled for you; mugen core
-stays a pure measurement engine.
+The contract is `foreignObject`'s: you declare the box (`height`, optional
+`width`), and you design the children within it — content that outgrows the box
+is clipped, never silently re-measured. Keep `Escape` for known-footprint
+content; a tooltip on *measured, wrapping* text is the one case that still
+wants the deprecated [`@wingleeio/mugen-ui`](https://www.npmjs.com/package/@wingleeio/mugen-ui)
+split-trigger pattern.
 
 ## Chat / message list
 

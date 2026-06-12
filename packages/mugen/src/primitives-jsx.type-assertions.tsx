@@ -3,7 +3,7 @@
  * sizing utilities at the call site (where the lint rule used to fire). Checked
  * by `tsc --noEmit`, never executed.
  */
-import { VStack, HStack, Text, definePrimitive } from './index';
+import { VStack, HStack, Text, Escape, definePrimitive } from './index';
 
 const Button = definePrimitive('button');
 
@@ -37,3 +37,14 @@ export const bad5 = <Button className="max-w-md" />;
 export const bad6 = <VStack style={{ padding: 4 }} />;
 // @ts-expect-error — width is a prop, not a style
 export const bad7 = <HStack style={{ width: 100 }} />;
+
+// ── Escape: declared box, unconstrained interior ──
+// Inside an Escape the walker never looks, so className/style/children are
+// deliberately unrestricted — only the frame's `height` is required.
+export const ok6 = (
+  <Escape height={32} className="flex items-center px-2" style={{ paddingTop: 4 }}>
+    <div>{'arbitrary DOM, never measured'}</div>
+  </Escape>
+);
+// @ts-expect-error — the declared height is the whole contract; it is required
+export const bad8 = <Escape>{<div />}</Escape>;

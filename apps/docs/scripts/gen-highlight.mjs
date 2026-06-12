@@ -401,38 +401,47 @@ function Notes({ docs }: { docs: Doc[] }) {
   return <MugenVList instance={list} getKey={(d) => d.id} render={DocRow} maxW={680} />;
 }`,
 
-  overlaysHtml: `import { MugenVList, Text, VStack, HStack, useMugenVirtualizer } from '@wingleeio/mugen';
-import { Tooltip, Dropdown } from '@wingleeio/mugen-ui';
+  overlaysHtml: `import { Escape, MugenVList, VStack, HStack, useMugenVirtualizer } from '@wingleeio/mugen';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+} from '@/components/ui/dropdown-menu'; // stock shadcn/ui — nothing mugen-aware
 
-// A row's trigger is measured like any primitive — it occupies real row space.
-// The popover / menu lives in a Portal: measured as 0 and never walked, so it
-// can be arbitrary React and never re-flows the 800-row list when it opens.
+// An Escape is a fixed-size box the walker never looks inside: it measures as
+// the height you declare, and its children can be arbitrary React. A complete
+// shadcn Tooltip or DropdownMenu drops in — trigger included — and Radix
+// portals the floating half to document.body, so opening it never re-flows
+// the 800-row list. A name or a role never wraps, so it doesn't need pretext
+// either: plain styled DOM inside the declared box is exact by construction.
 function Member(m: Member) {
   return (
     <HStack gap={12} padding={12} align="center">
       <VStack width={36} height={36} style={{ background: m.color }} />
 
-      <Tooltip>
-        <Tooltip.Trigger>
-          {/* measured: contributes the row's height */}
-          <VStack gap={2}>
-            <Text font="600 13px Inter">{m.name}</Text>
-            <Text>{m.role}</Text>
-          </VStack>
-        </Tooltip.Trigger>
-        <Tooltip.Content className="tooltip">
-          {/* portaled: any React, measured as 0 */}
-          {m.email}
-        </Tooltip.Content>
-      </Tooltip>
+      <Escape height={35}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="flex h-full w-fit flex-col justify-between">
+              <div className="text-sm font-semibold leading-[18px]">{m.name}</div>
+              <div className="text-[10.5px] uppercase leading-[14px]">{m.role}</div>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">{m.email}</TooltipContent>
+        </Tooltip>
+      </Escape>
 
-      <Dropdown>
-        <Dropdown.Trigger><Text>Actions</Text></Dropdown.Trigger>
-        <Dropdown.Content className="menu">
-          <Dropdown.Item onSelect={() => view(m)}>View profile</Dropdown.Item>
-          <Dropdown.Item onSelect={() => remove(m)}>Remove</Dropdown.Item>
-        </Dropdown.Content>
-      </Dropdown>
+      <Escape height={32}>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm">Actions</Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => view(m)}>View profile</DropdownMenuItem>
+            <DropdownMenuItem variant="destructive" onSelect={() => remove(m)}>Remove</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </Escape>
     </HStack>
   );
 }

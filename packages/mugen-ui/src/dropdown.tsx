@@ -127,5 +127,6 @@ function Item(props: DropdownItemProps) {
 }
 Item.displayName = 'Dropdown.Item';
 
+/** @deprecated Use a shadcn/Radix DropdownMenu inside mugen's `Escape` primitive. */
 const DropdownNamespace = Object.assign(Dropdown, { Trigger, Content, Item });
 export { DropdownNamespace as Dropdown };
