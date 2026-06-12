@@ -45,6 +45,15 @@ const MAX_CATCHUP_FRAMES = 8;
  *  viewports where lines wrap often. Warm, the next step resumes from cruise. */
 const SETTLE_GRACE_MS = 500;
 
+/** EMA rate for the target-growth estimate (per simulated frame). A pure
+ *  P-spring trails continuously growing content by ~11× the per-frame growth
+ *  rate — during fast streaming that is 50–120px, which clips the trailing
+ *  caret below the fold. Feeding the (smoothed) growth rate forward into the
+ *  position step makes the steady-state lag ~0 while the spring, at its stock
+ *  gains, only ever handles the residual — so tracking tightens without the
+ *  surge a stiffer spring would add under dropped frames. */
+const GROWTH_EMA = 0.12;
+
 export class ScrollController {
   private el: HTMLElement | null = null;
   private raf: number | null = null;
@@ -52,6 +61,9 @@ export class ScrollController {
   private lastTick = 0;
   /** When the spring first found itself pinned at the bottom (0 = moving). */
   private settledSince = 0;
+  /** Smoothed target growth (px per simulated frame) — the feed-forward term. */
+  private targetVel = 0;
+  private lastTarget = -1;
   /** scrollTop our animation last wrote — lets onScroll tell us from the user. */
   private expectedTop = 0;
   private lastScrollTop = 0;
@@ -202,14 +214,31 @@ export class ScrollController {
     // (the grown diff over-accelerating the next update) under load — which
     // reads as vertical jitter on mobile. At a steady 60Hz (h = 1) this is
     // exactly the original recurrence.
+    // Track how fast the bottom itself is moving (streamed content growing).
+    const grew = this.lastTarget >= 0 ? target - this.lastTarget : 0;
+    this.lastTarget = target;
+    if (grew < -1) {
+      this.targetVel = 0; // content shrank (replay/reset) — stop feeding forward
+    } else {
+      const observed = Math.max(0, grew) / Math.max(frames, 0.25);
+      this.targetVel += GROWTH_EMA * (observed - this.targetVel);
+    }
+    // While content streams, ride a rate-scaled buffer behind the bottom
+    // instead of hugging it: growth lands in discrete line-sized steps, so
+    // tracking closer than ~one step forces stop-go motion. Riding about a
+    // wrapped line back keeps velocity continuous while the trailing caret
+    // stays above the fold; the buffer vanishes as growth stops, so the list
+    // still settles flush.
+    const ride = Math.min(32, this.targetVel * 9);
+    const chase = target - ride;
     let pos = el.scrollTop;
     let v = this.velocity;
     while (frames > 0) {
       const h = Math.min(1, frames);
       frames -= h;
-      const diff = Math.max(0, target - pos);
+      const diff = Math.max(0, chase - pos);
       v += h * ((spring.damping * v + spring.stiffness * diff) / spring.mass - v);
-      pos = Math.min(target, pos + v * h);
+      pos = Math.min(target, pos + (v + this.targetVel) * h);
     }
     this.velocity = v;
     const next = target - pos <= 0.5 ? target : pos;
@@ -220,9 +249,11 @@ export class ScrollController {
       // same dynamics) so a growth step landing mid-stream resumes from speed;
       // park only once the content has stopped growing for a while.
       if (this.settledSince === 0) this.settledSince = now;
-      if (now - this.settledSince >= SETTLE_GRACE_MS && v < 0.05) {
+      if (now - this.settledSince >= SETTLE_GRACE_MS && v < 0.05 && this.targetVel < 0.05) {
         this.velocity = 0;
         this.settledSince = 0;
+        this.targetVel = 0;
+        this.lastTarget = -1;
         return;
       }
     } else {
@@ -238,5 +269,7 @@ export class ScrollController {
     }
     this.velocity = 0;
     this.settledSince = 0;
+    this.targetVel = 0;
+    this.lastTarget = -1;
   }
 }
