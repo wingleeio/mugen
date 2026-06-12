@@ -1,99 +1,109 @@
 # mugen
 
-A [Turborepo](https://turborepo.com) monorepo for the **mugen** package and its documentation.
+**Virtualized React lists with heights you compute, not measure.**
 
-## Structure
+mugen derives every row's height *arithmetically* — from the text, the font,
+and the column width, via
+[`@chenglou/pretext`](https://github.com/chenglou/pretext) — and renders the
+same description to the DOM. One description feeds both the measurement and the
+paint, so they can't disagree by a pixel.
 
-```
-.
-├── apps/
-│   └── docs/        # Documentation site — Fumadocs on TanStack Start (Vite 8)
-└── packages/
-    └── mugen/       # The @wingleeio/mugen library
-```
-
-## Requirements
-
-- Node.js >= 22
-- [pnpm](https://pnpm.io) 10+
-- [Portless](https://github.com/vercel-labs/portless) (global) for named local
-  domains: `npm i -g portless`
-
-## Getting started
+**Docs & live demos: [mugen.winglee.dev](https://mugen.winglee.dev)** — including
+a 3,000-message AI chat with streaming markdown, collapsible reasoning traces,
+and stick-to-bottom.
 
 ```bash
-pnpm install
+npm i @wingleeio/mugen
 ```
 
-## Scripts
+```tsx
+import { MugenVList, Text, VStack, useMugenVirtualizer } from '@wingleeio/mugen';
 
-Run from the repo root (Turborepo orchestrates the workspaces):
-
-| Command             | Description                                  |
-| ------------------- | -------------------------------------------- |
-| `pnpm dev`          | Run every package in dev/watch mode          |
-| `pnpm build`        | Build all packages and the docs site         |
-| `pnpm check-types`  | Type-check the whole workspace               |
-| `pnpm clean`        | Remove build artifacts                       |
-
-To work on a single workspace, use a filter, e.g.:
-
-```bash
-pnpm --filter docs dev               # docs site only
-pnpm --filter @wingleeio/mugen build # the mugen package only
+function Inbox({ messages }: { messages: Message[] }) {
+  const list = useMugenVirtualizer({ items: messages });
+  return (
+    <MugenVList
+      instance={list}
+      getKey={(m) => m.id}
+      font="15px Inter"
+      lineHeight={22}
+      render={(m) => (
+        <VStack gap={2} padding={12}>
+          <Text font="600 15px Inter">{m.author}</Text>
+          <Text>{m.text}</Text>
+        </VStack>
+      )}
+    />
+  );
+}
 ```
 
-## Local domains (Portless) — one per worktree
+## Why
 
-`pnpm dev` runs the docs site behind [Portless](https://github.com/vercel-labs/portless),
-which gives each dev server a stable, named `.localhost` URL instead of a port
-number — and **automatically gives every git worktree its own subdomain**.
+A virtualizer is only as honest as its row heights. DOM-measuring virtualizers
+guess, mount, measure, and correct — which means scrollbar jumps, layout shift,
+and deep links that land in the wrong place. mugen never measures the DOM:
 
-| Where you run it                         | URL                              |
-| ---------------------------------------- | -------------------------------- |
-| Main checkout                            | `http://docs.localhost`          |
-| A worktree on branch `feature/login`     | `http://login.docs.localhost`    |
-| A worktree on branch `t3code/3202727a`   | `http://3202727a.docs.localhost` |
+- **Exact heights up front** — even for rows that have never mounted.
+- **Zero layout shift** — no measure-on-mount pass, no second correction.
+- **Pixel-exact deep links** — `scrollToItem('41212', { align: 'center' })`
+  lands dead-center on the first try.
+- **O(log n) everything hot** — a Fenwick offset index patches one row's height
+  change and finds the visible slice; a million rows scroll like a thousand.
+- **Streaming-native** — incremental markdown
+  ([`@wingleeio/mugen-markdown`](packages/mugen-markdown)), smooth
+  frame-rate-independent stick-to-bottom, and prepends that never move what
+  you're reading.
+- **Escape hatch included** — the `Escape` primitive reserves a declared box
+  the measurer never looks inside, so shadcn/Radix tooltips, menus, dialogs,
+  charts, and images drop straight into rows.
 
-The subdomain is derived from the **last segment of the branch name** (Portless
-handles this automatically — no config or `--force` needed, so two worktrees
-never collide on a port). The proxy auto-starts on first use; the first run may
-prompt for `sudo` to bind port 443 and to trust a local CA.
-
-Useful commands:
-
-```bash
-portless list                # show active routes/URLs
-portless get docs            # print the docs URL (for scripts/cross-refs)
-```
-
-The docs `dev` script wraps Vite as `portless run vite dev`, so Portless infers
-the name (`docs`) from its `package.json` and applies the worktree prefix. If
-you don't have Portless installed, use the plain fallback:
-
-```bash
-pnpm --filter docs dev:vite  # plain Vite on http://localhost:3000
-```
-
-> **Note** — the docs dev server runs with `DISABLE_NITRO=1`. Nitro's Vite dev
-> worker is unstable on the current Vite 8 / Nitro 3 beta stack (it throws
-> `Vite environment 'ssr' is unavailable`), so dev uses TanStack Start's
-> in-process SSR. `pnpm build` keeps Nitro for the production server. See
-> `apps/docs/vite.config.ts`.
+Rows are built from a small measurable vocabulary — `Text`, `VStack`, `HStack`,
+`definePrimitive(tag)`, `Escape` — with layout as type-checked props, so a
+height can never silently drift from what paints. See
+[the fit test](https://mugen.winglee.dev/docs/constraints) for when mugen is
+(and isn't) the right tool.
 
 ## Packages
 
-### `@wingleeio/mugen`
+| Package | Description |
+| --- | --- |
+| [`@wingleeio/mugen`](packages/mugen) | The virtualizer: list, primitives, hooks, scrolling. |
+| [`@wingleeio/mugen-markdown`](packages/mugen-markdown) | Measurable markdown — incremark-parsed, rendered with mugen primitives, streams incrementally. |
 
-The library this repo is built around: virtualized React lists whose row heights
-are computed analytically with
-[`@chenglou/pretext`](https://github.com/chenglou/pretext) instead of measured
-from the DOM, so off-screen and never-mounted rows have exact heights and there
-is no measure-on-mount layout shift. See [`packages/mugen`](packages/mugen) for
-the API.
+## Development
 
-### `docs`
+A [Turborepo](https://turborepo.com) monorepo: `packages/*` are the libraries,
+`apps/docs` is the documentation site ([Fumadocs](https://fumadocs.dev) on
+[TanStack Start](https://tanstack.com/start), content in
+`apps/docs/content/docs`).
 
-The documentation site for `mugen`, built with [Fumadocs](https://fumadocs.dev)
-on [TanStack Start](https://tanstack.com/start). Content lives in
-`apps/docs/content/docs`.
+Requires Node.js >= 22 and [pnpm](https://pnpm.io) 10+.
+
+```bash
+pnpm install
+pnpm dev          # everything in watch mode (docs site included)
+pnpm build        # build all packages + docs
+pnpm test         # run all tests
+pnpm check-types  # type-check the workspace
+```
+
+Work on a single workspace with a filter, e.g. `pnpm --filter docs dev` or
+`pnpm --filter @wingleeio/mugen test`.
+
+`pnpm dev` serves the docs behind
+[Portless](https://github.com/vercel-labs/portless) (`npm i -g portless`),
+which gives each git worktree its own stable `.localhost` URL
+(`http://docs.localhost`, `http://<branch>.docs.localhost`). Without Portless,
+use `pnpm --filter docs dev:vite` for plain Vite on `http://localhost:3000`.
+The docs dev server runs with `DISABLE_NITRO=1` (Nitro's Vite dev worker is
+unstable on the Vite 8 / Nitro 3 beta stack); production builds keep Nitro —
+see [DEPLOYMENT.md](DEPLOYMENT.md).
+
+Releases go through [Changesets](https://github.com/changesets/changesets):
+pushes to `main` update a "Version Packages" PR, and merging it publishes to
+npm.
+
+## License
+
+[MIT](LICENSE) © Wing Lee

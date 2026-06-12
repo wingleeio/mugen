@@ -3,6 +3,26 @@
   "version": "0.2.2",
   "description": "Virtualized React lists with analytic row heights — measured with pretext, never the DOM.",
   "license": "MIT",
+  "author": "Wing Lee <contact@winglee.io>",
+  "homepage": "https://mugen.winglee.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wingleeio/mugen.git",
+    "directory": "packages/mugen"
+  },
+  "bugs": "https://github.com/wingleeio/mugen/issues",
+  "keywords": [
+    "react",
+    "virtualization",
+    "virtual-list",
+    "virtual-scroll",
+    "infinite-scroll",
+    "chat",
+    "ai",
+    "streaming",
+    "text-measurement",
+    "stick-to-bottom"
+  ],
   "type": "module",
   "sideEffects": false,
   "publishConfig": {

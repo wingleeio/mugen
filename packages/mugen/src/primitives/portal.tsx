@@ -34,8 +34,7 @@ PortalComponent.displayName = 'Portal';
  * children are never walked. Overlay libraries (Radix, shadcn/ui) portal their
  * own floating content out of the row, so a whole tooltip/popover/menu — trigger
  * included — drops inside an `Escape`; a separate measured-as-0 half is no
- * longer needed. `Portal` (and `@wingleeio/mugen-ui`, which builds on it) keeps
- * working but will be removed in a future major.
+ * longer needed. `Portal` keeps working but will be removed in a future major.
  */
 export const Portal = markPrimitive(
   PortalComponent as (props: PortalProps) => ReactElement | null,

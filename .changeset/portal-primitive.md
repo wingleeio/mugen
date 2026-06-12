@@ -12,6 +12,4 @@ inline for self-positioned content).
 
 Also expose `measureChildren` (the standard vertical-stack measure) and
 `toChildArray`, so a custom primitive can pair a bespoke hook-using render with
-the usual child measurement. These are the building blocks `@wingleeio/mugen-ui`
-uses for dialogs, dropdowns, popovers, and tooltips. Adds `react-dom` as a peer
-dependency.
+the usual child measurement. Adds `react-dom` as a peer dependency.

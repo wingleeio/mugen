@@ -102,8 +102,8 @@ export function toChildArray(children: ReactNode): ReactNode[] {
  * Sum the heights of `children` at the current width — the vertical-stack
  * measure used by `VStack`. Exposed so a custom primitive with a bespoke
  * (hook-using) render can still measure its children the standard way, e.g. a
- * `mugen-ui` overlay trigger that wraps the row's primitives in event handlers
- * but should measure exactly as those primitives do.
+ * wrapper that adds event handlers around the row's primitives but should
+ * measure exactly as those primitives do.
  */
 export function measureChildren(children: ReactNode, ctx: MeasureContext): number {
   let sum = 0;

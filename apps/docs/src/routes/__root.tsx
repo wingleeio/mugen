@@ -10,21 +10,32 @@ if (typeof window !== 'undefined' && import.meta.env.DEV) {
 }
 
 export const Route = createRootRoute({
-  head: () => ({
-    meta: [
-      {
-        charSet: 'utf-8',
-      },
-      {
-        name: 'viewport',
-        content: 'width=device-width, initial-scale=1',
-      },
-      {
-        title: 'mugen — Documentation',
-      },
-    ],
-    links: [{ rel: 'stylesheet', href: appCss }],
-  }),
+  head: () => {
+    const title = 'mugen — virtualized React lists with analytic row heights';
+    const description =
+      'Row heights are computed from text, font, and width — never measured from the DOM. ' +
+      'Exact heights for never-mounted rows, zero layout shift, pixel-exact deep links, ' +
+      'and smooth stick-to-bottom streaming at a million rows.';
+    const ogImage = 'https://mugen.winglee.dev/og.png';
+    return {
+      meta: [
+        { charSet: 'utf-8' },
+        { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+        { title },
+        { name: 'description', content: description },
+        { property: 'og:type', content: 'website' },
+        { property: 'og:url', content: 'https://mugen.winglee.dev' },
+        { property: 'og:title', content: title },
+        { property: 'og:description', content: description },
+        { property: 'og:image', content: ogImage },
+        { name: 'twitter:card', content: 'summary_large_image' },
+        { name: 'twitter:title', content: title },
+        { name: 'twitter:description', content: description },
+        { name: 'twitter:image', content: ogImage },
+      ],
+      links: [{ rel: 'stylesheet', href: appCss }],
+    };
+  },
   component: RootComponent,
 });
 

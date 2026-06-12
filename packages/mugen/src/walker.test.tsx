@@ -366,7 +366,7 @@ describe('walker: Escape (in-flow, unwalked content)', () => {
 describe('measureChildren helper', () => {
   it('sums children like a VStack, usable from a custom primitive', () => {
     // A bespoke primitive that renders however it likes but measures its children
-    // the standard way — the shape mugen-ui's overlay triggers use.
+    // the standard way — a wrapper that should measure exactly as its children do.
     const Trigger = markPrimitive((props: { children: React.ReactNode }) => <>{props.children}</>, {
       name: 'Trigger',
       measure: (props, ctx) => measureChildren((props as { children: React.ReactNode }).children, ctx),

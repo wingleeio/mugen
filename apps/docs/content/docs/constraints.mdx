@@ -73,10 +73,10 @@ come from the text itself — wrapping paragraphs, markdown — still belongs to
 measured primitives. In an `HStack` whose other children wrap, give the
 `Escape` a `width` so the row distributes width exactly.
 
-The older escape hatch, `Portal` (an out-of-flow subtree measured as 0, the
-base of `@wingleeio/mugen-ui`), is **deprecated**: overlay libraries portal
-their own content, so the split-trigger pattern is no longer needed. Both keep
-working, but new code should reach for `Escape`.
+The older escape hatch, `Portal` (an out-of-flow subtree measured as 0), is
+**deprecated**: overlay libraries portal their own content, so a separate
+measured-as-0 half is no longer needed. It keeps working, but new code should
+reach for `Escape`.
 
 ## Layout goes through props, not CSS
 

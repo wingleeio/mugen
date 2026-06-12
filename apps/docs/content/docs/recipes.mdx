@@ -64,9 +64,10 @@ the name), `Popover` (React), `DropdownMenu` (arrow-key menu), and a modal
 The contract is `foreignObject`'s: you declare the box (`height`, optional
 `width`), and you design the children within it — content that outgrows the box
 is clipped, never silently re-measured. Keep `Escape` for known-footprint
-content; a tooltip on *measured, wrapping* text is the one case that still
-wants the deprecated [`@wingleeio/mugen-ui`](https://www.npmjs.com/package/@wingleeio/mugen-ui)
-split-trigger pattern.
+content; for a tooltip on *measured, wrapping* text, build a custom primitive
+whose `measure()` is `measureChildren` and whose render adds the trigger
+handlers — the walker measures the children exactly, and the floating panel
+portals out as usual.
 
 ## Chat / message list
 

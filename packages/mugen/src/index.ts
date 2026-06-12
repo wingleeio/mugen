@@ -65,7 +65,7 @@ export { measureChildren, toChildArray, naturalWidthOf, isOutOfFlow } from './wa
 
 // ── Style + font types ──
 export type { MeasurableStyle, SafeClassName } from './style';
-export { fontWithLineHeight } from './font';
+export { fontWithLineHeight, fontLonghands } from './font';
 export type { Font, FontSizeUnit, FontStyle, FontWeight } from './font';
 export type { TextDefaults, WhiteSpaceMode, WordBreakMode } from './text-defaults';
 

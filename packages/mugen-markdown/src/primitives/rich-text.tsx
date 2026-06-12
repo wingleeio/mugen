@@ -9,7 +9,7 @@ import {
   markPrimitive,
   assertMeasurableFont,
   fontEpoch,
-  fontWithLineHeight,
+  fontLonghands,
   type Font,
   type MeasureContext,
   type MeasurableStyle,
@@ -159,9 +159,7 @@ function renderRichText(props: RichTextProps): ReactElement {
     // inherited font-size sits on a different baseline than the runs — the
     // union then exceeds `lineHeight` (a 32px heading inside a 16px page gains
     // ~6px per line) and the painted height drifts from lines × lineHeight.
-    ...(props.font != null
-      ? { font: fontWithLineHeight(props.font, lh) }
-      : { lineHeight: `${lh}px` }),
+    ...(props.font != null ? fontLonghands(props.font, lh) : { lineHeight: `${lh}px` }),
     whiteSpace: 'normal',
     // Match pretext, which breaks a word that can't fit rather than overflow.
     overflowWrap: 'anywhere',
@@ -175,15 +173,16 @@ function renderRichText(props: RichTextProps): ReactElement {
   const children: ReactNode[] = props.runs.map((run, i) => {
     if (run.break) return createElement('br', { key: i });
     const tag = run.as ?? (run.href != null ? 'a' : 'span');
-    // Runs get `line-height: 0` (folded into the `font` shorthand, avoiding
-    // React's shorthand/longhand warning): a zero-leading inline box can never
-    // extend a line box, so the container's strut — base font + `lineHeight`,
-    // exactly what the measure models — solely defines every line's height.
-    // With the paragraph's line-height on each run instead, a run in another
-    // font (inline code) sits on the shared baseline with different
-    // ascent/descent, and the union grows the line ~0.5px past `lineHeight`.
+    // Runs get `line-height: 0`: a zero-leading inline box can never extend a
+    // line box, so the container's strut — base font + `lineHeight`, exactly
+    // what the measure models — solely defines every line's height. With the
+    // paragraph's line-height on each run instead, a run in another font
+    // (inline code) sits on the shared baseline with different ascent/descent,
+    // and the union grows the line ~0.5px past `lineHeight`. The font is
+    // expanded to longhands so it can't conflict with the shaping longhands
+    // below (React's shorthand/longhand mixing warning).
     const style: CSSProperties = {
-      font: fontWithLineHeight(resolveRunFont(run, props.font), 0),
+      ...fontLonghands(resolveRunFont(run, props.font), 0),
       // Pin text shaping to the canvas defaults pretext measures with — page
       // CSS targeting the run's tag (e.g. `code { font-feature-settings:
       // 'liga' 0 }`) would otherwise change glyph widths and shift wrapping.

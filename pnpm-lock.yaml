@@ -222,33 +222,6 @@ importers:
         specifier: ^4.1.8
         version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@25.9.1)(@vitest/browser-playwright@4.1.8)(happy-dom@20.10.1)(vite@8.0.16(@types/node@25.9.1)(esbuild@0.28.0)(jiti@2.7.0)(yaml@2.9.0))
 
-  packages/mugen-ui:
-    devDependencies:
-      '@types/react':
-        specifier: 19.2.16
-        version: 19.2.16
-      '@types/react-dom':
-        specifier: 19.2.3
-        version: 19.2.3(@types/react@19.2.16)
-      '@wingleeio/mugen':
-        specifier: workspace:*
-        version: link:../mugen
-      react:
-        specifier: 19.2.7
-        version: 19.2.7
-      react-dom:
-        specifier: 19.2.7
-        version: 19.2.7(react@19.2.7)
-      tsdown:
-        specifier: 0.22.2
-        version: 0.22.2(oxc-resolver@11.20.0)(typescript@6.0.3)
-      typescript:
-        specifier: 6.0.3
-        version: 6.0.3
-      vitest:
-        specifier: 4.1.8
-        version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@25.9.1)(@vitest/browser-playwright@4.1.8)(happy-dom@20.10.1)(vite@8.0.16(@types/node@25.9.1)(esbuild@0.28.0)(jiti@2.7.0)(yaml@2.9.0))
-
 packages:
 
   '@babel/code-frame@7.27.1':

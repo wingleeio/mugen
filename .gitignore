@@ -8,7 +8,6 @@ build/
 .nitro/
 .vercel/
 .source/
-.wrangler/
 
 # Turbo
 .turbo/

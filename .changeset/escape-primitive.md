@@ -1,6 +1,5 @@
 ---
 "@wingleeio/mugen": minor
-"@wingleeio/mugen-ui": patch
 ---
 
 Add the `Escape` primitive — a fixed-size box that escapes the walker. It stays
@@ -14,8 +13,7 @@ content to `document.body` themselves, where mugen's layout never sees it. The
 contract is `foreignObject`'s: mugen reserves exactly the box you declare, and
 you design the children within it.
 
-Deprecate `Portal` and the `@wingleeio/mugen-ui` package in its favour. Both
-keep working, but the split-trigger pattern is no longer needed for overlays
-with a known in-row footprint; it remains relevant only when a trigger's height
-must come from measured, wrapping text. `@wingleeio/mugen-ui` will not receive
-new features and will be removed in a future major.
+Deprecate `Portal` in its favour. It keeps working, but a separate
+measured-as-0 out-of-flow half is no longer needed for overlays with a known
+in-row footprint — the whole widget, trigger included, lives inside an
+`Escape`.

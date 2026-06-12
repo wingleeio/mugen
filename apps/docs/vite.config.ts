@@ -40,7 +40,7 @@ export default defineConfig({
     react(),
     // Production target: Vercel. Nitro's `vercel` preset emits a
     // `.vercel/output` Build Output API directory that Vercel deploys directly —
-    // no adapter config, no wrangler. https://nitro.build/deploy/providers/vercel
+    // no adapter config to maintain. https://nitro.build/deploy/providers/vercel
     ...(disableNitro
       ? []
       : [

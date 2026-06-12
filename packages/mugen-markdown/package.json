@@ -3,6 +3,23 @@
   "version": "0.0.0",
   "description": "Measurable markdown for mugen — incremark-parsed, rendered with mugen primitives so the virtualizer's tree walker computes exact row heights.",
   "license": "MIT",
+  "author": "Wing Lee <contact@winglee.io>",
+  "homepage": "https://mugen.winglee.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wingleeio/mugen.git",
+    "directory": "packages/mugen-markdown"
+  },
+  "bugs": "https://github.com/wingleeio/mugen/issues",
+  "keywords": [
+    "react",
+    "markdown",
+    "incremental",
+    "streaming",
+    "virtualization",
+    "mugen",
+    "gfm"
+  ],
   "type": "module",
   "sideEffects": false,
   "publishConfig": {
