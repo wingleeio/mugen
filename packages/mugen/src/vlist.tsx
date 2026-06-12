@@ -388,6 +388,11 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
   instance.setViewport(vw, vh, rootPx);
   instance.sync();
 
+  const reachedRef = useRef<{ top: string | null; bottom: string | null }>({
+    top: null,
+    bottom: null,
+  });
+
   // Apply the pending scroll-anchor shift in a layout effect (post-commit), not
   // during render. `sync()` queues the delta on the instance; consuming it here
   // — rather than reading it during render — keeps it intact when React invokes
@@ -402,6 +407,18 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     el.scrollTop += scrollAnchorDelta;
     instance.scrollTop = el.scrollTop;
     setScrollTop(el.scrollTop);
+    // A re-anchored items change preserves visual continuity, so whatever rows
+    // now sit at the edges were not freshly *reached* — mark them handled. The
+    // browser can clamp or override the scrollTop write (an active touchpad
+    // gesture holding the top edge); without this, a prepend would leave the
+    // viewport pinned at the top with a new first key and immediately re-fire
+    // `onTopReached` — a double page load from one gesture. When the list
+    // can't scroll at all (content shorter than the viewport), the edge keys
+    // stay unmarked so reach callbacks keep chaining to fill the viewport.
+    if (instance.totalHeight() > vh + 1 && instance.length > 0) {
+      reachedRef.current.top = instance.keyAt(0);
+      reachedRef.current.bottom = instance.keyAt(instance.length - 1);
+    }
   });
 
   const total = instance.totalHeight();
@@ -410,10 +427,6 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
   const centered = instance.isCentered();
   const topSlotHeight = instance.topHeight();
   const bottomSlotTop = topSlotHeight + instance.itemsHeight();
-  const reachedRef = useRef<{ top: string | null; bottom: string | null }>({
-    top: null,
-    bottom: null,
-  });
   const topEdgeKey = instance.length === 0 ? '__empty__' : instance.keyAt(0);
   const bottomEdgeKey =
     instance.length === 0 ? '__empty__' : instance.keyAt(instance.length - 1);

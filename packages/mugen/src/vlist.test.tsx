@@ -206,6 +206,56 @@ describe('MugenVList windowing', () => {
     });
     expect(onTopReached).toHaveBeenCalledTimes(2);
   });
+
+  it('does not re-fire onTopReached when a prepend is re-anchored but the scroll write is swallowed', async () => {
+    const onTopReached = vi.fn();
+    const renderRow = (it: Item) => (
+      <VStack>
+        <Text>{`row-${it.id}`}</Text>
+      </VStack>
+    );
+    const { container, rerender } = render(
+      <Harness items={makeRange(10, 59)} vlistProps={{ onTopReached }} render={renderRow} />,
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(onTopReached).toHaveBeenCalledTimes(1);
+
+    // An active touchpad gesture can clamp/override programmatic scrollTop
+    // writes at the top edge: model it by swallowing assignments. The prepend
+    // below queues a real anchor delta (key "10" survives), but the viewport
+    // stays pinned at 0 with a new first key — which must NOT count as a
+    // fresh reach.
+    const scroller = container.firstChild as HTMLElement;
+    Object.defineProperty(scroller, 'scrollTop', {
+      configurable: true,
+      get: () => 0,
+      set: () => {},
+    });
+
+    rerender(
+      <Harness items={makeRange(0, 59)} vlistProps={{ onTopReached }} render={renderRow} />,
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(onTopReached).toHaveBeenCalledTimes(1);
+
+    // Leaving the zone re-arms the edge as usual.
+    Reflect.deleteProperty(scroller, 'scrollTop');
+    await act(async () => {
+      scroller.scrollTop = 400;
+      fireEvent.scroll(scroller);
+      await Promise.resolve();
+    });
+    await act(async () => {
+      scroller.scrollTop = 0;
+      fireEvent.scroll(scroller);
+      await Promise.resolve();
+    });
+    expect(onTopReached).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('useMugenState', () => {
