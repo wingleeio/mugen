@@ -37,9 +37,10 @@ const FEATURES = [
   },
 ];
 
-/** A plate on the sheet: hairline box with the content inside. */
+/** A plate on the sheet: hairline box with the content inside. Matches the
+ *  demo window's radius so every plate on the page agrees. */
 function Frame({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <div className={`overflow-hidden rounded-lg border border-fd-border ${className}`}>{children}</div>;
+  return <div className={`overflow-hidden rounded-xl border border-fd-border ${className}`}>{children}</div>;
 }
 
 function Figure({ n, label }: { n: string; label: string }) {
@@ -145,17 +146,17 @@ function Home() {
         {/* ── Fig. 01 — the live demo, plated like a drawing ── */}
         <section className="mx-auto w-full max-w-3xl px-6 pb-6">
           <div className="mu-rise" style={{ animationDelay: '280ms' }}>
-            <Frame className="bg-fd-background">
-              <ClientOnly
-                fallback={
-                  <div className="flex h-[560px] items-center justify-center font-mono text-sm text-fd-muted-foreground">
-                    booting the list…
-                  </div>
-                }
-              >
-                {() => <DemoShowcase />}
-              </ClientOnly>
-            </Frame>
+            {/* DemoShowcase draws its own window chrome — no extra frame, or the
+                corners double up. */}
+            <ClientOnly
+              fallback={
+                <div className="flex h-[560px] items-center justify-center rounded-xl border bg-fd-card font-mono text-sm text-fd-muted-foreground">
+                  booting the list…
+                </div>
+              }
+            >
+              {() => <DemoShowcase />}
+            </ClientOnly>
             <Figure n="01" label="live — every row a different height, none of them measured" />
           </div>
         </section>
