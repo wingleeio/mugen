@@ -17,7 +17,17 @@
  *   state, so streaming appends re-tokenize only the changed tail and repaint
  *   only the dirty lines.
  * - Canvas memory is bounded: tiles allocate their backing store only while
- *   near the viewport (IntersectionObserver) and free it when they leave.
+ *   near the visible window and free it once they are far outside it.
+ *
+ * Tile visibility is computed *synchronously* from scroll/resize events on the
+ * block's scroll ancestors (plus the window): painting happens in the same
+ * task as the scroll, before the browser paints that frame, so a concealed
+ * block can never show a blank tile while scrolling. An IntersectionObserver
+ * is kept only as a backup signal for movement that produces no scroll event
+ * (e.g. the virtualizer repositioning rows). A viewport-rooted observer alone
+ * is not enough: its `rootMargin` does not extend into a nested scroller's
+ * clip, so it provides no prefetch inside a scrollable list — and its async
+ * delivery shows a flash of nothing where the code should be.
  */
 import type { Font } from '@wingleeio/mugen';
 import type { LanguageProfile } from './languages';
@@ -49,9 +59,8 @@ interface Tile {
   start: number;
   /** Lines `[start, dirtyFrom)` are painted; `dirtyFrom >= end` means clean. */
   dirtyFrom: number;
+  /** Within the prefetch margin of the visible window (kept painted). */
   visible: boolean;
-  /** Whether the observer has reported this tile at least once. */
-  known: boolean;
   cssWidth: number;
   dpr: number;
 }
@@ -92,7 +101,8 @@ export class HighlightSession {
   /** Number of lines tokenized so far (a prefix of `lines`). */
   private done = 0;
   private tiles: Tile[] = [];
-  private byCanvas = new Map<Element, Tile>();
+  /** Scrollable ancestors of the block (visibility window + scroll signals). */
+  private scrollers: Element[] = [];
   /** True while the DOM text is visible and the overlay hidden. */
   private revealed = true;
   private plainColor: string | null = null;
@@ -157,7 +167,7 @@ export class HighlightSession {
     if (this.input != null) this.reveal();
     for (const t of this.tiles) t.canvas.remove();
     this.tiles = [];
-    this.byCanvas.clear();
+    this.scrollers = [];
     this.input = null;
   }
 
@@ -175,7 +185,7 @@ export class HighlightSession {
       this.done++;
       if ((this.done & 31) === 0 && performance.now() - t0 > budget) break;
     }
-    this.paintReady();
+    this.syncVisibility();
     if (this.done < this.lines.length) {
       this.pending = setTimeout(() => {
         this.pending = null;
@@ -184,13 +194,49 @@ export class HighlightSession {
     }
   }
 
-  private paintReady(): void {
-    for (const t of this.tiles) {
-      if (!t.visible) continue;
-      const end = this.tileEnd(t);
-      if (t.dirtyFrom >= end) continue;
-      if (this.done < end) continue; // tokens not ready for this tile yet
-      this.paintTile(t);
+  /**
+   * Recompute which tiles are near the visible window, paint the dirty ones
+   * (tokens permitting), free the far ones, and conceal/reveal accordingly.
+   * Runs synchronously on scroll/resize, so a tile entering the window is
+   * painted before the browser paints that frame — never a blank flash.
+   */
+  private syncVisibility(): void {
+    const input = this.input;
+    if (input == null) return;
+    if (this.tiles.length > 0) {
+      const codeTop = input.codeEl.getBoundingClientRect().top;
+      // Visible vertical window: the viewport clipped by every scroll ancestor.
+      let top = 0;
+      let bottom = window.innerHeight;
+      for (const sc of this.scrollers) {
+        const r = sc.getBoundingClientRect();
+        if (r.top > top) top = r.top;
+        if (r.bottom < bottom) bottom = r.bottom;
+      }
+      const margin = Math.max(400, bottom - top);
+      const { lineHeight } = input;
+      for (const t of this.tiles) {
+        const tileTop = codeTop + t.start * lineHeight;
+        const tileBottom = codeTop + this.tileEnd(t) * lineHeight;
+        if (tileBottom > top - margin && tileTop < bottom + margin) {
+          t.visible = true;
+          const end = this.tileEnd(t);
+          if (t.dirtyFrom < end && this.done >= end) this.paintTile(t);
+        } else {
+          t.visible = false;
+          // Hysteresis: keep the painting until the tile is far outside the
+          // window, so small back-and-forth scrolls don't thrash repaints.
+          if (
+            (tileBottom < top - 2 * margin || tileTop > bottom + 2 * margin) &&
+            t.canvas.width !== 0
+          ) {
+            t.canvas.width = 0;
+            t.canvas.height = 0;
+            t.cssWidth = 0;
+            t.dirtyFrom = t.start;
+          }
+        }
+      }
     }
     this.maybeConceal();
   }
@@ -200,7 +246,6 @@ export class HighlightSession {
     if (!this.revealed || this.lines.length === 0) return;
     if (this.done < this.lines.length) return;
     for (const t of this.tiles) {
-      if (!t.known) return; // wait for the observer's first report
       if (t.visible && t.dirtyFrom < this.tileEnd(t)) return;
     }
     const { codeEl, overlayEl } = this.input!;
@@ -229,7 +274,6 @@ export class HighlightSession {
     while (this.tiles.length > count) {
       const t = this.tiles.pop()!;
       this.io?.unobserve(t.canvas);
-      this.byCanvas.delete(t.canvas);
       t.canvas.remove();
     }
     while (this.tiles.length < count) {
@@ -246,22 +290,9 @@ export class HighlightSession {
         pointerEvents: 'none',
       });
       overlayEl.appendChild(canvas);
-      // While the overlay is already live (streaming growth), paint new tiles
-      // eagerly: waiting for the observer's first report would flash newly
-      // streamed lines invisible. Before the first conceal we do wait, so a
-      // block mounting outside the viewport never allocates canvases.
-      const eager = !this.revealed || this.io == null;
-      const tile: Tile = {
-        canvas,
-        start,
-        dirtyFrom: start,
-        visible: eager,
-        known: this.io == null,
-        cssWidth: 0,
-        dpr: 0,
-      };
+      // Visibility is resolved synchronously by syncVisibility() right after.
+      const tile: Tile = { canvas, start, dirtyFrom: start, visible: false, cssWidth: 0, dpr: 0 };
       this.tiles.push(tile);
-      this.byCanvas.set(canvas, tile);
       this.io?.observe(canvas);
     }
     for (const t of this.tiles) t.canvas.style.top = `${t.start * lineHeight}px`;
@@ -408,30 +439,34 @@ export class HighlightSession {
   // ── Environment listeners ────────────────────────────────────────────────────
 
   private listen(): void {
+    const onSignal = (): void => this.syncVisibility();
+
+    // Primary visibility signal: scroll on every scrollable ancestor (plus
+    // the window). Handlers run in the same task as the scroll, so tiles
+    // entering the window paint before the frame they appear in.
+    const { codeEl } = this.input!;
+    this.scrollers = [];
+    for (let el = codeEl.parentElement; el != null; el = el.parentElement) {
+      const s = getComputedStyle(el);
+      const o = `${s.overflowY} ${s.overflowX}`;
+      if (o.includes('auto') || o.includes('scroll') || o.includes('overlay')) {
+        this.scrollers.push(el);
+        el.addEventListener('scroll', onSignal, { passive: true });
+        const target = el;
+        this.unlisten.push(() => target.removeEventListener('scroll', onSignal));
+      }
+    }
+    window.addEventListener('scroll', onSignal, { passive: true });
+    window.addEventListener('resize', onSignal);
+    this.unlisten.push(() => {
+      window.removeEventListener('scroll', onSignal);
+      window.removeEventListener('resize', onSignal);
+    });
+
+    // Backup signal for movement that fires no scroll event (the virtualizer
+    // repositioning rows). The callback just re-syncs from real geometry.
     if (typeof IntersectionObserver !== 'undefined') {
-      this.io = new IntersectionObserver(
-        (entries) => {
-          for (const e of entries) {
-            const t = this.byCanvas.get(e.target);
-            if (t == null) continue;
-            t.known = true;
-            if (e.isIntersecting) {
-              t.visible = true;
-            } else {
-              t.visible = false;
-              if (t.canvas.width !== 0) {
-                // Free the backing store; geometry (style size) is kept.
-                t.canvas.width = 0;
-                t.canvas.height = 0;
-                t.cssWidth = 0;
-              }
-              t.dirtyFrom = t.start;
-            }
-          }
-          this.paintReady();
-        },
-        { rootMargin: '100%' },
-      );
+      this.io = new IntersectionObserver(onSignal, { rootMargin: '50%' });
     }
 
     const fonts = typeof document !== 'undefined' ? document.fonts : undefined;
@@ -443,7 +478,7 @@ export class HighlightSession {
           t.dirtyFrom = t.start;
           t.dpr = 0; // force a resize-repaint with the loaded face
         }
-        this.paintReady();
+        this.syncVisibility();
       };
       fonts.addEventListener('loadingdone', onFonts);
       this.unlisten.push(() => fonts.removeEventListener('loadingdone', onFonts));
@@ -460,7 +495,7 @@ export class HighlightSession {
       stop();
       this.unlisten = this.unlisten.filter((u) => u !== stop);
       for (const t of this.tiles) t.dirtyFrom = t.start;
-      this.paintReady();
+      this.syncVisibility();
       this.watchDpr();
     };
     const stop = (): void => mq.removeEventListener('change', onChange);
