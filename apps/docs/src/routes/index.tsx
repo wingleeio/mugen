@@ -64,12 +64,6 @@ function Home() {
           <div aria-hidden className="mu-grid pointer-events-none absolute inset-0 -z-10" />
           <div
             aria-hidden
-            className="mu-kanji -z-10 top-10 right-[max(1rem,calc(50%-44rem))] hidden text-[200px] md:block"
-          >
-            無限
-          </div>
-          <div
-            aria-hidden
             className="mu-ruler-y pointer-events-none absolute inset-y-0 left-4 hidden xl:block"
           />
           <div

@@ -38,9 +38,8 @@
   --color-fd-primary: oklch(0.5 0.21 296);
   --color-fd-primary-foreground: oklch(0.982 0.002 300);
   --color-fd-ring: oklch(0.5 0.21 296);
-  /* drawing-sheet decoration strengths (ink on paper reads heavier) */
+  /* drawing-sheet grid strength (ink on paper reads heavier) */
   --mu-grid-strength: 5%;
-  --mu-cross-strength: 10%;
 }
 
 .dark {
@@ -61,7 +60,6 @@
   --color-fd-primary-foreground: oklch(0.15 0.01 300);
   --color-fd-ring: oklch(0.73 0.145 295);
   --mu-grid-strength: 5.5%;
-  --mu-cross-strength: 16%;
 }
 
 /* shadcn/ui token names, mapped onto the fumadocs theme so the components in
@@ -96,7 +94,7 @@ html > body[data-scroll-locked] {
   --removed-body-scroll-bar-size: 0px !important;
 }
 
-/* Seal-red selection — the one accent, everywhere. */
+/* Accent selection — the one accent, everywhere. */
 ::selection {
   background: color-mix(in oklab, var(--color-fd-primary) 90%, transparent);
   color: var(--color-fd-primary-foreground);
@@ -158,45 +156,17 @@ html > body[data-scroll-locked] {
   overscroll-behavior: contain;
 }
 
-/* ── Drawing-sheet backdrop: fine grid + registration crosshairs ────────── */
+/* ── Drawing-sheet backdrop: one fine grid, one opacity ─────────────────── */
 .mu-grid {
   --mu-grid-line: color-mix(
     in oklab,
     var(--color-fd-foreground) var(--mu-grid-strength, 5.5%),
     transparent
   );
-  --mu-cross: color-mix(
-    in oklab,
-    var(--color-fd-foreground) var(--mu-cross-strength, 16%),
-    transparent
-  );
   background-image:
-    /* crosshairs every 4th intersection */
-    repeating-linear-gradient(
-      to right,
-      transparent 0 70px,
-      var(--mu-cross) 70px 74px,
-      transparent 74px 144px
-    ),
-    repeating-linear-gradient(
-      to bottom,
-      transparent 0 70px,
-      var(--mu-cross) 70px 74px,
-      transparent 74px 144px
-    ),
     linear-gradient(to right, var(--mu-grid-line) 1px, transparent 1px),
     linear-gradient(to bottom, var(--mu-grid-line) 1px, transparent 1px);
-  background-size:
-    144px 1px,
-    1px 144px,
-    36px 36px,
-    36px 36px;
-  background-repeat: repeat;
-  background-position:
-    0 72px,
-    72px 0,
-    0 0,
-    0 0;
+  background-size: 36px 36px;
   -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 30%, transparent 76%);
   mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 30%, transparent 76%);
 }
@@ -211,19 +181,6 @@ html > body[data-scroll-locked] {
   );
   -webkit-mask-image: linear-gradient(to bottom, transparent, #000 15%, #000 85%, transparent);
   mask-image: linear-gradient(to bottom, transparent, #000 15%, #000 85%, transparent);
-}
-
-/* 無限 — the watermark glyphs, drawn as outlines like an unfilled plot. */
-.mu-kanji {
-  position: absolute;
-  pointer-events: none;
-  user-select: none;
-  writing-mode: vertical-rl;
-  font-family: var(--font-serif);
-  line-height: 1;
-  letter-spacing: 0.12em;
-  color: transparent;
-  -webkit-text-stroke: 1px color-mix(in oklab, var(--color-fd-foreground) 13%, transparent);
 }
 
 /* Dimension line for figure captions: ⊢———— label ————⊣ */
