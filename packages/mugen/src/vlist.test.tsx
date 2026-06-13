@@ -462,6 +462,94 @@ describe('MugenVList initial and data-change scroll anchoring', () => {
     }
   });
 
+  it('applies instant initial bottom when an empty reused page receives chat rows', () => {
+    const raf = vi.spyOn(window, 'requestAnimationFrame');
+    const scrollHeight = vi
+      .spyOn(HTMLElement.prototype, 'scrollHeight', 'get')
+      .mockImplementation(function (this: HTMLElement) {
+        const child = this.firstElementChild as HTMLElement | null;
+        return child ? Number.parseFloat(child.style.height) || 0 : 0;
+      });
+    const clientHeight = vi
+      .spyOn(HTMLElement.prototype, 'clientHeight', 'get')
+      .mockImplementation(function (this: HTMLElement) {
+        return Number.parseFloat(this.style.height) || 0;
+      });
+    try {
+      const renderRow = (it: Item) => (
+        <VStack>
+          <Text>{`row-${it.id}`}</Text>
+        </VStack>
+      );
+      const { container, rerender } = render(
+        <Harness
+          items={[]}
+          vlistProps={{ initialScroll: 'bottom', stickToBottom: true }}
+          render={renderRow}
+        />,
+      );
+      const scroller = container.firstChild as HTMLElement;
+      expect(scroller.scrollTop).toBe(0);
+
+      rerender(
+        <Harness
+          items={makeRange(100, 149)}
+          vlistProps={{ initialScroll: 'bottom', stickToBottom: true }}
+          render={renderRow}
+        />,
+      );
+
+      expect(scroller.scrollTop).toBe(50 * LH - HEIGHT);
+      expect(raf).not.toHaveBeenCalled();
+    } finally {
+      scrollHeight.mockRestore();
+      clientHeight.mockRestore();
+      raf.mockRestore();
+    }
+  });
+
+  it('applies instant initial bottom when a reused page changes from default top to chat bottom', () => {
+    const raf = vi.spyOn(window, 'requestAnimationFrame');
+    const scrollHeight = vi
+      .spyOn(HTMLElement.prototype, 'scrollHeight', 'get')
+      .mockImplementation(function (this: HTMLElement) {
+        const child = this.firstElementChild as HTMLElement | null;
+        return child ? Number.parseFloat(child.style.height) || 0 : 0;
+      });
+    const clientHeight = vi
+      .spyOn(HTMLElement.prototype, 'clientHeight', 'get')
+      .mockImplementation(function (this: HTMLElement) {
+        return Number.parseFloat(this.style.height) || 0;
+      });
+    try {
+      const renderRow = (it: Item) => (
+        <VStack>
+          <Text>{`row-${it.id}`}</Text>
+        </VStack>
+      );
+      const { container, rerender } = render(
+        <Harness items={makeRange(0, 29)} vlistProps={{ stickToBottom: true }} render={renderRow} />,
+      );
+      const scroller = container.firstChild as HTMLElement;
+      expect(scroller.scrollTop).toBe(0);
+
+      rerender(
+        <Harness
+          items={makeRange(100, 149)}
+          vlistProps={{ initialScroll: 'bottom', stickToBottom: true }}
+          render={renderRow}
+        />,
+      );
+
+      expect(scroller.scrollTop).toBe(50 * LH - HEIGHT);
+      expect(raf).not.toHaveBeenCalled();
+    } finally {
+      scrollHeight.mockRestore();
+      clientHeight.mockRestore();
+      raf.mockRestore();
+    }
+  });
+
   it('keeps the previous first visible row anchored when items are prepended', async () => {
     const renderRow = (it: Item) => (
       <VStack>

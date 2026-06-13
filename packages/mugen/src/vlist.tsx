@@ -273,6 +273,13 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
   const lastViewportRef = useRef({ w: -1, h: -1 });
   const didInitialScroll = useRef(false);
   const initialEdgesRef = useRef<{ first: string; last: string; length: number } | null>(null);
+  const initialKey =
+    initial == null
+      ? 'none'
+      : initial.to === 'index'
+        ? `index:${initial.index}:${initial.align ?? 'start'}:${initial.behavior ?? 'instant'}`
+        : `${initial.to}:${initial.behavior ?? 'instant'}`;
+  const lastInitialKeyRef = useRef(initialKey);
 
   // Back `instance.scrollToBottom()` with the controller so it re-engages the
   // stick and (for `smooth`) springs to the bottom while re-targeting it every
@@ -294,6 +301,12 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
   // set, `initialScroll` should apply to the new page too. Appends and prepends
   // preserve one edge key, so keep their normal scroll anchoring/stick behavior.
   useIsoLayoutEffect(() => {
+    if (lastInitialKeyRef.current !== initialKey) {
+      lastInitialKeyRef.current = initialKey;
+      didInitialScroll.current = false;
+      prevTotalRef.current = -1;
+      ctl.stop();
+    }
     if (initial == null) return;
     const length = instance.length;
     const next =
