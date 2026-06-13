@@ -49,6 +49,7 @@ type HarnessListProps = Pick<
   | 'bottomReachedThreshold'
   | 'initialScroll'
   | 'stickToBottom'
+  | 'height'
 >;
 
 function Harness(props: {
@@ -500,6 +501,66 @@ describe('MugenVList initial and data-change scroll anchoring', () => {
       );
 
       expect(scroller.scrollTop).toBe(50 * LH - HEIGHT);
+      expect(raf).not.toHaveBeenCalled();
+    } finally {
+      scrollHeight.mockRestore();
+      clientHeight.mockRestore();
+      raf.mockRestore();
+    }
+  });
+
+  it('re-applies instant initial bottom when an overflowing empty shell receives chat rows', () => {
+    const raf = vi.spyOn(window, 'requestAnimationFrame');
+    const scrollHeight = vi
+      .spyOn(HTMLElement.prototype, 'scrollHeight', 'get')
+      .mockImplementation(function (this: HTMLElement) {
+        const child = this.firstElementChild as HTMLElement | null;
+        return child ? Number.parseFloat(child.style.height) || 0 : 0;
+      });
+    const clientHeight = vi
+      .spyOn(HTMLElement.prototype, 'clientHeight', 'get')
+      .mockImplementation(function (this: HTMLElement) {
+        return Number.parseFloat(this.style.height) || 0;
+      });
+    try {
+      const renderRow = (it: Item) => (
+        <VStack>
+          <Text>{`row-${it.id}`}</Text>
+        </VStack>
+      );
+      const shellSlots = {
+        renderTop: () => <VStack height={72} />,
+        renderBottom: () => <VStack height={176} />,
+      };
+      const { container, rerender } = render(
+        <Harness
+          items={[]}
+          vlistProps={{
+            ...shellSlots,
+            initialScroll: 'bottom',
+            stickToBottom: true,
+            height: 200,
+          }}
+          render={renderRow}
+        />,
+      );
+      const scroller = container.firstChild as HTMLElement;
+      expect(scroller.scrollTop).toBe(48); // 72 + 176 - 200
+
+      rerender(
+        <Harness
+          items={makeRange(100, 149)}
+          vlistProps={{
+            ...shellSlots,
+            initialScroll: 'bottom',
+            stickToBottom: true,
+            height: 200,
+          }}
+          render={renderRow}
+        />,
+      );
+
+      expect(scroller.scrollTop).toBe(72 + 50 * LH + 176 - 200);
       expect(raf).not.toHaveBeenCalled();
     } finally {
       scrollHeight.mockRestore();

@@ -317,11 +317,13 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     const prev = initialEdgesRef.current;
     initialEdgesRef.current = next;
     if (!prev || !didInitialScroll.current) return;
+    const filledEmptyPage = prev.length === 0 && next.length > 0;
     const replaced =
-      prev.length > 0 &&
-      next.length > 0 &&
-      prev.first !== next.first &&
-      prev.last !== next.last;
+      filledEmptyPage ||
+      (prev.length > 0 &&
+        next.length > 0 &&
+        prev.first !== next.first &&
+        prev.last !== next.last);
     if (!replaced) return;
     didInitialScroll.current = false;
     prevTotalRef.current = -1;
