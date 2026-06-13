@@ -48,6 +48,7 @@ type HarnessListProps = Pick<
   | 'topReachedThreshold'
   | 'bottomReachedThreshold'
   | 'initialScroll'
+  | 'stickToBottom'
 >;
 
 function Harness(props: {
@@ -413,6 +414,52 @@ describe('MugenVList initial and data-change scroll anchoring', () => {
     );
 
     expect((container.firstChild as HTMLElement).scrollTop).toBe(8 * LH);
+  });
+
+  it('re-applies instant initial bottom on a replaced page before stick-to-bottom can smooth', () => {
+    const raf = vi.spyOn(window, 'requestAnimationFrame');
+    const scrollHeight = vi
+      .spyOn(HTMLElement.prototype, 'scrollHeight', 'get')
+      .mockImplementation(function (this: HTMLElement) {
+        const child = this.firstElementChild as HTMLElement | null;
+        return child ? Number.parseFloat(child.style.height) || 0 : 0;
+      });
+    const clientHeight = vi
+      .spyOn(HTMLElement.prototype, 'clientHeight', 'get')
+      .mockImplementation(function (this: HTMLElement) {
+        return Number.parseFloat(this.style.height) || 0;
+      });
+    try {
+      const renderRow = (it: Item) => (
+        <VStack>
+          <Text>{`row-${it.id}`}</Text>
+        </VStack>
+      );
+      const { container, rerender } = render(
+        <Harness
+          items={makeRange(0, 29)}
+          vlistProps={{ initialScroll: 'bottom', stickToBottom: true }}
+          render={renderRow}
+        />,
+      );
+      const scroller = container.firstChild as HTMLElement;
+      expect(scroller.scrollTop).toBe(30 * LH - HEIGHT);
+
+      rerender(
+        <Harness
+          items={makeRange(100, 149)}
+          vlistProps={{ initialScroll: 'bottom', stickToBottom: true }}
+          render={renderRow}
+        />,
+      );
+
+      expect(scroller.scrollTop).toBe(50 * LH - HEIGHT);
+      expect(raf).not.toHaveBeenCalled();
+    } finally {
+      scrollHeight.mockRestore();
+      clientHeight.mockRestore();
+      raf.mockRestore();
+    }
   });
 
   it('keeps the previous first visible row anchored when items are prepended', async () => {

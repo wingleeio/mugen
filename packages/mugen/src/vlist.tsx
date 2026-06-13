@@ -268,6 +268,12 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     setScrollTop(el.scrollTop);
   };
 
+  const prevTotalRef = useRef(-1);
+  const lastFontEpochRef = useRef(fontEpoch());
+  const lastViewportRef = useRef({ w: -1, h: -1 });
+  const didInitialScroll = useRef(false);
+  const initialEdgesRef = useRef<{ first: string; last: string; length: number } | null>(null);
+
   // Back `instance.scrollToBottom()` with the controller so it re-engages the
   // stick and (for `smooth`) springs to the bottom while re-targeting it every
   // frame — landing on the current bottom of a streaming list instead of the
@@ -284,9 +290,32 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     }
   };
 
+  // If a route/page reuses the same mounted list component for a different data
+  // set, `initialScroll` should apply to the new page too. Appends and prepends
+  // preserve one edge key, so keep their normal scroll anchoring/stick behavior.
+  useIsoLayoutEffect(() => {
+    if (initial == null) return;
+    const length = instance.length;
+    const next =
+      length === 0
+        ? { first: '__empty__', last: '__empty__', length }
+        : { first: instance.keyAt(0), last: instance.keyAt(length - 1), length };
+    const prev = initialEdgesRef.current;
+    initialEdgesRef.current = next;
+    if (!prev || !didInitialScroll.current) return;
+    const replaced =
+      prev.length > 0 &&
+      next.length > 0 &&
+      prev.first !== next.first &&
+      prev.last !== next.last;
+    if (!replaced) return;
+    didInitialScroll.current = false;
+    prevTotalRef.current = -1;
+    ctl.stop();
+  });
+
   // Apply `initialScroll` once, after the first real measure (content width and
   // total height are only known after the ResizeObserver fires).
-  const didInitialScroll = useRef(false);
   useIsoLayoutEffect(() => {
     if (didInitialScroll.current) return;
     const el = scrollRef.current;
@@ -319,6 +348,7 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     } else {
       ctl.jumpToBottom();
       syncWindowFromEl();
+      prevTotalRef.current = instance.totalHeight();
     }
     didInitialScroll.current = true;
   });
@@ -328,9 +358,6 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
   // a row toggling). That mirrors use-stick-to-bottom's ResizeObserver: without
   // it the spring would fire on the user's own scroll and yank them back even
   // when nothing streamed. No-op once the user has escaped.
-  const prevTotalRef = useRef(-1);
-  const lastFontEpochRef = useRef(fontEpoch());
-  const lastViewportRef = useRef({ w: -1, h: -1 });
   useIsoLayoutEffect(() => {
     const el = scrollRef.current;
     if (!stickOn || !didInitialScroll.current || !el) return;
