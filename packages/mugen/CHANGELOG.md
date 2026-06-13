@@ -1,5 +1,15 @@
 # @wingleeio/mugen
 
+## 0.3.2
+
+### Patch Changes
+
+- [`ec43322`](https://github.com/wingleeio/mugen/commit/ec4332285c95a94ed6079abdc05907673a08581b) Thanks [@wingleeio](https://github.com/wingleeio)! - Fix reused-route initial scrolling when a list changes from default top
+  placement to `initialScroll="bottom"`. The list now treats a changed
+  `initialScroll` target as a fresh initial-scroll request, so navigating from a
+  main page into a chat page jumps to the chat bottom instantly instead of staying
+  at top or letting `stickToBottom` perform the first move.
+
 ## 0.3.1
 
 ### Patch Changes
