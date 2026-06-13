@@ -1,5 +1,15 @@
 # @wingleeio/mugen
 
+## 0.3.3
+
+### Patch Changes
+
+- [`dbe2409`](https://github.com/wingleeio/mugen/commit/dbe24097c5bdb0941692bad6afc4e4cd1ad994d6) Thanks [@wingleeio](https://github.com/wingleeio)! - Force instant scroll jumps to bypass CSS `scroll-behavior: smooth`. Initial
+  bottom/index placement and controller jumps now temporarily set the scroll
+  element's inline scroll behavior to `auto` while writing `scrollTop`, then
+  restore the previous style so app-level smooth scrolling cannot animate an
+  instant initial jump.
+
 ## 0.3.2
 
 ### Patch Changes
