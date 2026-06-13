@@ -1,5 +1,26 @@
 # @wingleeio/mugen
 
+## 0.3.1
+
+### Patch Changes
+
+- [`6e218e0`](https://github.com/wingleeio/mugen/commit/6e218e0e4f9ba2433fa19376a3c5a69e1c5ccd49) Thanks [@wingleeio](https://github.com/wingleeio)! - Fix `initialScroll="bottom"` with `stickToBottom` when a mounted list is reused
+  for a different page of data. Instant initial bottom placement now re-applies on
+  page replacement and seeds the sticky baseline so the stick controller does not
+  smooth-scroll what should be an instant initial jump.
+
+- [`288f758`](https://github.com/wingleeio/mugen/commit/288f758b1171f26bebe774827cbdcf912daa500c) Thanks [@wingleeio](https://github.com/wingleeio)! - Keep the streaming tail above the fold while stuck to the bottom. The spring is
+  a proportional controller, so continuously growing content left it trailing the
+  bottom by ~11× the per-frame growth rate — 50–120px during fast streaming,
+  enough to clip the trailing caret below the fold. The controller now estimates
+  the content growth rate (EMA) and feeds it forward into the position step, with
+  the spring handling only the residual at its stock gains, riding a rate-scaled
+  buffer (~a wrapped line) behind the bottom so velocity stays continuous instead
+  of stair-stepping against discrete line wraps. Measured during the AI-chat
+  stream: median distance from bottom drops 47px → 13px with no loss of
+  frame-rate-independent smoothness; the list still settles flush when the stream
+  ends.
+
 ## 0.3.0
 
 ### Minor Changes
