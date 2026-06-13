@@ -54,6 +54,13 @@ const SETTLE_GRACE_MS = 500;
  *  surge a stiffer spring would add under dropped frames. */
 const GROWTH_EMA = 0.12;
 
+export function setScrollTopInstant(el: HTMLElement, top: number): void {
+  const prev = el.style.scrollBehavior;
+  el.style.scrollBehavior = 'auto';
+  el.scrollTop = top;
+  el.style.scrollBehavior = prev;
+}
+
 export class ScrollController {
   private el: HTMLElement | null = null;
   private raf: number | null = null;
@@ -175,7 +182,7 @@ export class ScrollController {
     const el = this.el;
     if (!el) return;
     this.stop();
-    el.scrollTop = Math.max(0, el.scrollHeight - el.clientHeight);
+    setScrollTopInstant(el, Math.max(0, el.scrollHeight - el.clientHeight));
     this.expectedTop = el.scrollTop;
     this.lastScrollTop = el.scrollTop;
     this.escaped = false;
@@ -185,7 +192,7 @@ export class ScrollController {
     const el = this.el;
     if (!el) return;
     this.stop();
-    el.scrollTop = 0;
+    setScrollTopInstant(el, 0);
     this.expectedTop = 0;
     this.lastScrollTop = 0;
   }

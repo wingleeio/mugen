@@ -3,7 +3,7 @@ import { ScrollController, STICK_THRESHOLD_PX, DEFAULT_SPRING } from './scroll-c
 
 /** A minimal stand-in for the scroll element (only the geometry we read). */
 function fakeEl(scrollHeight: number, clientHeight: number, scrollTop = 0): HTMLElement {
-  return { scrollHeight, clientHeight, scrollTop } as unknown as HTMLElement;
+  return { scrollHeight, clientHeight, scrollTop, style: { scrollBehavior: '' } } as unknown as HTMLElement;
 }
 
 describe('ScrollController', () => {
@@ -29,6 +29,18 @@ describe('ScrollController', () => {
     c.jumpToBottom();
     expect(el.scrollTop).toBe(600); // scrollHeight - clientHeight
     expect(c.escaped).toBe(false);
+  });
+
+  it('forces instant jumps even when the scroll element has smooth behavior', () => {
+    const c = new ScrollController();
+    const el = fakeEl(1000, 400, 0);
+    el.style.scrollBehavior = 'smooth';
+    c.attach(el);
+
+    c.jumpToBottom();
+
+    expect(el.scrollTop).toBe(600);
+    expect(el.style.scrollBehavior).toBe('smooth');
   });
 
   it('releases when the user scrolls past the threshold, re-engages at the bottom', () => {

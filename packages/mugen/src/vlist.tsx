@@ -21,6 +21,7 @@ import {
   ScrollController,
   DEFAULT_SPRING,
   STICK_THRESHOLD_PX,
+  setScrollTopInstant,
   type MugenScrollEase,
   type SpringOptions,
 } from './scroll-controller';
@@ -349,7 +350,7 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
       if (initial.behavior === 'smooth') {
         el.scrollTo({ top: target, behavior: 'smooth' });
       } else {
-        el.scrollTop = target;
+        setScrollTopInstant(el, target);
       }
       syncWindowFromEl();
       didInitialScroll.current = true;
