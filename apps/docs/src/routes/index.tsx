@@ -43,18 +43,6 @@ function Frame({ children, className = '' }: { children: ReactNode; className?: 
   return <div className={`overflow-hidden rounded-xl border border-fd-border ${className}`}>{children}</div>;
 }
 
-function Figure({ n, label }: { n: string; label: string }) {
-  return (
-    <div className="mu-dim mt-4">
-      <span className="shrink-0">
-        <span className="text-fd-primary">fig. {n}</span>
-        <span className="mx-2">—</span>
-        {label}
-      </span>
-    </div>
-  );
-}
-
 function Home() {
   return (
     <HomeLayout {...baseOptions()}>
@@ -137,7 +125,7 @@ function Home() {
           </div>
         </section>
 
-        {/* ── Fig. 01 — the live demo, plated like a drawing ── */}
+        {/* ── The live demo, plated like a drawing ── */}
         <section className="mx-auto w-full max-w-3xl px-6 pb-6">
           <div className="mu-rise" style={{ animationDelay: '280ms' }}>
             {/* DemoShowcase draws its own window chrome — no extra frame, or the
@@ -151,7 +139,6 @@ function Home() {
             >
               {() => <DemoShowcase />}
             </ClientOnly>
-            <Figure n="01" label="live — every row a different height, none of them measured" />
           </div>
         </section>
 
@@ -180,7 +167,7 @@ function Home() {
           </div>
         </section>
 
-        {/* ── Fig. 02 — the contract ── */}
+        {/* ── The contract ── */}
         <section className="mx-auto w-full max-w-3xl px-6 pb-24">
           <h2 className="font-serif text-3xl">
             A list is one <em className="text-fd-primary">contract</em>
@@ -189,7 +176,6 @@ function Home() {
             <Frame className="mu-code overflow-x-auto bg-fd-card">
               <div dangerouslySetInnerHTML={{ __html: contractHtml }} />
             </Frame>
-            <Figure n="02" label="the same tree measures and paints — they cannot desync" />
           </div>
           <div className="mt-12 text-center">
             <Link
