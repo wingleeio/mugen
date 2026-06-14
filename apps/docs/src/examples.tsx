@@ -14,7 +14,6 @@ import {
   VStack,
 } from '@wingleeio/mugen';
 import { Markdown, defineMarkdownComponents } from '@wingleeio/mugen-markdown';
-import { StreamFadeOverlay } from '@/components/stream-fade';
 import { MoreHorizontalIcon } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from './components/ui/tooltip';
@@ -848,11 +847,10 @@ function TurnRow(item: Turn): ReactNode {
       {thinkingEl}
       {toolsEl}
       <VStack gap={4}>
-        {/* While streaming, mark the body so the StreamFadeOverlay can veil
-            newly arrived text — canvas paint only, the row never animates. */}
-        <VStack className={streaming ? 'mu-stream-fade' : undefined}>
-          <Markdown source={source} theme={CHAT_MD_THEME} />
-        </VStack>
+        {/* `fade` veils newly-arrived text as it streams — canvas paint only,
+            the row never animates. Stable per turn (the live turn keeps it on;
+            the painter idles once the text settles). */}
+        <Markdown source={source} theme={CHAT_MD_THEME} fade={isLive} />
         {streaming ? (
           <Text font="600 15px Inter, sans-serif" lineHeight={24} color={AC.accent} className="mu-pulse">
             ▍
@@ -1322,7 +1320,6 @@ function AiChatExample(): ReactNode {
           stickToBottom
           className="mu-scroll"
         />
-        <StreamFadeOverlay />
         <ScrollToBottomButton list={list} />
       </div>
     </div>

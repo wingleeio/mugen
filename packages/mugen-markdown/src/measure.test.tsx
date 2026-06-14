@@ -32,6 +32,19 @@ function measure(md: string, width = 600, theme?: DeepPartial<MarkdownTheme>): n
   return inst.totalHeight();
 }
 
+function measureFade(md: string, width = 600): number {
+  const inst = new MugenInstance<{ id: string }>();
+  inst.setItems([{ id: '1' }]);
+  inst.configure({
+    getKey: (it) => it.id,
+    render: () => createElement(Markdown, { source: md, fade: true }),
+    defaults: { font: '16px sans-serif', lineHeight: 26 },
+  });
+  inst.setViewport(width, 400, 16);
+  inst.sync();
+  return inst.totalHeight();
+}
+
 describe('Markdown measurability (mugen walker)', () => {
   it('measures a document with every block type without throwing', () => {
     const doc = [
@@ -109,6 +122,15 @@ describe('Markdown measurability (mugen walker)', () => {
     const narrow = measure('y'.repeat(60), 200); // 480px → 3 lines → 78
     expect(wide).toBe(26);
     expect(narrow).toBe(78);
+  });
+
+  it('the fade overlay adds no height — same as without fade', () => {
+    // The veil canvas is out of flow, so a faded block measures identically.
+    const doc = ['# Heading', '', 'A paragraph with several words.', '', '- one', '- two'].join('\n');
+    expect(measureFade(doc)).toBe(measure(doc));
+    expect(measureFade(doc, 200)).toBe(measure(doc, 200));
+    // Fenced code under fade stays line-count exact too.
+    expect(measureFade('```\na\nb\nc\n```')).toBe(measure('```\na\nb\nc\n```'));
   });
 
   it('a theme override changes the measured height', () => {

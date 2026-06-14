@@ -47,6 +47,7 @@ export { CodeBlock } from './primitives/code-block';
 export type { CodeBlockProps, CodeBlockHeader } from './primitives/code-block';
 export { TableBlock } from './primitives/table-block';
 export type { TableBlockProps } from './primitives/table-block';
+export { FadeMarkdown } from './primitives/fade';
 
 // ── Code-block syntax highlighting (non-blocking canvas overlay) ──
 export { defaultTokenColors } from './highlight/types';

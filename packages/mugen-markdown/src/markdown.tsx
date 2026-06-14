@@ -1,9 +1,17 @@
-import type { ReactNode } from 'react';
+import { createElement, type ReactNode } from 'react';
 import { renderMarkdown, type RenderMarkdownOptions } from './render';
+import { FadeMarkdown } from './primitives/fade';
 
 export interface MarkdownProps extends RenderMarkdownOptions {
   /** The markdown source to render. */
   source: string;
+  /**
+   * Fade just-arrived text in as the source streams. The DOM still commits and
+   * lays out instantly (heights stay exact); a veil over new characters
+   * dissolves, which reads as a fade-in. Leaving it on for a settled block is
+   * free. Honours `prefers-reduced-motion`.
+   */
+  fade?: boolean;
 }
 
 /**
@@ -27,6 +35,13 @@ export interface MarkdownProps extends RenderMarkdownOptions {
  * and a deep-partial `theme`.
  */
 export function Markdown(props: MarkdownProps): ReactNode {
-  return renderMarkdown(props.source, props);
+  const content = renderMarkdown(props.source, props);
+  // Wrap in the fade primitive only when asked and there's something to show.
+  // The primitive measures the content exactly (the veil canvas is out of flow),
+  // so heights are unchanged whether `fade` is on or off.
+  if (props.fade && content != null) {
+    return createElement(FadeMarkdown, null, content);
+  }
+  return content;
 }
 Markdown.displayName = 'Markdown';
