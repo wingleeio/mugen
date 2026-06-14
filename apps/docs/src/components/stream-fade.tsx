@@ -45,6 +45,34 @@ function commonPrefixLength(a: string, b: string): number {
   return i;
 }
 
+// Streamed markdown never emits a <button>, so any button inside the container
+// is interactive chrome (e.g. a code block's copy button). Its text must be
+// excluded from the veil's accounting: it isn't streamed content, and a label
+// flip ("Copy" → "Copied") sits *before* later content in DOM order, so counting
+// it would make `commonPrefixLength` diverge at the button and re-veil — i.e.
+// flash — every block after it. Both the change-detection text and the geometry
+// walk skip these nodes, so their character offsets stay aligned.
+function inChrome(node: Node, container: Element): boolean {
+  for (let p = node.parentElement; p != null && p !== container; p = p.parentElement) {
+    if (p.tagName === 'BUTTON') return true;
+  }
+  return false;
+}
+
+function contentTextFilter(container: Element): NodeFilter {
+  return {
+    acceptNode: (n) => (inChrome(n, container) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+  };
+}
+
+/** `container.textContent`, minus interactive chrome (see {@link inChrome}). */
+function contentText(container: Element): string {
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, contentTextFilter(container));
+  let s = '';
+  for (let n = walker.nextNode(); n != null; n = walker.nextNode()) s += (n as Text).data;
+  return s;
+}
+
 // 1×1 scratch canvas used to composite background layers. The canvas accepts
 // any CSS colour (`oklab(...)`, `color-mix(...)` results, wide-gamut) as a
 // fillStyle, so stacking fills and reading the pixel back gives the exact
@@ -133,7 +161,7 @@ export function StreamFadeOverlay(): ReactElement {
         marked ?? (container != null && container.isConnected && veils.length > 0 ? container : null);
       if (tracked !== container) {
         container = tracked;
-        prevText = container?.textContent ?? '';
+        prevText = container != null ? contentText(container) : '';
         veils = [];
         ema = EMA_SEED_MS;
         lastAppend = 0;
@@ -149,7 +177,7 @@ export function StreamFadeOverlay(): ReactElement {
       }
 
       const now = performance.now();
-      const text = container.textContent ?? '';
+      const text = contentText(container);
       if (text !== prevText) {
         // Streaming mostly appends, but inline markdown can rewrite the tail
         // ("**bo" → bold "bo"): re-veil from the common prefix and truncate
@@ -190,7 +218,11 @@ export function StreamFadeOverlay(): ReactElement {
         const groups = new Map<string, { alpha: number; bg: string; path: Path2D }>();
         const minStart = veils.reduce((m, v) => Math.min(m, v.start), Infinity);
 
-        const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+        const walker = document.createTreeWalker(
+          container,
+          NodeFilter.SHOW_TEXT,
+          contentTextFilter(container),
+        );
         let base = 0;
         let node = walker.nextNode() as Text | null;
         while (node != null) {

@@ -634,7 +634,25 @@ const CHAT_MD_THEME = {
   heading: { color: AC.fg, weight: 650 },
   link: { color: AC.accent, underline: true },
   inlineCode: { background: AC.card, color: AC.fg, sizeScale: 0.9 },
-  code: { background: AC.card, color: AC.fg, padding: 12, radius: 10, fontSize: 13, lineHeight: 20 },
+  code: {
+    background: AC.card,
+    color: AC.fg,
+    padding: 12,
+    radius: 10,
+    fontSize: 13,
+    lineHeight: 20,
+    // Chrome bar styled like the showcase window header: muted language label
+    // on the left, a bordered copy pill on the right.
+    header: {
+      show: true,
+      height: 38,
+      fontSize: 11.5,
+      background: 'color-mix(in oklab, var(--color-fd-foreground) 6%, transparent)',
+      color: AC.muted,
+      borderColor: AC.hairline,
+      buttonBackground: AC.page,
+    },
+  },
   blockquote: { borderColor: AC.rule, color: AC.muted, padding: 12, gap: 8, borderWidth: 3 },
   list: { gap: 6, indent: 24, markerColor: AC.muted },
 };
