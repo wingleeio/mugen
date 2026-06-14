@@ -83,6 +83,17 @@ describe('Markdown measurability (mugen walker)', () => {
     expect(measure('```\na\nb\nc\n```', 120)).toBe(91);
   });
 
+  it('folds the code header bar into the measured height', () => {
+    // Same block, plus the fixed-height chrome bar (default header height 38).
+    const headed = measure('```\na\nb\nc\n```', 600, { code: { header: { show: true } } });
+    expect(headed).toBe(91 + 38);
+    // A custom bar height is honoured, and stays width-independent.
+    const tall = measure('```\na\nb\nc\n```', 120, {
+      code: { header: { show: true, height: 50 } },
+    });
+    expect(tall).toBe(91 + 50);
+  });
+
   it('sums adjacent blocks with the block gap', () => {
     // two one-line paragraphs: 26 + 16 (blockGap) + 26.
     expect(measure('a\n\nb')).toBe(26 + 16 + 26);

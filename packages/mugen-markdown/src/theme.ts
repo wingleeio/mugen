@@ -64,6 +64,28 @@ export interface MarkdownTheme {
      * change a block's measured height.
      */
     highlight: CodeTokenColors | false;
+    /**
+     * Optional chrome bar above the code — the language on the left, a
+     * copy-to-clipboard button on the right. `show: false` (the default) keeps
+     * the bare `<pre>`. When shown, the bar's fixed `height` is folded into the
+     * block's measured height, so computed and painted heights stay identical.
+     */
+    header: {
+      /** Render the chrome bar. Off by default. */
+      show: boolean;
+      /** Fixed bar height in px (counted in the measured height). */
+      height: number;
+      /** Label + button font size in px. */
+      fontSize: number;
+      /** Bar background. */
+      background: string;
+      /** Label + button text colour. */
+      color: string;
+      /** Bottom hairline + button border colour. */
+      borderColor: string;
+      /** Copy-button fill. */
+      buttonBackground: string;
+    };
   };
 
   blockquote: {
@@ -145,6 +167,15 @@ export const defaultTheme: MarkdownTheme = {
     color: 'inherit',
     radius: 8,
     highlight: defaultTokenColors,
+    header: {
+      show: false,
+      height: 38,
+      fontSize: 12,
+      background: 'rgba(127, 127, 127, 0.06)',
+      color: 'rgba(127, 127, 127, 0.85)',
+      borderColor: 'rgba(127, 127, 127, 0.18)',
+      buttonBackground: 'rgba(127, 127, 127, 0.04)',
+    },
   },
 
   blockquote: {

@@ -140,6 +140,21 @@ export const defaultComponents: ResolvedMarkdownComponents = {
       radius: c.radius,
       highlight: c.highlight,
       ...(c.color !== 'inherit' ? { color: c.color } : null),
+      // Chrome bar (language + copy button). The label falls back to the lang,
+      // and its height is folded into the block's measured height.
+      ...(c.header.show
+        ? {
+            header: {
+              height: c.header.height,
+              fontSize: c.header.fontSize,
+              fontFamily: ctx.theme.monoFamily,
+              background: c.header.background,
+              color: c.header.color,
+              borderColor: c.header.borderColor,
+              buttonBackground: c.header.buttonBackground,
+            },
+          }
+        : null),
     });
   },
 

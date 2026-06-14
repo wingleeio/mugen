@@ -44,7 +44,7 @@ export { defaultComponents } from './components';
 export { RichText, clearRichTextCache } from './primitives/rich-text';
 export type { RichTextProps, RichTextRun } from './primitives/rich-text';
 export { CodeBlock } from './primitives/code-block';
-export type { CodeBlockProps } from './primitives/code-block';
+export type { CodeBlockProps, CodeBlockHeader } from './primitives/code-block';
 export { TableBlock } from './primitives/table-block';
 export type { TableBlockProps } from './primitives/table-block';
 

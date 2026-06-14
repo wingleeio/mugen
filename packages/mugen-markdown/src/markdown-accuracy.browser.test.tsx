@@ -7,7 +7,7 @@
 // tests can't see.
 import { createElement } from 'react';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { render, cleanup } from '@testing-library/react';
+import { render, cleanup, waitFor } from '@testing-library/react';
 import { MugenInstance } from '@wingleeio/mugen';
 import { Markdown } from './markdown';
 import { parseMarkdown } from './parse';
@@ -107,5 +107,97 @@ describe('real-document markdown: computed vs DOM per block', () => {
     }
     expect(rows, '\n' + rows.join('\n')).toEqual([]);
     expect(domBlocks.length).toBe(blocks.length);
+  });
+});
+
+describe('code block with a chrome header: computed vs DOM', () => {
+  // THEME with the header bar enabled. The bar is a fixed-height box, so the
+  // block must still paint exactly what the walker computes (header + code).
+  const HEADER_THEME = {
+    ...THEME,
+    code: {
+      ...THEME.code,
+      header: {
+        show: true,
+        height: 38,
+        fontSize: 11.5,
+        background: '#f3f3f3',
+        color: '#555',
+        borderColor: '#ddd',
+        buttonBackground: '#fff',
+      },
+    },
+  };
+
+  function computedHeaderHeight(md: string): number {
+    const inst = new MugenInstance<{ id: string }>();
+    inst.setItems([{ id: '1' }]);
+    inst.configure({
+      getKey: (it) => it.id,
+      render: () => createElement(Markdown, { source: md, theme: HEADER_THEME }),
+      defaults: {},
+    });
+    inst.setViewport(WIDTH, 600, 16);
+    inst.sync();
+    return inst.totalHeight();
+  }
+
+  it('paints header + code at exactly the computed height', () => {
+    // A long line forces the <pre> to scroll horizontally — the header must
+    // not absorb or add any of that, so computed still equals painted.
+    const md = [
+      '```ts',
+      'const x = 1',
+      'function reallyLongIdentifierThatScrollsHorizontally(a: number, b: number) {}',
+      'return x',
+      '```',
+    ].join('\n');
+
+    const computed = computedHeaderHeight(md);
+    const { container } = render(
+      createElement(
+        'div',
+        { style: { width: `${WIDTH}px` } },
+        createElement(Markdown, { source: md, theme: HEADER_THEME }),
+      ),
+    );
+    const stack = container.firstElementChild!.firstElementChild!;
+    const block = stack.firstElementChild as HTMLElement;
+    const painted = block.getBoundingClientRect().height;
+    expect(Math.abs(computed - painted)).toBeLessThanOrEqual(0.5);
+
+    // And the bar itself painted exactly its declared height.
+    const bar = block.firstElementChild as HTMLElement;
+    expect(Math.abs(bar.getBoundingClientRect().height - 38)).toBeLessThanOrEqual(0.5);
+  });
+
+  it('confirms with "Copied" even when the async clipboard API is unavailable', async () => {
+    // Simulate an insecure context (e.g. a non-localhost http origin), where
+    // `navigator.clipboard` is undefined — the button must fall back to the
+    // legacy `execCommand` path and still flip to "Copied".
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, get: () => undefined });
+    const realExec = document.execCommand;
+    let copiedCmd: string | null = null;
+    document.execCommand = (cmd: string) => {
+      copiedCmd = cmd;
+      return true;
+    };
+    try {
+      const { container } = render(
+        createElement(
+          'div',
+          { style: { width: `${WIDTH}px` } },
+          createElement(Markdown, { source: '```ts\nconst x = 1\n```', theme: HEADER_THEME }),
+        ),
+      );
+      const btn = container.querySelector('button')!;
+      expect(btn.textContent).toBe('Copy');
+      btn.click();
+      await waitFor(() => expect(btn.textContent).toBe('Copied'));
+      expect(copiedCmd).toBe('copy');
+    } finally {
+      document.execCommand = realExec;
+      delete (navigator as { clipboard?: unknown }).clipboard;
+    }
   });
 });
