@@ -42,22 +42,23 @@ interface Veil {
   t0: number;
 }
 
-function commonPrefixLength(a: string, b: string): number {
-  const n = Math.min(a.length, b.length);
-  let i = 0;
-  while (i < n && a.charCodeAt(i) === b.charCodeAt(i)) i++;
-  return i;
-}
-
 // Streamed markdown never emits a <button>, so any button inside the container
 // is interactive chrome (e.g. a code block's copy button). Its text is excluded
 // from the veil's accounting: it isn't streamed content, and a label flip
 // ("Copy" -> "Copied") sits *before* later content in DOM order, so counting it
-// would make `commonPrefixLength` diverge at the button and re-veil — i.e. flash
-// — every block after it. Both the change-detection text and the geometry walk
-// skip these nodes, so their character offsets stay aligned.
+// would shift every later character offset and re-veil — i.e. flash — every
+// block after it. The length tracking and the geometry walk both skip these
+// nodes, so the offsets stay aligned.
 function inChrome(node: Node, container: Element): boolean {
   for (let p = node.parentElement; p != null && p !== container; p = p.parentElement) {
+    if (p.tagName === 'BUTTON') return true;
+  }
+  return false;
+}
+
+/** Whether `el` (or an ancestor up to `container`) is interactive chrome. */
+function elementInChrome(el: Element, container: Element): boolean {
+  for (let p: Element | null = el; p != null && p !== container; p = p.parentElement) {
     if (p.tagName === 'BUTTON') return true;
   }
   return false;
@@ -69,12 +70,35 @@ function contentTextFilter(container: Element): NodeFilter {
   };
 }
 
-/** `container.textContent`, minus interactive chrome (see {@link inChrome}). */
-function contentText(container: Element): string {
+/** Chrome-free text length of `container` — a full walk; used to seed/reconcile. */
+function chromeFreeLength(container: Element): number {
   const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, contentTextFilter(container));
-  let s = '';
-  for (let n = walker.nextNode(); n != null; n = walker.nextNode()) s += (n as Text).data;
-  return s;
+  let n = 0;
+  for (let t = walker.nextNode(); t != null; t = walker.nextNode()) n += (t as Text).data.length;
+  return n;
+}
+
+/**
+ * Chrome-free text length of one node's subtree — used to fold a single
+ * added/removed node into the running length without touching the rest of the
+ * DOM. Buttons inside the node are skipped; a button node itself counts zero.
+ */
+function subtreeTextLength(node: Node): number {
+  if (node.nodeType === 3 /* TEXT_NODE */) return (node as Text).data.length;
+  if (node.nodeType !== 1 /* ELEMENT_NODE */) return 0;
+  const el = node as Element;
+  if (el.tagName === 'BUTTON') return 0;
+  let n = 0;
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
+    acceptNode: (t) => {
+      for (let p = t.parentElement; p != null && p !== el; p = p.parentElement) {
+        if (p.tagName === 'BUTTON') return NodeFilter.FILTER_REJECT;
+      }
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  for (let t = walker.nextNode(); t != null; t = walker.nextNode()) n += (t as Text).data.length;
+  return n;
 }
 
 // 1x1 scratch canvas used to composite background layers. The canvas accepts any
@@ -123,14 +147,20 @@ function effectiveBackground(el: Element, cache: Map<Element, string>): string {
 
 /**
  * Paints the dissolving veil over a single content element's newly-arrived text.
- * Driven by a MutationObserver: a rAF loop runs only while veils are alive, then
- * stops until the next mutation, so an idle (settled) block uses no frames.
+ * Driven by a MutationObserver that folds each change into a running length, so
+ * a streaming tick costs O(delta) — never an O(n) walk of the whole content,
+ * which is what made long streams lag. A rAF loop runs only while veils are
+ * alive, then stops until the next mutation, so an idle (settled) block uses no
+ * frames. Only the small, recent veil region is ever measured for geometry.
  */
 class FadePainter {
   private content: Element | null = null;
   private canvas: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
-  private prevText = '';
+  /** Chrome-free text length, tracked incrementally from mutation records. */
+  private length = 0;
+  /** Net length change observed since the last frame folded it in. */
+  private pendingDelta = 0;
   private veils: Veil[] = [];
   private ema = EMA_SEED_MS;
   private lastAppend = 0;
@@ -148,9 +178,38 @@ class FadePainter {
     this.canvas = canvas;
     this.ctx = ctx;
     // Seed from the current content so already-present text is never veiled.
-    this.prevText = contentText(content);
-    this.mo = new MutationObserver(() => this.wake());
-    this.mo.observe(content, { subtree: true, childList: true, characterData: true });
+    this.length = chromeFreeLength(content);
+    // Track length from mutation records — appended text folds in as a delta, so
+    // a streaming tick costs O(delta), never an O(n) walk of the whole content.
+    this.mo = new MutationObserver((records) => this.onMutations(records));
+    this.mo.observe(content, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+      characterDataOldValue: true,
+    });
+  }
+
+  private onMutations(records: MutationRecord[]): void {
+    const content = this.content;
+    if (content == null) return;
+    for (const rec of records) {
+      if (rec.type === 'characterData') {
+        const node = rec.target;
+        if (inChrome(node, content)) continue;
+        this.pendingDelta += (node.nodeValue?.length ?? 0) - (rec.oldValue?.length ?? 0);
+      } else if (rec.type === 'childList') {
+        // A mutation inside chrome (the copy button's label) changes no content.
+        if (rec.target instanceof Element && elementInChrome(rec.target, content)) continue;
+        for (let i = 0; i < rec.addedNodes.length; i++) {
+          this.pendingDelta += subtreeTextLength(rec.addedNodes[i]!);
+        }
+        for (let i = 0; i < rec.removedNodes.length; i++) {
+          this.pendingDelta -= subtreeTextLength(rec.removedNodes[i]!);
+        }
+      }
+    }
+    this.wake();
   }
 
   destroy(): void {
@@ -180,22 +239,23 @@ class FadePainter {
     }
 
     const now = performance.now();
-    const text = contentText(content);
-    if (text !== this.prevText) {
-      // Streaming mostly appends, but inline markdown can rewrite the tail
-      // ("**bo" -> bold "bo"): re-veil from the common prefix and truncate veils
-      // that pointed past it.
-      const prefix = commonPrefixLength(this.prevText, text);
-      this.veils = this.veils
-        .map((v) => ({ ...v, start: Math.min(v.start, prefix), end: Math.min(v.end, prefix) }))
-        .filter((v) => v.end > v.start);
-      if (text.length > prefix) {
+    // Fold in the length change since last frame (no DOM walk). Appended text
+    // gets a fresh veil over `[oldLength, newLength)`; a tail that shrank (inline
+    // markdown collapsing, e.g. "**bo" -> bold "bo") clamps veils back.
+    if (this.pendingDelta !== 0) {
+      const newLength = Math.max(0, this.length + this.pendingDelta);
+      this.pendingDelta = 0;
+      if (newLength > this.length) {
         if (this.lastAppend > 0) this.ema = this.ema * 0.7 + Math.min(now - this.lastAppend, 1000) * 0.3;
         this.lastAppend = now;
-        this.veils.push({ start: prefix, end: text.length, t0: now });
+        this.veils.push({ start: this.length, end: newLength, t0: now });
         if (this.veils.length > MAX_VEILS) this.veils.splice(0, this.veils.length - MAX_VEILS);
+      } else if (newLength < this.length) {
+        this.veils = this.veils
+          .map((v) => ({ ...v, start: Math.min(v.start, newLength), end: Math.min(v.end, newLength) }))
+          .filter((v) => v.end > v.start);
       }
-      this.prevText = text;
+      this.length = newLength;
     }
 
     // Adaptive pace: track the chunk cadence, accelerate under backlog.
@@ -264,7 +324,10 @@ class FadePainter {
     if (this.veils.length > 0) {
       this.raf = requestAnimationFrame(this.frame);
     } else {
-      // Nothing left to dissolve — clear and idle until the next mutation.
+      // Nothing left to dissolve — idle until the next mutation. Reconcile the
+      // length against the DOM here (off the hot path) so any drift from an
+      // unusual mutation can't accumulate across bursts.
+      this.length = chromeFreeLength(content);
       this.running = false;
       this.raf = 0;
     }

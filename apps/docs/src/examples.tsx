@@ -13,7 +13,7 @@ import {
   useMugenVirtualizer,
   VStack,
 } from '@wingleeio/mugen';
-import { Markdown, defineMarkdownComponents } from '@wingleeio/mugen-markdown';
+import { Markdown, defineMarkdownComponents, measureInline, type Font } from '@wingleeio/mugen-markdown';
 import { MoreHorizontalIcon } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from './components/ui/tooltip';
@@ -656,6 +656,62 @@ const CHAT_MD_THEME = {
   list: { gap: 6, indent: 24, markerColor: AC.muted },
 };
 
+// ── Inline citation pills (the inline-box + override API) ─────────────────────
+// A `[1](cite:slug)` link renders as a clickable accent pill that flows and
+// wraps with the prose — and, because the box reserves its exact advance, never
+// breaks the analytic row heights. The pill's font is fixed so the width we
+// reserve matches what the browser paints.
+const PILL_FONT = '600 11px Inter' as Font;
+const PILL_PAD = 12; // 2 × 6px horizontal padding
+
+function CitationPill({ label, source }: { label: string; source: string }): ReactNode {
+  // A plain button: focusable, clickable, and its box is exactly text + padding,
+  // so the advance the flow reserves matches what's painted (no width set, no
+  // border/margin to drift it). `title` is a zero-layout native tooltip.
+  return (
+    <button
+      type="button"
+      title={source}
+      onClick={() => window.alert(`Source: ${source}`)}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        verticalAlign: 'middle',
+        height: 16,
+        padding: '0 6px',
+        borderRadius: 5,
+        border: 'none',
+        cursor: 'pointer',
+        font: PILL_FONT,
+        lineHeight: '16px',
+        background: 'color-mix(in oklab, var(--color-fd-primary) 16%, transparent)',
+        color: 'var(--color-fd-primary)',
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+const CHAT_COMPONENTS = defineMarkdownComponents({
+  inline: {
+    // `cite:` links become measured inline pills; everything else stays a link.
+    link: (node) => {
+      const url = node.url ?? '';
+      if (!url.startsWith('cite:')) return null;
+      const label =
+        node.children.map((c) => (c.type === 'text' ? c.value : '')).join('') || '?';
+      return [
+        {
+          advance: measureInline(label, PILL_FONT) + PILL_PAD,
+          content: <CitationPill label={label} source={url.slice('cite:'.length)} />,
+        },
+      ];
+    },
+  },
+});
+
 /** Clickable header for the reasoning disclosure (a real <button>). */
 const Disclosure = definePrimitive('button', { name: 'Disclosure' });
 
@@ -850,7 +906,7 @@ function TurnRow(item: Turn): ReactNode {
         {/* `fade` veils newly-arrived text as it streams — canvas paint only,
             the row never animates. Stable per turn (the live turn keeps it on;
             the painter idles once the text settles). */}
-        <Markdown source={source} theme={CHAT_MD_THEME} fade={isLive} />
+        <Markdown source={source} theme={CHAT_MD_THEME} components={CHAT_COMPONENTS} fade={isLive} />
         {streaming ? (
           <Text font="600 15px Inter, sans-serif" lineHeight={24} color={AC.accent} className="mu-pulse">
             ▍
@@ -1004,7 +1060,7 @@ const TAIL: Turn[] = [
       { kind: 'run', title: 'Computed the centered scroll target', detail: 'align: center' },
     ],
     body:
-      'Yes — and it lands on the very first try:\n\n```tsx\nlist.scrollToItem("41212", { align: "center", behavior: "smooth" });\n```\n\nBecause every row’s offset already lives in the index, it’s **dead-center** immediately — no measure-on-arrival, no second correction, no scrollbar jump.\n\n## Putting it all together\n\nHere’s the whole flow, end to end. Every row is a pure `item → tree`, the walker derives its height analytically, and **nothing ever touches the DOM to measure**.\n\n### What you get\n\n- **Exact heights up front** — even for rows that never mount\n- **O(log n)** scroll math via a Fenwick offset index\n- **Zero layout shift** — one description feeds both measure *and* render\n- Pixel-exact `scrollToItem`, on- or off-screen\n- Streaming markdown that re-parses *incrementally* as it grows\n\n### Setting it up\n\n1. Create one virtualizer over your data\n2. Render each row through `MugenVList`\n3. Author the row from primitives — or drop in `<Markdown>`\n4. Keep height-affecting state in `useMugenState`\n\n```tsx\nconst THEME = {\n  fontFamily: "Inter",\n  monoFamily: "Geist Mono Variable",\n  fontSize: 15,\n  lineHeight: 24,\n  code: { fontSize: 13, lineHeight: 20, padding: 12, radius: 10 },\n};\n\nfunction MessageRow(m: Message): ReactNode {\n  return (\n    <HStack gap={12} padding={16} align="flex-start">\n      <VStack width={36} height={36} style={{ borderRadius: 18, background: m.tint }} />\n      <VStack gap={4}>\n        <HStack gap={8} align="center">\n          <Text font="600 13px Inter" lineHeight={18}>{m.author}</Text>\n          <Text font="11px Geist Mono Variable" lineHeight={18} color="#8a919e">\n            {m.sentAt}\n          </Text>\n        </HStack>\n        <Markdown source={m.body} theme={THEME} />\n      </VStack>\n    </HStack>\n  );\n}\n\nconst list = useMugenVirtualizer({ items: messages });\n\nreturn (\n  <MugenVList\n    instance={list}\n    getKey={(m) => m.id}\n    render={MessageRow}\n    font="15px Inter"\n    lineHeight={24}\n    initialScroll="bottom"\n    stickToBottom\n  />\n);\n```\n\nEvery fenced block in this answer — including the one above, which **streamed in while highlighted** — is painted by the canvas overlay: the text lays out instantly, colours land off the critical path, and the height never moves.\n\n### Wiring the stream\n\nAppend each delta to the row’s body. incremark re-parses only the tail, the walker re-measures one row, and the code-block highlighter re-paints only the changed lines:\n\n```ts\nconst res = await fetch(`/chat/${threadId}/stream`);\nconst reader = res.body!.pipeThrough(new TextDecoderStream()).getReader();\n\nwhile (true) {\n  const { value, done } = await reader.read();\n  if (done) break;\n  setBody((prev) => prev + value); // O(delta) re-parse + re-measure\n}\n```\n\n### The index, since you asked about #41,212\n\nThe structure that makes `scrollToItem` land in one jump is small enough to read in full — a Fenwick tree over row heights. Here it is in Rust, streaming through the highlighter right now, all ~75 lines tokenized off the critical path while the text itself paints instantly:\n\n```rust\n/// A Fenwick (binary indexed) tree over row heights.\n///\n/// `patch` and `prefix_sum` are both O(log n), so editing one row height\n/// and asking "where does row i start?" stay cheap at any list size.\npub struct OffsetIndex {\n    tree: Vec<f64>,\n    heights: Vec<f64>,\n}\n\nimpl OffsetIndex {\n    pub fn new(heights: &[f64]) -> Self {\n        let mut index = Self {\n            tree: vec![0.0; heights.len() + 1],\n            heights: heights.to_vec(),\n        };\n        for (i, &h) in heights.iter().enumerate() {\n            index.add(i, h);\n        }\n        index\n    }\n\n    /// Top edge of `row`: the sum of every height before it.\n    pub fn offset_of(&self, row: usize) -> f64 {\n        let mut i = row;\n        let mut sum = 0.0;\n        while i > 0 {\n            sum += self.tree[i];\n            i -= i & i.wrapping_neg();\n        }\n        sum\n    }\n\n    /// Replace one row height; everything below shifts by the delta.\n    pub fn set_height(&mut self, row: usize, height: f64) -> f64 {\n        let delta = height - self.heights[row];\n        if delta != 0.0 {\n            self.heights[row] = height;\n            self.add(row, delta);\n        }\n        delta\n    }\n\n    /// First row whose bottom edge passes `y` — the binary search behind\n    /// "which rows are visible right now?".\n    pub fn row_at(&self, y: f64) -> usize {\n        let mut pos = 0usize;\n        let mut rem = y;\n        let mut step = self.tree.len().next_power_of_two() / 2;\n        while step > 0 {\n            let next = pos + step;\n            if next < self.tree.len() && self.tree[next] <= rem {\n                rem -= self.tree[next];\n                pos = next;\n            }\n            step /= 2;\n        }\n        pos.min(self.heights.len().saturating_sub(1))\n    }\n\n    fn add(&mut self, row: usize, delta: f64) {\n        let mut i = row + 1;\n        while i < self.tree.len() {\n            self.tree[i] += delta;\n            i += i & i.wrapping_neg();\n        }\n    }\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[test]\n    fn offsets_track_height_patches() {\n        let mut idx = OffsetIndex::new(&[24.0, 480.0, 36.0, 120.0]);\n        assert_eq!(idx.offset_of(2), 504.0);\n\n        idx.set_height(1, 64.0); // collapse the tall row\n        assert_eq!(idx.offset_of(2), 88.0);\n        assert_eq!(idx.row_at(90.0), 2);\n    }\n}\n```\n\nWhile that block streamed in, the row re-measured on every tick — `lines × lineHeight` is arithmetic, so a 75-line block costs the walker the same as a one-liner — and the highlighter re-tokenized only the lines that changed.\n\n### Why it scales\n\n| rows | what mounts | scroll |\n|------|-------------|--------|\n| 1k | visible slice | 60fps |\n| 50k | visible slice | 60fps |\n| 1M | visible slice | 60fps |\n\nOnly the visible window mounts, so the row *count* stops being the bottleneck — your data is.\n\n> One description of a row feeds both the measurement walk and the React render, so the height you compute is the height that paints.\n\nAnd streaming? The answer you’re reading **streamed in word by word** just now:\n\n1. each chunk appended to a retained incremark parser (`O(delta)`)\n2. the walker re-measured *this one row*\n3. `stickToBottom` followed it down — until you scroll up to break free\n\nThat’s the entire idea: heights are *computed*, not measured; markdown is *parsed incrementally*, not re-parsed; and the list stays honest whether it’s **5 messages or a million**.',
+      'Yes — and it lands on the very first try [1](cite:fenwick-offset-index):\n\n```tsx\nlist.scrollToItem("41212", { align: "center", behavior: "smooth" });\n```\n\nBecause every row’s offset already lives in the index, it’s **dead-center** immediately — no measure-on-arrival, no second correction, no scrollbar jump.\n\n## Putting it all together\n\nHere’s the whole flow, end to end. Every row is a pure `item → tree`, the walker derives its height analytically, and **nothing ever touches the DOM to measure**.\n\n### What you get\n\n- **Exact heights up front** — even for rows that never mount\n- **O(log n)** scroll math via a Fenwick offset index\n- **Zero layout shift** — one description feeds both measure *and* render\n- Pixel-exact `scrollToItem`, on- or off-screen\n- Streaming markdown that re-parses *incrementally* as it grows\n\n### Setting it up\n\n1. Create one virtualizer over your data\n2. Render each row through `MugenVList`\n3. Author the row from primitives — or drop in `<Markdown>`\n4. Keep height-affecting state in `useMugenState`\n\n```tsx\nconst THEME = {\n  fontFamily: "Inter",\n  monoFamily: "Geist Mono Variable",\n  fontSize: 15,\n  lineHeight: 24,\n  code: { fontSize: 13, lineHeight: 20, padding: 12, radius: 10 },\n};\n\nfunction MessageRow(m: Message): ReactNode {\n  return (\n    <HStack gap={12} padding={16} align="flex-start">\n      <VStack width={36} height={36} style={{ borderRadius: 18, background: m.tint }} />\n      <VStack gap={4}>\n        <HStack gap={8} align="center">\n          <Text font="600 13px Inter" lineHeight={18}>{m.author}</Text>\n          <Text font="11px Geist Mono Variable" lineHeight={18} color="#8a919e">\n            {m.sentAt}\n          </Text>\n        </HStack>\n        <Markdown source={m.body} theme={THEME} />\n      </VStack>\n    </HStack>\n  );\n}\n\nconst list = useMugenVirtualizer({ items: messages });\n\nreturn (\n  <MugenVList\n    instance={list}\n    getKey={(m) => m.id}\n    render={MessageRow}\n    font="15px Inter"\n    lineHeight={24}\n    initialScroll="bottom"\n    stickToBottom\n  />\n);\n```\n\nEvery fenced block in this answer — including the one above, which **streamed in while highlighted** — is painted by the canvas overlay: the text lays out instantly, colours land off the critical path, and the height never moves.\n\n### Wiring the stream\n\nAppend each delta to the row’s body. incremark re-parses only the tail, the walker re-measures one row, and the code-block highlighter re-paints only the changed lines:\n\n```ts\nconst res = await fetch(`/chat/${threadId}/stream`);\nconst reader = res.body!.pipeThrough(new TextDecoderStream()).getReader();\n\nwhile (true) {\n  const { value, done } = await reader.read();\n  if (done) break;\n  setBody((prev) => prev + value); // O(delta) re-parse + re-measure\n}\n```\n\n### The index, since you asked about #41,212\n\nThe structure that makes `scrollToItem` land in one jump is small enough to read in full — a Fenwick tree over row heights. Here it is in Rust, streaming through the highlighter right now, all ~75 lines tokenized off the critical path while the text itself paints instantly:\n\n```rust\n/// A Fenwick (binary indexed) tree over row heights.\n///\n/// `patch` and `prefix_sum` are both O(log n), so editing one row height\n/// and asking "where does row i start?" stay cheap at any list size.\npub struct OffsetIndex {\n    tree: Vec<f64>,\n    heights: Vec<f64>,\n}\n\nimpl OffsetIndex {\n    pub fn new(heights: &[f64]) -> Self {\n        let mut index = Self {\n            tree: vec![0.0; heights.len() + 1],\n            heights: heights.to_vec(),\n        };\n        for (i, &h) in heights.iter().enumerate() {\n            index.add(i, h);\n        }\n        index\n    }\n\n    /// Top edge of `row`: the sum of every height before it.\n    pub fn offset_of(&self, row: usize) -> f64 {\n        let mut i = row;\n        let mut sum = 0.0;\n        while i > 0 {\n            sum += self.tree[i];\n            i -= i & i.wrapping_neg();\n        }\n        sum\n    }\n\n    /// Replace one row height; everything below shifts by the delta.\n    pub fn set_height(&mut self, row: usize, height: f64) -> f64 {\n        let delta = height - self.heights[row];\n        if delta != 0.0 {\n            self.heights[row] = height;\n            self.add(row, delta);\n        }\n        delta\n    }\n\n    /// First row whose bottom edge passes `y` — the binary search behind\n    /// "which rows are visible right now?".\n    pub fn row_at(&self, y: f64) -> usize {\n        let mut pos = 0usize;\n        let mut rem = y;\n        let mut step = self.tree.len().next_power_of_two() / 2;\n        while step > 0 {\n            let next = pos + step;\n            if next < self.tree.len() && self.tree[next] <= rem {\n                rem -= self.tree[next];\n                pos = next;\n            }\n            step /= 2;\n        }\n        pos.min(self.heights.len().saturating_sub(1))\n    }\n\n    fn add(&mut self, row: usize, delta: f64) {\n        let mut i = row + 1;\n        while i < self.tree.len() {\n            self.tree[i] += delta;\n            i += i & i.wrapping_neg();\n        }\n    }\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[test]\n    fn offsets_track_height_patches() {\n        let mut idx = OffsetIndex::new(&[24.0, 480.0, 36.0, 120.0]);\n        assert_eq!(idx.offset_of(2), 504.0);\n\n        idx.set_height(1, 64.0); // collapse the tall row\n        assert_eq!(idx.offset_of(2), 88.0);\n        assert_eq!(idx.row_at(90.0), 2);\n    }\n}\n```\n\nWhile that block streamed in, the row re-measured on every tick — `lines × lineHeight` is arithmetic, so a 75-line block costs the walker the same as a one-liner — and the highlighter re-tokenized only the lines that changed.\n\n### Why it scales\n\n| rows | what mounts | scroll |\n|------|-------------|--------|\n| 1k | visible slice | 60fps |\n| 50k | visible slice | 60fps |\n| 1M | visible slice | 60fps |\n\nOnly the visible window mounts, so the row *count* stops being the bottleneck — your data is [2](cite:windowing).\n\n> One description of a row feeds both the measurement walk and the React render, so the height you compute is the height that paints.\n\nAnd streaming? The answer you’re reading **streamed in word by word** just now:\n\n1. each chunk appended to a retained incremark parser (`O(delta)`)\n2. the walker re-measured *this one row*\n3. `stickToBottom` followed it down — until you scroll up to break free\n\nThat’s the entire idea: heights are *computed*, not measured; markdown is *parsed incrementally*, not re-parsed; and the list stays honest whether it’s **5 messages or a million**.',
   },
 ];
 
