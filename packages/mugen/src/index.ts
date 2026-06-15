@@ -62,6 +62,9 @@ export type { MeasurableDef, MeasureContext } from './primitives/core';
 // `naturalWidthOf`/`isOutOfFlow` let a custom primitive implement
 // `naturalWidth` (content-based HStack distribution) over its children.
 export { measureChildren, toChildArray, naturalWidthOf, isOutOfFlow } from './walker';
+// Drops the element-identity height memo (the walker caches `(element, width,
+// defaults, fontEpoch) -> height`); exposed for tests / memory pressure.
+export { clearHeightCache } from './walker';
 
 // ── Style + font types ──
 export type { MeasurableStyle, SafeClassName } from './style';

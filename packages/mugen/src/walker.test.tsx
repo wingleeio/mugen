@@ -12,7 +12,8 @@ vi.mock('@chenglou/pretext', () => ({
   clearCache: vi.fn(),
 }));
 
-import { heightOf, measureChildren } from './walker';
+import { heightOf, measureChildren, clearHeightCache } from './walker';
+import { notifyFontsChanged } from './pretext/fonts';
 import { Text } from './primitives/text';
 import { Escape } from './primitives/escape';
 import { Portal } from './primitives/portal';
@@ -396,5 +397,68 @@ describe('walker: measurability guards', () => {
 
   it('throws (with a font hint) when neither Text nor defaults set a font', () => {
     expect(() => heightOf(<Text>{'hi'}</Text>, 600, {})).toThrow(/needs a font/);
+  });
+});
+
+describe('walker: element-identity height memo', () => {
+  function spyPrimitive(name: string, h = 42) {
+    const measure = vi.fn(() => h);
+    const Comp = markPrimitive((() => null) as () => null, { name, measure });
+    return { Comp, measure };
+  }
+
+  it('measures a stable element ref once, recomputing only on a real change', () => {
+    clearHeightCache();
+    const { Comp, measure } = spyPrimitive('Spy');
+    const el = <Comp />; // a single, stable ref (what mugen-markdown's block cache yields)
+
+    expect(heightOf(el, 600, defaults)).toBe(42);
+    expect(heightOf(el, 600, defaults)).toBe(42); // hit
+    expect(heightOf(el, 600, defaults)).toBe(42); // hit
+    expect(measure).toHaveBeenCalledTimes(1);
+
+    // A width change is a real change → recompute.
+    heightOf(el, 300, defaults);
+    expect(measure).toHaveBeenCalledTimes(2);
+
+    // A new defaults object → recompute; then stable again → hit.
+    const defaults2: TextDefaults = { ...defaults };
+    heightOf(el, 300, defaults2);
+    heightOf(el, 300, defaults2);
+    expect(measure).toHaveBeenCalledTimes(3);
+  });
+
+  it('invalidates when web fonts settle (font epoch bumps)', () => {
+    clearHeightCache();
+    const { Comp, measure } = spyPrimitive('SpyFont', 10);
+    const el = <Comp />;
+    heightOf(el, 600, defaults);
+    heightOf(el, 600, defaults);
+    expect(measure).toHaveBeenCalledTimes(1);
+
+    notifyFontsChanged(); // glyph metrics may have changed under the same element ref
+    heightOf(el, 600, defaults);
+    expect(measure).toHaveBeenCalledTimes(2);
+  });
+
+  it('keys by identity, not by type/props — two distinct elements each measure', () => {
+    clearHeightCache();
+    const { Comp, measure } = spyPrimitive('SpyId', 7);
+    heightOf(<Comp />, 600, defaults); // distinct refs, same type+props
+    heightOf(<Comp />, 600, defaults);
+    expect(measure).toHaveBeenCalledTimes(2);
+  });
+
+  it('a changed subtree re-measures while its stable siblings hit (O(changed))', () => {
+    clearHeightCache();
+    const stable = spyPrimitive('Stable', 20);
+    const tail = spyPrimitive('Tail', 20);
+    const stableEl = <stable.Comp />; // kept across "ticks"
+    // Tick 1.
+    heightOf(<VStack>{[stableEl, <tail.Comp key="a" />]}</VStack>, 600, defaults);
+    // Tick 2: same stable child ref, a fresh tail element (the streaming block).
+    heightOf(<VStack>{[stableEl, <tail.Comp key="b" />]}</VStack>, 600, defaults);
+    expect(stable.measure).toHaveBeenCalledTimes(1); // settled block: hit on tick 2
+    expect(tail.measure).toHaveBeenCalledTimes(2); // changed block: re-measured
   });
 });
