@@ -23,10 +23,16 @@ import {
  * text fading in. Nothing about the row ever animates; layout is done the
  * moment the text lands.
  *
- * Unlike a list-level overlay, the veil canvas lives **inside** the markdown's
- * own box (`position: absolute; inset: 0`), so it scrolls with the content and
- * needs no viewport-geometry tracking. The painter idles (no rAF) until a
- * DOM mutation arrives, so leaving `fade` on for a settled block costs nothing.
+ * The veil canvas lives **inside** the markdown's own box (`position:
+ * absolute`), so it scrolls with the content. It is *windowed to the scroll
+ * viewport* each frame — sized and positioned to cover only the visible band,
+ * never the full answer height — because the backing store is reallocated and
+ * `clearRect`-cleared every frame, and a full-height canvas on a tall stream
+ * makes that O(answer length): a multi-megapixel clear at 60fps that blows the
+ * frame budget once the answer is tall. The veils only ever sit on the freshly
+ * appended tail, which stick-to-bottom keeps at the viewport's edge, so the
+ * window loses nothing. The painter also idles (no rAF) until a DOM mutation
+ * arrives, so leaving `fade` on for a settled block costs nothing.
  */
 
 const EMA_SEED_MS = 160;
@@ -62,6 +68,17 @@ function elementInChrome(el: Element, container: Element): boolean {
     if (p.tagName === 'BUTTON') return true;
   }
   return false;
+}
+
+/** Whether a computed `overflow` value clips its overflow (bounds visibility). */
+function isClipped(overflow: string): boolean {
+  return (
+    overflow === 'auto' ||
+    overflow === 'scroll' ||
+    overflow === 'hidden' ||
+    overflow === 'clip' ||
+    overflow === 'overlay'
+  );
 }
 
 function contentTextFilter(container: Element): NodeFilter {
@@ -167,6 +184,9 @@ class FadePainter {
   private raf = 0;
   private running = false;
   private mo: MutationObserver | null = null;
+  /** Scrollable/clipping ancestors of the content — found once, then cached.
+   *  Intersecting their rects bounds the veil canvas to the visible band. */
+  private clippers: Element[] | null = null;
 
   attach(content: Element, canvas: HTMLCanvasElement): void {
     if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -229,6 +249,34 @@ class FadePainter {
     this.raf = requestAnimationFrame(this.frame);
   }
 
+  /**
+   * The vertical band of `content` currently inside the scroll viewport, in
+   * client coordinates, clamped to the content's own box. Intersects every
+   * scrollable/clipping ancestor (found once via `getComputedStyle`, then
+   * cached) and the window. This is what keeps the veil canvas O(viewport)
+   * instead of O(content height): only the visible band is sized and cleared.
+   */
+  private visibleBand(content: HTMLElement, rect: DOMRect): { top: number; height: number } {
+    if (this.clippers == null) {
+      const list: Element[] = [];
+      for (let p = content.parentElement; p != null; p = p.parentElement) {
+        const s = getComputedStyle(p);
+        if (isClipped(s.overflowY) || isClipped(s.overflowX)) list.push(p);
+      }
+      this.clippers = list;
+    }
+    let top = 0;
+    let bottom = typeof innerHeight === 'number' ? innerHeight : rect.bottom;
+    for (const c of this.clippers) {
+      const r = c.getBoundingClientRect();
+      if (r.top > top) top = r.top;
+      if (r.bottom < bottom) bottom = r.bottom;
+    }
+    const visTop = Math.max(rect.top, top);
+    const visBottom = Math.min(rect.bottom, bottom);
+    return { top: visTop, height: Math.max(0, visBottom - visTop) };
+  }
+
   private frame = (): void => {
     const content = this.content;
     const canvas = this.canvas;
@@ -264,8 +312,21 @@ class FadePainter {
     this.veils = this.veils.filter((v) => (now - v.t0) * boost < duration);
 
     const dpr = typeof devicePixelRatio === 'number' && devicePixelRatio > 0 ? devicePixelRatio : 1;
-    const w = (content as HTMLElement).clientWidth;
-    const h = (content as HTMLElement).clientHeight;
+    // Window the canvas to the scroll viewport, not the whole content. The
+    // backing store is reallocated and `clearRect`-cleared every frame; sizing
+    // it to the full content height made that O(answer length) — a
+    // multi-megapixel clear per frame on a tall stream. The veils only ever sit
+    // on the freshly-appended tail, which stick-to-bottom keeps at the
+    // viewport's edge, so covering just the visible band loses nothing.
+    const rect = (content as HTMLElement).getBoundingClientRect();
+    const band = this.visibleBand(content as HTMLElement, rect);
+    const w = rect.width;
+    const h = band.height;
+    // Position the canvas over the visible band, relative to the host (its
+    // offset parent), whose top coincides with the content's (content is the
+    // host's first, offset-0 child). `top`/`height` override the static CSS.
+    canvas.style.top = `${band.top - rect.top}px`;
+    canvas.style.height = `${h}px`;
     if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
       canvas.width = Math.round(w * dpr);
       canvas.height = Math.round(h * dpr);
@@ -274,7 +335,9 @@ class FadePainter {
     ctx.clearRect(0, 0, w, h);
 
     if (this.veils.length > 0) {
-      const origin = canvas.getBoundingClientRect();
+      // The canvas covers the visible band: its viewport origin is the content's
+      // left and the band's top (both computed above — no layout read-back).
+      const origin = { left: rect.left, top: band.top };
       const bgCache = new Map<Element, string>();
       const groups = new Map<string, { alpha: number; bg: string; path: Path2D }>();
       const minStart = this.veils.reduce((m, v) => Math.min(m, v.start), Infinity);
@@ -364,9 +427,12 @@ function renderFadeMarkdown(props: FadeMarkdownProps): ReactElement {
   const hostStyle: CSSProperties = { position: 'relative' };
   const canvasStyle: CSSProperties = {
     position: 'absolute',
-    inset: 0,
+    left: 0,
+    top: 0,
     width: '100%',
-    height: '100%',
+    // `top`/`height` are set by the painter each frame to window the canvas to
+    // the visible band (see FadePainter.frame); start collapsed.
+    height: 0,
     pointerEvents: 'none',
   };
 

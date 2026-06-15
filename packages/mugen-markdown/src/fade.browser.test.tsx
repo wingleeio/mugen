@@ -107,6 +107,48 @@ describe('streaming fade: incremental length tracking', () => {
     expect(oldA, 'earlier blocks are untouched').toBeLessThan(10);
   });
 
+  it('windows the veil canvas to the scroll viewport, not the full content height', async () => {
+    // The canvas backing store is reallocated and clearRect-cleared every frame.
+    // Sizing it to the full answer height makes that O(answer length) — the lag.
+    // In a short scroll container holding tall content, the canvas must be sized
+    // to ~the visible band, never the full content height, yet still veil the
+    // tail once it's scrolled into view.
+    const long = Array.from(
+      { length: 20 },
+      (_, i) => `paragraph ${i} with a good number of plain words to give the column some real height`,
+    ).join('\n\n');
+    const App = ({ src }: { src: string }) =>
+      createElement(
+        'div',
+        { style: { width: '600px', height: '200px', overflowY: 'auto' } },
+        createElement(Markdown, { source: src, theme: THEME, fade: true }),
+      );
+    const { container, rerender } = render(createElement(App, { src: long }));
+    const scroller = container.firstElementChild as HTMLElement;
+    const host = scroller.firstElementChild as HTMLElement;
+    await frames(3);
+
+    // Append a tail and scroll to the bottom so the fresh text is in view.
+    const tail = ' freshly appended streaming tail words';
+    rerender(createElement(App, { src: long + tail }));
+    scroller.scrollTop = scroller.scrollHeight;
+    await frames(2);
+
+    const { content, canvas } = parts(host);
+    const dpr = window.devicePixelRatio || 1;
+
+    // The content is far taller than the 200px viewport...
+    expect(content.clientHeight, 'content overflows the viewport').toBeGreaterThan(400);
+    // ...but the canvas is bounded to ~the visible band, not the whole content.
+    expect(canvas.height, 'canvas is windowed to ~the viewport').toBeLessThanOrEqual(Math.round(250 * dpr));
+    expect(canvas.height, 'canvas is far smaller than full content').toBeLessThan(content.clientHeight * dpr);
+
+    // And it stays correct: the tail, now scrolled into view, is veiled.
+    const total = content.textContent!.length;
+    const newA = veilAlphaOverRange(content, canvas, total - tail.length + 1, total);
+    expect(newA, 'the appended tail is veiled when visible').toBeGreaterThan(20);
+  });
+
   it('a copy-button label flip is chrome — never counts or re-veils', async () => {
     // A code block renders a copy button inside the faded content. Flipping its
     // label "Copy" -> "Copied" is a mutation, but it's chrome: it must not shift
