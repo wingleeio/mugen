@@ -31,8 +31,19 @@ import {
  * rich-inline layout) and the painted spans use the identical fonts.
  */
 export interface RichTextRun {
-  /** The run's text. Ignored when `break` is set. */
-  text: string;
+  /** The run's text. Ignored when `break` or `advance` is set. */
+  text?: string;
+  /**
+   * Render this run as an **inline box** — the inline analogue of mugen's
+   * `Escape`: it reserves exactly `advance` px in the flow (via pretext's
+   * `extraWidth`) and paints {@link content}, whatever it is, without measuring
+   * its insides. The flow wraps it as one non-breaking atom. The caller owns the
+   * contract: `content` must render exactly `advance` px wide and no taller than
+   * the line (use the exported `measureInline` to size text-based boxes).
+   */
+  advance?: number;
+  /** The painted content of an inline box (see {@link advance}). */
+  content?: ReactNode;
   /** Measurable font for this run; falls back to the `<RichText font>` prop. */
   font?: Font;
   color?: string;
@@ -79,6 +90,13 @@ function resolveRunFont(run: RichTextRun, fallback: Font | undefined): Font {
   return font;
 }
 
+// Measurement placeholder for an inline box. pretext drops an item that lays out
+// no glyph segment — a zero-width *space* (U+200B) is skipped, taking its
+// `extraWidth` with it. A zero-width *non-joiner* (U+200C) lays out a zero-advance
+// segment, so the item is kept and its `extraWidth` honoured while it contributes
+// no width of its own. It's never painted (the DOM renders the box's `content`).
+const BOX_PLACEHOLDER = '‌';
+
 /** Split runs into hard-break-delimited segments, each a list of rich-inline items. */
 function segmentItems(runs: RichTextRun[], fallback: Font | undefined): RichInlineItem[][] {
   const segments: RichInlineItem[][] = [];
@@ -89,8 +107,21 @@ function segmentItems(runs: RichTextRun[], fallback: Font | undefined): RichInli
       cur = [];
       continue;
     }
-    if (run.text.length === 0) continue;
-    const item: RichInlineItem = { text: run.text, font: resolveRunFont(run, fallback) };
+    if (run.advance != null) {
+      // Inline box: a zero-advance placeholder keeps the item alive and
+      // `extraWidth` is the whole reserved advance, laid out as one non-breaking
+      // atom. See BOX_PLACEHOLDER.
+      cur.push({
+        text: BOX_PLACEHOLDER,
+        font: resolveRunFont(run, fallback),
+        extraWidth: Math.max(0, run.advance),
+        break: 'never',
+      });
+      continue;
+    }
+    const text = run.text ?? '';
+    if (text.length === 0) continue;
+    const item: RichInlineItem = { text, font: resolveRunFont(run, fallback) };
     if (run.letterSpacing != null) item.letterSpacing = run.letterSpacing;
     if (run.noBreak) item.break = 'never';
     cur.push(item);
@@ -172,6 +203,19 @@ function renderRichText(props: RichTextProps): ReactElement {
 
   const children: ReactNode[] = props.runs.map((run, i) => {
     if (run.break) return createElement('br', { key: i });
+    if (run.advance != null) {
+      // Inline box. `line-height: 0` keeps the box from extending the line box —
+      // the container strut (base font + lineHeight) owns the height, exactly as
+      // the measure models — so the box's own height is paint-only. The caller
+      // keeps it within the line; we only guarantee the reserved width.
+      const boxStyle: CSSProperties = {
+        display: 'inline-block',
+        verticalAlign: 'middle',
+        lineHeight: 0,
+        whiteSpace: 'nowrap',
+      };
+      return createElement('span', { key: i, style: boxStyle }, run.content);
+    }
     const tag = run.as ?? (run.href != null ? 'a' : 'span');
     // Runs get `line-height: 0`: a zero-leading inline box can never extend a
     // line box, so the container's strut — base font + `lineHeight`, exactly
@@ -199,7 +243,7 @@ function renderRichText(props: RichTextProps): ReactElement {
     if (run.title != null) elementProps.title = run.title;
     if (run.onClick != null) elementProps.onClick = run.onClick;
     if (run.className != null) elementProps.className = run.className;
-    return createElement(tag, elementProps, run.text);
+    return createElement(tag, elementProps, run.text ?? '');
   });
 
   return createElement('div', { className: props.className as string | undefined, style: containerStyle }, children);
@@ -232,6 +276,17 @@ export const RichText = markPrimitive(
     },
   },
 );
+
+/**
+ * Measure a string's rendered advance in px for a given measurable font — the
+ * same ruler `RichText` measures with. Use it to size an inline box: a text
+ * "pill" reserves `measureInline(label, font) + horizontalPadding`.
+ */
+export function measureInline(text: string, font: Font): number {
+  if (text.length === 0) return 0;
+  assertMeasurableFont(font);
+  return measureRichInlineStats(prepareCached([{ text, font }]), 1e7).maxLineWidth;
+}
 
 /** Drop the rich-inline prepare cache (tests / memory pressure). */
 export function clearRichTextCache(): void {

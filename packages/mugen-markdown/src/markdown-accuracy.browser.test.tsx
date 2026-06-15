@@ -10,6 +10,8 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { render, cleanup, waitFor } from '@testing-library/react';
 import { MugenInstance } from '@wingleeio/mugen';
 import { Markdown } from './markdown';
+import { defineMarkdownComponents } from './types';
+import { measureInline } from './primitives/rich-text';
 import { parseMarkdown } from './parse';
 // @ts-expect-error vite raw import
 import fixture from './__fixtures__/ai-chat-live.md?raw';
@@ -199,5 +201,172 @@ describe('code block with a chrome header: computed vs DOM', () => {
       document.execCommand = realExec;
       delete (navigator as { clipboard?: unknown }).clipboard;
     }
+  });
+});
+
+describe('inline box (the inline Escape): computed vs DOM', () => {
+  // An inline override that turns every link into a fixed-size measured box —
+  // a 64×14 pill. `advance` is what the measure reserves; the painted content
+  // is exactly 64px wide, so wrapping (and therefore height) must match.
+  const BOX_W = 64;
+  const components = defineMarkdownComponents({
+    inline: {
+      link: () => [
+        {
+          advance: BOX_W,
+          content: createElement('span', {
+            style: {
+              display: 'inline-block',
+              width: `${BOX_W}px`,
+              height: '14px',
+              background: '#cdd',
+              borderRadius: '7px',
+              verticalAlign: 'middle',
+            },
+          }),
+        },
+      ],
+    },
+  });
+
+  function computedBox(md: string, width: number): number {
+    const inst = new MugenInstance<{ id: string }>();
+    inst.setItems([{ id: '1' }]);
+    inst.configure({
+      getKey: (it) => it.id,
+      render: () => createElement(Markdown, { source: md, theme: THEME, components }),
+      defaults: {},
+    });
+    inst.setViewport(width, 600, 16);
+    inst.sync();
+    return inst.totalHeight();
+  }
+
+  function paintedBox(md: string, width: number): number {
+    const { container } = render(
+      createElement(
+        'div',
+        { style: { width: `${width}px` } },
+        createElement(Markdown, { source: md, theme: THEME, components }),
+      ),
+    );
+    const stack = container.firstElementChild!.firstElementChild as HTMLElement;
+    return stack.getBoundingClientRect().height;
+  }
+
+  function computedPlain(md: string, width: number): number {
+    const inst = new MugenInstance<{ id: string }>();
+    inst.setItems([{ id: '1' }]);
+    inst.configure({
+      getKey: (it) => it.id,
+      render: () => createElement(Markdown, { source: md, theme: THEME }),
+      defaults: {},
+    });
+    inst.setViewport(width, 600, 16);
+    inst.sync();
+    return inst.totalHeight();
+  }
+
+  it('counts the box advance in the measure — and matches the paint', () => {
+    // A wide box that forces a wrap a 1-char link never would. The box must be
+    // reserved (else it would be dropped like a zero-width placeholder), so the
+    // box version is a line taller, and computed equals painted. Width is clear
+    // of any wrap boundary, so the sub-px inter-item gap can't tip a line.
+    const wide = defineMarkdownComponents({
+      inline: {
+        link: () => [
+          { advance: 200, content: createElement('span', { style: { display: 'inline-block', width: '200px', height: '14px', verticalAlign: 'middle' } }) },
+        ],
+      },
+    });
+    const md = 'word [c](x)';
+    const computedWideBox = (() => {
+      const inst = new MugenInstance<{ id: string }>();
+      inst.setItems([{ id: '1' }]);
+      inst.configure({ getKey: (it) => it.id, render: () => createElement(Markdown, { source: md, theme: THEME, components: wide }), defaults: {} });
+      inst.setViewport(120, 600, 16);
+      inst.sync();
+      return inst.totalHeight();
+    })();
+    // Without the box (link → its char), "word c" is one line; with the 200px
+    // box it wraps to two.
+    expect(computedWideBox).toBeGreaterThan(computedPlain(md, 120));
+    const { container } = render(
+      createElement(
+        'div',
+        { style: { width: '120px' } },
+        createElement(Markdown, { source: md, theme: THEME, components: wide }),
+      ),
+    );
+    const stack = container.firstElementChild!.firstElementChild as HTMLElement;
+    expect(Math.abs(computedWideBox - stack.getBoundingClientRect().height)).toBeLessThanOrEqual(0.5);
+  });
+
+  it('a mid-sentence box matches the paint at the content width', () => {
+    // The everyday case: a box in flowing text at a normal content width.
+    const md =
+      'Alpha beta gamma [c](x) delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho.';
+    expect(Math.abs(computedBox(md, WIDTH) - paintedBox(md, WIDTH))).toBeLessThanOrEqual(0.5);
+  });
+
+  it('a text pill sized with measureInline matches the paint', () => {
+    // The canonical use: a citation pill = the label's advance + padding. The
+    // painted pill is `display:inline-block` with that exact width.
+    const font = `${THEME.fontSize}px Inter` as const;
+    const PAD = 12;
+    const pillComponents = defineMarkdownComponents({
+      inline: {
+        link: (_node, ctx) => {
+          const label = '1';
+          const w = ctx.measure(label, font) + PAD;
+          return [
+            {
+              advance: w,
+              content: createElement(
+                'span',
+                {
+                  style: {
+                    display: 'inline-block',
+                    width: `${w}px`,
+                    height: '16px',
+                    lineHeight: '16px',
+                    textAlign: 'center',
+                    fontSize: `${THEME.fontSize}px`,
+                    background: '#dde',
+                    borderRadius: '8px',
+                    verticalAlign: 'middle',
+                  },
+                },
+                label,
+              ),
+            },
+          ];
+        },
+      },
+    });
+    const md = 'The sky is blue [1](s1) because light scatters [1](s2) off air molecules everywhere.';
+    const inst = new MugenInstance<{ id: string }>();
+    inst.setItems([{ id: '1' }]);
+    inst.configure({
+      getKey: (it) => it.id,
+      render: () =>
+        createElement(Markdown, { source: md, theme: THEME, components: pillComponents }),
+      defaults: {},
+    });
+    inst.setViewport(316, 600, 16);
+    inst.sync();
+    const computed = inst.totalHeight();
+    const { container } = render(
+      createElement(
+        'div',
+        { style: { width: '316px' } },
+        createElement(Markdown, { source: md, theme: THEME, components: pillComponents }),
+      ),
+    );
+    const stack = container.firstElementChild!.firstElementChild as HTMLElement;
+    const painted = stack.getBoundingClientRect().height;
+    // Sanity: measureInline returns a positive advance.
+    expect(measureInline('1', font)).toBeGreaterThan(0);
+    expect(Math.abs(computed - painted)).toBeLessThanOrEqual(0.5);
   });
 });

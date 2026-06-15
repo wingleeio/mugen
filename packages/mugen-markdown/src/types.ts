@@ -1,15 +1,22 @@
 import type { CSSProperties, ReactNode } from 'react';
+import type { Font } from '@wingleeio/mugen';
 import type {
   Blockquote,
   Code,
+  Delete,
+  Emphasis,
   Heading,
   Html,
   Image,
+  InlineCode,
+  Link,
   List,
   Paragraph,
   PhrasingContent,
   RootContent,
+  Strong,
   Table,
+  Text as MdastText,
   ThematicBreak,
 } from 'mdast';
 import type { MarkdownTheme } from './theme';
@@ -78,10 +85,53 @@ export interface MarkdownComponentProps<N> {
 export type MarkdownComponent<N> = (props: MarkdownComponentProps<N>) => ReactNode;
 
 /**
- * The overridable block-level components, keyed by mdast node type and typed to
- * the matching node. Inline marks (bold, italic, code, links) are styled through
- * the {@link MarkdownTheme} rather than as components, because inline content
- * must collapse into a single wrapping flow to be measured exactly.
+ * The context passed to an inline override. It carries the active inline format
+ * (so an override can match the surrounding type) and the helpers to build runs
+ * that stay exactly measurable.
+ */
+export interface InlineRenderContext {
+  readonly theme: MarkdownTheme;
+  /** The composed inline format at this node (family, size, weight, colour…). */
+  readonly fmt: InlineFormat;
+  /** Compose a measurable `Font` from the current format plus overrides. */
+  font(overrides?: Partial<InlineFormat>): Font;
+  /**
+   * Measure a string's rendered advance in px for a font — to size an inline
+   * box. A text pill reserves `measure(label, font) + horizontalPadding`.
+   */
+  measure(text: string, font: Font): number;
+  /** Default-flatten phrasing children into runs, to compose with your own. */
+  runs(nodes: readonly PhrasingContent[], fmtOverrides?: Partial<InlineFormat>): RichTextRun[];
+}
+
+/**
+ * An inline-node override: given the mdast node and the inline context, return
+ * the runs it should flatten to — styled text, an inline box (`{ advance,
+ * content }`), or a mix — or `null` to fall back to the default styling.
+ */
+export type InlineComponent<N> = (node: N, ctx: InlineRenderContext) => RichTextRun[] | null;
+
+/**
+ * Inline-node overrides, keyed by mdast inline type. The index signature admits
+ * custom inline tokens (from a remark plugin) beyond the named ones.
+ */
+export interface InlineComponents {
+  text?: InlineComponent<MdastText>;
+  strong?: InlineComponent<Strong>;
+  emphasis?: InlineComponent<Emphasis>;
+  delete?: InlineComponent<Delete>;
+  inlineCode?: InlineComponent<InlineCode>;
+  link?: InlineComponent<Link>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [type: string]: InlineComponent<any> | undefined;
+}
+
+/**
+ * The overridable components. Block-level marks are keyed by mdast node type and
+ * typed to the matching node. Inline marks (bold, italic, code, links) are
+ * styled through the {@link MarkdownTheme} by default, but `inline` lets you
+ * override how an inline node flattens into runs — including a measured inline
+ * box (`{ advance, content }`), the inline twin of mugen's `Escape`.
  */
 export interface MarkdownComponents {
   paragraph?: MarkdownComponent<Paragraph>;
@@ -93,9 +143,14 @@ export interface MarkdownComponents {
   table?: MarkdownComponent<Table>;
   image?: MarkdownComponent<Image>;
   html?: MarkdownComponent<Html>;
+  /** Inline-node overrides (see {@link InlineComponents}). */
+  inline?: InlineComponents;
 }
 
-export type ResolvedMarkdownComponents = Required<MarkdownComponents>;
+/** Block components resolve to defaults; `inline` stays optional. */
+export type ResolvedMarkdownComponents = Required<Omit<MarkdownComponents, 'inline'>> & {
+  inline?: InlineComponents;
+};
 
 /**
  * Identity helper for authoring a typed component set with full inference and

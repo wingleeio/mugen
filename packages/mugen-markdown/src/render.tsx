@@ -192,7 +192,7 @@ function createContext(
     inlineRuns(nodes, base) {
       const fmt: InlineFormat = { ...baseFormat(theme), ...base };
       const out: RichTextRun[] = [];
-      flattenInline(nodes, fmt, theme, out);
+      flattenInline(nodes, fmt, theme, out, components.inline);
       return out;
     },
     inlineText(nodes, opts: InlineTextOptions = {}) {
@@ -202,7 +202,7 @@ function createContext(
         ...(opts.color != null ? { color: opts.color } : null),
       });
       const out: RichTextRun[] = [];
-      flattenInline(nodes, fmt, theme, out);
+      flattenInline(nodes, fmt, theme, out, components.inline);
       return createElement(RichText, {
         runs: out,
         font: composeFont(fmt),

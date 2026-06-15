@@ -37,11 +37,14 @@ export type {
   MarkdownRenderContext,
   ResolvedMarkdownComponents,
   InlineTextOptions,
+  InlineComponents,
+  InlineComponent,
+  InlineRenderContext,
 } from './types';
 export { defaultComponents } from './components';
 
 // ── Markdown primitives (compose overrides from these) ──
-export { RichText, clearRichTextCache } from './primitives/rich-text';
+export { RichText, clearRichTextCache, measureInline } from './primitives/rich-text';
 export type { RichTextProps, RichTextRun } from './primitives/rich-text';
 export { CodeBlock } from './primitives/code-block';
 export type { CodeBlockProps, CodeBlockHeader } from './primitives/code-block';

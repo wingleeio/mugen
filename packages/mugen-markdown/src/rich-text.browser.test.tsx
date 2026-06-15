@@ -43,7 +43,7 @@ function domRich(runs: RichTextRun[], lineHeight: number, width: number): number
     // container's strut alone defines line height.
     span.style.lineHeight = '0';
     if (run.noBreak) span.style.whiteSpace = 'nowrap';
-    span.textContent = run.text;
+    span.textContent = run.text ?? '';
     el.appendChild(span);
   }
   document.body.appendChild(el);

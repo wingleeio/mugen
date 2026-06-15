@@ -1,7 +1,8 @@
 import type { PhrasingContent } from 'mdast';
 import type { Font } from '@wingleeio/mugen';
 import type { MarkdownTheme } from './theme';
-import type { RichTextRun } from './primitives/rich-text';
+import { measureInline, type RichTextRun } from './primitives/rich-text';
+import type { InlineComponent, InlineComponents, InlineRenderContext } from './types';
 
 /**
  * The mutable styling state threaded through the inline walk. Markdown inline
@@ -67,24 +68,56 @@ function pushRun(out: RichTextRun[], text: string, fmt: InlineFormat): void {
   out.push(run);
 }
 
+/** Build the context handed to an inline override. */
+function makeInlineCtx(
+  fmt: InlineFormat,
+  theme: MarkdownTheme,
+  inline: InlineComponents | undefined,
+): InlineRenderContext {
+  return {
+    theme,
+    fmt,
+    font: (overrides) => composeFont(overrides ? { ...fmt, ...overrides } : fmt),
+    measure: (text, font) => measureInline(text, font),
+    runs: (nodes, fmtOverrides) => {
+      const sub: RichTextRun[] = [];
+      flattenInline(nodes, fmtOverrides ? { ...fmt, ...fmtOverrides } : fmt, theme, sub, inline);
+      return sub;
+    },
+  };
+}
+
 /**
  * Flatten phrasing content into styled runs. Recursive over the inline marks;
  * the result feeds a single `<RichText>` so the whole paragraph wraps as one
- * flow and measures exactly.
+ * flow and measures exactly. An `inline` override map can replace how any node
+ * type flattens — returning its own runs (e.g. a measured inline box) or `null`
+ * to fall through to the default.
  */
 export function flattenInline(
   nodes: readonly PhrasingContent[],
   fmt: InlineFormat,
   theme: MarkdownTheme,
   out: RichTextRun[],
+  inline?: InlineComponents,
 ): void {
   for (const node of nodes) {
+    if (inline != null) {
+      const override = inline[node.type] as InlineComponent<typeof node> | undefined;
+      if (override != null) {
+        const produced = override(node, makeInlineCtx(fmt, theme, inline));
+        if (produced != null) {
+          for (const run of produced) out.push(run);
+          continue;
+        }
+      }
+    }
     switch (node.type) {
       case 'text':
         pushRun(out, node.value, fmt);
         break;
       case 'strong':
-        flattenInline(node.children, { ...fmt, weight: theme.strongWeight }, theme, out);
+        flattenInline(node.children, { ...fmt, weight: theme.strongWeight }, theme, out, inline);
         break;
       case 'emphasis':
         flattenInline(
@@ -92,10 +125,11 @@ export function flattenInline(
           { ...fmt, italic: theme.emphasisItalic ? true : fmt.italic },
           theme,
           out,
+          inline,
         );
         break;
       case 'delete':
-        flattenInline(node.children, { ...fmt, strike: true }, theme, out);
+        flattenInline(node.children, { ...fmt, strike: true }, theme, out, inline);
         break;
       case 'inlineCode':
         pushRun(out, node.value, {
@@ -117,11 +151,12 @@ export function flattenInline(
           },
           theme,
           out,
+          inline,
         );
         break;
       case 'linkReference':
         // No definition resolution in v1 — render the visible children as text.
-        flattenInline(node.children, fmt, theme, out);
+        flattenInline(node.children, fmt, theme, out, inline);
         break;
       case 'break':
         out.push({ text: '', break: true });
@@ -139,7 +174,7 @@ export function flattenInline(
         // `html`, `inlineMath`, directives, etc.: recurse into children if any,
         // otherwise drop (raw inline HTML is not measurable as styled text).
         if ('children' in node && Array.isArray(node.children)) {
-          flattenInline(node.children as PhrasingContent[], fmt, theme, out);
+          flattenInline(node.children as PhrasingContent[], fmt, theme, out, inline);
         }
         break;
     }
