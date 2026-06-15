@@ -70,6 +70,8 @@ export interface CodeBlockProps<C extends string = string> {
   background?: string;
   color?: string;
   radius?: number;
+  /** Cosmetic outer border colour, painted inset so it does not affect measurement. */
+  borderColor?: string;
   /**
    * Token-colour overrides for the built-in canvas highlighter, or `false` to
    * disable it. Defaults to {@link defaultTokenColors}; only languages with a
@@ -385,6 +387,9 @@ function renderCodeBlock(props: CodeBlockProps): ReactElement {
             borderBottomRightRadius: `${props.radius}px`,
           }
       : null),
+    ...(header == null && props.borderColor != null
+      ? { boxShadow: `inset 0 0 0 1px ${props.borderColor}` }
+      : null),
     // The overlay positions against the padding box, and the painter computes
     // tab stops itself — pin `tab-size` so page CSS can't desynchronise them.
     ...(profile != null ? { position: 'relative' as const, tabSize: TAB_COLUMNS } : null),
@@ -425,12 +430,17 @@ function renderCodeBlock(props: CodeBlockProps): ReactElement {
 
   if (header == null) return pre;
 
+  const wrapperStyle: CSSProperties = {
+    ...(props.radius != null ? { borderRadius: `${props.radius}px` } : null),
+    ...(props.borderColor != null ? { boxShadow: `inset 0 0 0 1px ${props.borderColor}` } : null),
+  };
+
   // The wrapper just stacks the bar over the <pre> (no margins, so its height is
   // exactly header.height + the pre's height). Each child rounds its own outer
   // corners, so the wrapper needs no clip of its own.
   return createElement(
     'div',
-    { className: props.className as string | undefined },
+    { className: props.className as string | undefined, style: wrapperStyle },
     createElement(CodeHeader, {
       key: 'header',
       label: header.label ?? props.lang ?? 'code',

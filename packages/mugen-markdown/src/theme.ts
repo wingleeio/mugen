@@ -58,6 +58,8 @@ export interface MarkdownTheme {
     background: string;
     color: string;
     radius: number;
+    /** Cosmetic outer border colour, painted inset so it does not change height. */
+    borderColor?: string;
     /**
      * Token palette for the built-in non-blocking canvas highlighter, or
      * `false` to disable highlighting. Colours are paint-only — they can never
@@ -166,6 +168,7 @@ export const defaultTheme: MarkdownTheme = {
     background: 'rgba(127, 127, 127, 0.12)',
     color: 'inherit',
     radius: 8,
+    borderColor: 'rgba(127, 127, 127, 0.18)',
     highlight: defaultTokenColors,
     header: {
       show: false,
