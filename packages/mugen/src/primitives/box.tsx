@@ -219,6 +219,13 @@ function renderBox(
     border: 0,
     boxSizing: 'border-box',
     padding: `${p.padding ?? 0}px`,
+    // A flex item's default `min-width: auto` floors it at its content's
+    // min-content, so a child with an unbreakable wide subtree (a `<pre>` that
+    // scrolls, a long line of code) would expand the box past its measured width
+    // instead of shrinking. The measure (`distribute`) already models proportional
+    // shrink with no such floor, so pin `min-width: 0` to make the render match —
+    // overflowing content then scrolls within the box rather than widening it.
+    minWidth: 0,
     alignItems: p.align,
     justifyContent: p.justify,
     ...(p.gap != null ? { gap: `${p.gap}px` } : null),

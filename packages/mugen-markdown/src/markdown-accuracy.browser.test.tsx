@@ -370,3 +370,44 @@ describe('inline box (the inline Escape): computed vs DOM', () => {
     expect(Math.abs(computed - painted)).toBeLessThanOrEqual(0.5);
   });
 });
+
+describe('nested code block: overflow scrolls, never widens the column', () => {
+  // A code block (with the chrome header) inside a list item, with a long
+  // unbreakable line. Regression for the flex `min-width: auto` overflow: the
+  // block must scroll within the list-content column, not expand past it.
+  const CODE_THEME = {
+    ...THEME,
+    code: {
+      background: '#eee',
+      color: '#111',
+      padding: 8,
+      radius: 8,
+      fontSize: 13,
+      lineHeight: 18,
+      header: { show: true, height: 30, fontSize: 11 },
+    },
+    list: { gap: 6, indent: 24, markerColor: '#666' },
+  };
+
+  it('a long line scrolls inside the block, and nothing exceeds the width', () => {
+    const longLine = 'abcdefgh'.repeat(60); // 480 unbreakable chars
+    const md = ['- a list item with a code block:', '', '  ```bash', `  ${longLine}`, '  ```'].join('\n');
+    const { container } = render(
+      createElement(
+        'div',
+        { style: { width: `${WIDTH}px` } },
+        createElement(Markdown, { source: md, theme: CODE_THEME }),
+      ),
+    );
+    const root = container.firstElementChild as HTMLElement;
+    const pre = root.querySelector('pre')!;
+    const wrapper = pre.parentElement as HTMLElement; // the headered code-block box
+
+    // The long line overflows the <pre> internally — it scrolls.
+    expect(pre.scrollWidth).toBeGreaterThan(pre.clientWidth + 1);
+    // But the block's box stays within the available width…
+    expect(wrapper.getBoundingClientRect().width).toBeLessThanOrEqual(WIDTH);
+    // …and the whole tree doesn't overflow the container horizontally.
+    expect(root.scrollWidth).toBeLessThanOrEqual(WIDTH + 1);
+  });
+});
