@@ -279,12 +279,21 @@ class FadePainter {
       const groups = new Map<string, { alpha: number; bg: string; path: Path2D }>();
       const minStart = this.veils.reduce((m, v) => Math.min(m, v.start), Infinity);
 
+      // Veils only ever cover the freshly-appended tail — `[minStart, length]`,
+      // a few hundred characters. So instead of walking forward from offset 0 to
+      // accumulate each node's `base` (O(content length) every frame, the thing
+      // that lagged long streams), position at the last chrome-free text node and
+      // walk *backward*, deriving `base` from the running total. `this.length` is
+      // the same coordinate system the veils use, so the offsets line up. This is
+      // O(veil span) per frame — flat regardless of how long the answer gets.
       const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT, contentTextFilter(content));
-      let base = 0;
-      let node = walker.nextNode() as Text | null;
-      while (node != null) {
+      walker.currentNode = content;
+      let node = walker.lastChild() as Text | null;
+      let end = this.length;
+      while (node != null && end > minStart) {
         const len = node.data.length;
-        if (len > 0 && base + len > minStart) {
+        const base = end - len;
+        if (len > 0) {
           for (let vi = 0; vi < this.veils.length; vi++) {
             const v = this.veils[vi]!;
             const s = Math.max(v.start - base, 0);
@@ -309,8 +318,8 @@ class FadePainter {
             }
           }
         }
-        base += len;
-        node = walker.nextNode() as Text | null;
+        end = base;
+        node = walker.previousNode() as Text | null;
       }
 
       for (const group of groups.values()) {

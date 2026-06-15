@@ -84,6 +84,29 @@ describe('streaming fade: incremental length tracking', () => {
     expect(oldA, 'settled text should not be re-veiled').toBeLessThan(10);
   });
 
+  it('bounds the walk to the tail across many blocks (long stream)', async () => {
+    // Many settled paragraphs (many text nodes), then append to the last one.
+    // The veil must land on the fresh tail and leave every earlier block alone —
+    // exercising the backward, tail-bounded geometry walk across blocks.
+    const base = Array.from({ length: 10 }, (_, i) => `paragraph number ${i} with several plain words in it`).join('\n\n');
+    const tail = ' freshly appended tail words here';
+    const App = ({ src }: { src: string }) =>
+      createElement('div', { style: { width: '600px' } }, createElement(Markdown, { source: src, theme: THEME, fade: true }));
+    const { container, rerender } = render(createElement(App, { src: base }));
+    const host = container.firstElementChild!.firstElementChild as HTMLElement;
+    await frames(3);
+
+    rerender(createElement(App, { src: base + tail }));
+    await frames(2);
+
+    const { content, canvas } = parts(host);
+    const total = content.textContent!.length;
+    const newA = veilAlphaOverRange(content, canvas, total - tail.length + 1, total);
+    const oldA = veilAlphaOverRange(content, canvas, 0, 40); // the first paragraph
+    expect(newA, 'the appended tail is veiled').toBeGreaterThan(20);
+    expect(oldA, 'earlier blocks are untouched').toBeLessThan(10);
+  });
+
   it('a copy-button label flip is chrome — never counts or re-veils', async () => {
     // A code block renders a copy button inside the faded content. Flipping its
     // label "Copy" -> "Copied" is a mutation, but it's chrome: it must not shift
