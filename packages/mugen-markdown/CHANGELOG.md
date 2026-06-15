@@ -1,5 +1,11 @@
 # @wingleeio/mugen-markdown
 
+## 0.4.4
+
+### Patch Changes
+
+- [`9034d83`](https://github.com/wingleeio/mugen/commit/9034d837813a759537bacf9a3d04a4df2571cbb8) Thanks [@wingleeio](https://github.com/wingleeio)! - Add a subtle default border to fenced code blocks.
+
 ## 0.4.3
 
 ### Patch Changes
