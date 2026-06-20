@@ -247,7 +247,18 @@ export class MugenInstance<T> implements SlotHost {
   /** Apply pending data/geometry changes as a single re-measure. Call once per render. */
   sync(): void {
     if (!this.ready()) return;
-    const anchor = this.itemsDirty ? this.captureScrollAnchor() : null;
+    // Capture the top-visible keyed row before re-measuring so we can keep it
+    // visually stable afterwards. This covers item prepends AND a top-slot
+    // height change (a loading skeleton appearing/disappearing, a header
+    // growing): the slot sits above every row, so a change to its height shifts
+    // all of them — without compensation the viewport jumps. The anchor row's
+    // offset includes `topSlotHeight`, so re-reading it after the re-measure
+    // folds the slot delta into the same correction as a prepend. Skip it on a
+    // geometry reflow (a resize / web-font settle re-wraps every row at once):
+    // there `stickToBottom` owns the correction, and a stale per-row anchor
+    // would fight it. A no-op (delta 0) when nothing above the fold moved.
+    const skipAnchor = this.geometryDirty && !this.itemsDirty;
+    const anchor = !skipAnchor && this.keys.length > 0 ? this.captureScrollAnchor() : null;
     if (this.itemsDirty) this.recomputeKeys();
     if (this.itemsDirty || this.geometryDirty) this.remeasureAll();
     else this.remeasureSlots();

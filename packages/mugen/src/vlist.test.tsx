@@ -631,4 +631,42 @@ describe('MugenVList initial and data-change scroll anchoring', () => {
 
     expect(scroller.scrollTop).toBe(60 + 10 * LH);
   });
+
+  it('keeps visible rows anchored when the top slot grows/shrinks (loading skeleton)', async () => {
+    const renderRow = (it: Item) => (
+      <VStack>
+        <Text>{`row-${it.id}`}</Text>
+      </VStack>
+    );
+    const top = (h: number) => () => (h > 0 ? <VStack height={h} /> : null);
+    const { container, rerender } = render(
+      <Harness items={makeRange(0, 49)} vlistProps={{ renderTop: top(0) }} render={renderRow} />,
+    );
+    const scroller = container.firstChild as HTMLElement;
+    await act(async () => {
+      scroller.scrollTop = 300;
+      fireEvent.scroll(scroller);
+      await Promise.resolve();
+    });
+    expect(scroller.scrollTop).toBe(300);
+
+    // Top slot appears (144px loading skeleton). Rows below shift down 144, so
+    // scrollTop must follow to keep them under the same pixels — no jump.
+    rerender(
+      <Harness items={makeRange(0, 49)} vlistProps={{ renderTop: top(144) }} render={renderRow} />,
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(scroller.scrollTop).toBe(444);
+
+    // Skeleton removed — scrollTop returns.
+    rerender(
+      <Harness items={makeRange(0, 49)} vlistProps={{ renderTop: top(0) }} render={renderRow} />,
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(scroller.scrollTop).toBe(300);
+  });
 });

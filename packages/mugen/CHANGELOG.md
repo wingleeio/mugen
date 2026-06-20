@@ -1,5 +1,11 @@
 # @wingleeio/mugen
 
+## 0.3.7
+
+### Patch Changes
+
+- Anchor the scroll position across top-slot height changes, not only item prepends. A `renderTop` whose height changes between renders (a loading skeleton appearing/disappearing, a growing header) sits above every row, so its delta shifted all of them and jumped the viewport. `sync()` now captures the top-visible keyed row before any re-measure — covering both prepends and slot-height changes — and skips only a full geometry reflow (resize / web-font settle), where `stickToBottom` owns the correction. This makes loading skeletons in the top slot toggle without the reader losing their place.
+
 ## 0.3.6
 
 ### Patch Changes
