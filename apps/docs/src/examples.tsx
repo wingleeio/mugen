@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import {
+  Collapse,
   definePrimitive,
   Escape,
   HStack,
@@ -868,7 +869,7 @@ function TurnRow(item: Turn): ReactNode {
   const thinkingEl = useMugenMemo(
     () =>
       item.thinking ? (
-        <VStack gap={open ? 9 : 0}>
+        <VStack>
           <Disclosure padding={2} onClick={() => setOpen((o) => !o)} style={{ ...buttonReset, borderRadius: 8 }}>
             <HStack gap={7} align="center">
               <Text font={`600 11px ${MONO}`} lineHeight={16} color={AC.muted}>
@@ -879,7 +880,14 @@ function TurnRow(item: Turn): ReactNode {
               </Text>
             </HStack>
           </Disclosure>
-          {open ? <Reasoning text={item.thinking} /> : null}
+          {/* The trace animates open/closed: Collapse tweens the row's
+              *committed* height on the list's animation clock, so rows below
+              slide with exact offsets and the scrollbar tracks every frame.
+              The 9px spacer lives inside so the breathing room animates too. */}
+          <Collapse id="thinking" open={open} duration={240}>
+            <VStack height={9} />
+            <Reasoning text={item.thinking} />
+          </Collapse>
         </VStack>
       ) : null,
     [open],

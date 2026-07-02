@@ -25,9 +25,10 @@ export type {
   MugenConfig,
 } from './instance';
 
-// ── Row hooks (used inside `render`) ──
-export { useMugenState, useMugenMemo, useMugenEffect } from './hooks';
-export type { SetMugenState, EffectCleanup } from './hooks';
+// ── Row hooks (used inside `render`; `useMugenRow` also in nested components) ──
+export { useMugenState, useMugenMemo, useMugenEffect, useMugenTween, useMugenRow } from './hooks';
+export type { SetMugenState, EffectCleanup, MugenRowScope } from './hooks';
+export type { MugenTweenOptions, MugenEasing } from './state/clock';
 
 // ── Selecting list state (e.g. a scroll-to-bottom button) ──
 export { useMugenSelector } from './use-mugen-selector';
@@ -47,6 +48,8 @@ export type {
 } from './primitives/box';
 export { Escape } from './primitives/escape';
 export type { EscapeProps } from './primitives/escape';
+export { Collapse } from './primitives/collapse';
+export type { CollapseProps } from './primitives/collapse';
 export { Portal } from './primitives/portal';
 export type { PortalProps } from './primitives/portal';
 

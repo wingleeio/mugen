@@ -284,7 +284,7 @@ function Notes({ items }: { items: Note[] }) {
 }`,
 
   aiChatHtml: `import {
-  MugenVList, Text, VStack, definePrimitive,
+  Collapse, MugenVList, Text, VStack, definePrimitive,
   useMugenState, useMugenEffect, useMugenVirtualizer,
 } from '@wingleeio/mugen';
 import { Markdown } from '@wingleeio/mugen-markdown';
@@ -305,7 +305,8 @@ const theme = { fontFamily: 'Inter', monoFamily: 'Geist Mono Variable', fontSize
 // A turn is a pure item -> tree. The three mugen hooks do the rest; the body is
 // markdown, rendered with mugen primitives so the walker measures every block.
 function TurnRow(item: Turn) {
-  // Collapse / expand the reasoning — re-measures just this row, O(log n).
+  // Expand / collapse the reasoning. <Collapse> animates the row's *committed*
+  // height, so rows below slide with exact offsets — O(log n) per frame.
   const [open, setOpen] = useMugenState(!!item.live);
 
   // The live turn streams its answer in, word by word. The growing markdown
@@ -330,13 +331,16 @@ function TurnRow(item: Turn) {
   return (
     <VStack gap={12} padding={20}>
       {item.thinking ? (
-        <VStack gap={open ? 9 : 0}>
+        <VStack>
           <Disclosure onClick={() => setOpen((o) => !o)}>
             <Text font="500 11.5px 'Geist Mono Variable'" color="gray">
               {open ? '▾ Thought for 2.7s' : '▸ Thought for 2.7s'}
             </Text>
           </Disclosure>
-          {open ? <Reasoning text={item.thinking} /> : null}
+          <Collapse id="thinking" open={open} duration={240}>
+            <VStack height={9} />
+            <Reasoning text={item.thinking} />
+          </Collapse>
         </VStack>
       ) : null}
 

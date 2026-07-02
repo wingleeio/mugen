@@ -105,7 +105,7 @@ thin map from data to primitives.
 | ✅ Vertical lists | Text-dominant, structurally-regular rows. |
 | ❌ Horizontal / grids | pretext is height-from-width; the inverted axis is a separate design. |
 | ❌ Arbitrary CSS rows | Only the measurable primitive vocabulary can be walked. |
-| ⚠️ Animated height | mugen commits the final height and lets you animate visually. Exact per-frame offsets would mean re-patching every frame. |
+| ✅ Animated height (per row) | `Collapse` / `useMugenTween` tween the *committed* height: each frame re-measures the row (an O(log n) offset patch), so paint and offsets agree mid-flight. Whole-layout reflows (font settle, resize) still snap by design. |
 
 ## The fit test
 

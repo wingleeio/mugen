@@ -1,6 +1,7 @@
 import { Fragment, isValidElement, type ReactElement, type ReactNode } from 'react';
 import { getPrimitiveDef, typeName, type MeasureContext } from './primitives/core';
 import { fontEpoch } from './pretext/fonts';
+import { currentSession } from './session';
 import type { TextDefaults } from './text-defaults';
 
 /**
@@ -23,6 +24,10 @@ interface HeightEntry {
   width: number;
   defaults: TextDefaults;
   epoch: number;
+  /** The owning row's slot epoch at measure time. Keyed slots (`useMugenRow`
+   *  state, tweens) change measured output without changing any element ref,
+   *  so their writes bump the row epoch and invalidate entries under it. */
+  slotEpoch: number;
   height: number;
 }
 let heightCache = new WeakMap<object, HeightEntry>();
@@ -68,17 +73,20 @@ export function measureNode(node: ReactNode, width: number, defaults: TextDefaul
   if (isValidElement(node)) {
     const element = node as ReactElement;
     const epoch = fontEpoch();
+    const session = currentSession();
+    const slotEpoch = session ? session.host.slotEpoch(session.rowKey) : 0;
     const cached = heightCache.get(element);
     if (
       cached !== undefined &&
       cached.width === width &&
       cached.defaults === defaults &&
-      cached.epoch === epoch
+      cached.epoch === epoch &&
+      cached.slotEpoch === slotEpoch
     ) {
       return cached.height;
     }
     const height = measureElement(element, width, defaults);
-    heightCache.set(element, { width, defaults, epoch, height });
+    heightCache.set(element, { width, defaults, epoch, slotEpoch, height });
     return height;
   }
 
@@ -106,8 +114,9 @@ function measureElement(element: ReactElement, width: number, defaults: TextDefa
 
   if (typeof element.type === 'function') {
     // A plain (non-primitive) component: call it to get its primitive tree and
-    // measure that. It must be hook-free — mugen hooks throw here because the
-    // measure session only spans the row's `render(item)` call, not the walk.
+    // measure that. Positional mugen hooks throw here (their call order can't
+    // be reproduced across the walk and the React render); `useMugenRow(id)`
+    // scopes resolve through the ambient walk session.
     const name = typeName(element.type);
     try {
       const rendered = (element.type as (props: object) => ReactNode)(element.props as object);

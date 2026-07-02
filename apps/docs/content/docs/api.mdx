@@ -68,23 +68,44 @@ const instance = useMugenVirtualizer({ items });
 
 ## Row hooks
 
-Called inside `render`. See [State & Hooks](/docs/state) and [Effects](/docs/effects).
+Called inside `render`. See [State & Hooks](/docs/state), [Effects](/docs/effects),
+and [Animations](/docs/animations).
 
 ```ts twoslash
-import { useMugenState, useMugenMemo, useMugenEffect } from '@wingleeio/mugen';
+import { useMugenState, useMugenMemo, useMugenEffect, useMugenTween } from '@wingleeio/mugen';
 declare const init: number;
 declare const factory: () => string[];
 declare const deps: readonly unknown[];
 declare const effect: () => void | (() => void);
+declare const target: number;
 // ---cut---
 const [value, set] = useMugenState(init); // like useState; set re-measures
 const memo = useMugenMemo(factory, deps); // like useMemo; readable off-screen
 useMugenEffect(effect, deps); // like useEffect; runs for every row
+const animated = useMugenTween(target, { duration: 200 }); // animated number
 ```
 
 `useMugenState`'s `set` and `useMugenEffect` re-measure the affected row in
 O(log n). `useMugenEffect` runs on a microtask after measure, for **every** row
-(on- or off-screen); return a cleanup like `useEffect`.
+(on- or off-screen); return a cleanup like `useEffect`. `useMugenTween` animates
+toward `target` on the list's animation clock, re-measuring the row each frame.
+
+### `useMugenRow(id)` — hooks in nested components
+
+The positional hooks are root-only. In a nested component, create a scope:
+
+```ts twoslash
+import { useMugenRow } from '@wingleeio/mugen';
+// ---cut---
+const row = useMugenRow('reply');
+const [open, setOpen] = row.state(false); // scoped useMugenState
+const derived = row.memo(() => open, [open]); // scoped useMugenMemo
+row.effect(() => {}, []); // scoped useMugenEffect
+const h = row.tween(open ? 120 : 0, { duration: 200 }); // scoped useMugenTween
+```
+
+`id` must be unique within the row. See
+[State & Hooks](/docs/state#usemugenrow--hooks-in-nested-components).
 
 ## `MugenInstance`
 
@@ -117,9 +138,12 @@ See [Scrolling](/docs/scrolling).
 `Text` is the pretext leaf; `VStack`/`HStack` are the layout boxes;
 `definePrimitive(tag, { direction? })` makes a measurable box from any HTML tag.
 `style` is `MeasurableStyle` and `className` is `SafeClassName` — spacing/sizing
-through either is a type error. `Escape` is the exception: a declared-height box
-whose children are never walked (arbitrary React, e.g. a shadcn tooltip), with
-unrestricted `style`/`className` inside. See [Primitives](/docs/primitives).
+through either is a type error. `Collapse` is the animated disclosure — it tweens
+the committed height between 0 and its children's natural height (see
+[Animations](/docs/animations#collapse)). `Escape` is the exception: a
+declared-height box whose children are never walked (arbitrary React, e.g. a
+shadcn tooltip), with unrestricted `style`/`className` inside. See
+[Primitives](/docs/primitives).
 
 ## Fonts
 

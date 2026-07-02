@@ -1,0 +1,132 @@
+---
+title: Animations
+description: Animated heights that stay exact — Collapse, tweens, and the animation clock.
+---
+
+Most virtualizers can't animate a row's height: the animation happens in CSS,
+the virtualizer finds out later (or never), and offsets drift mid-flight. mugen
+animates the **committed height** instead. Each list owns one animation clock
+(a single rAF loop that runs only while something is animating); every frame it
+advances the active tweens, re-measures the affected rows with the new values
+(an O(log n) offset patch each), and paints the same values — so offsets, the
+scrollbar, and the pixels agree at every intermediate frame, not just at the
+endpoints. Rows below slide in lockstep; scroll anchoring keeps animations above
+the fold from shifting your viewport.
+
+Animations snap to their target under `prefers-reduced-motion`, and whole-layout
+reflows (a web font settling, a viewport resize) still snap by design — see
+[Constraints](/docs/constraints#v1-scope).
+
+## `Collapse`
+
+The animated disclosure. Toggling `open` tweens between `0` and the children's
+measured natural height — which the walker knows *before* the animation starts,
+so there is no render-to-measure dance:
+
+```tsx twoslash
+import {
+  Collapse, MugenVList, Text, VStack, definePrimitive,
+  useMugenState, useMugenVirtualizer,
+} from '@wingleeio/mugen';
+
+interface Thread {
+  id: string;
+  title: string;
+  body: string;
+}
+
+const Row = definePrimitive('button');
+
+function ThreadRow(thread: Thread) {
+  const [open, setOpen] = useMugenState(false);
+  return (
+    <VStack padding={12} gap={4}>
+      <Row onClick={() => setOpen((o) => !o)}>
+        <Text font="600 15px Inter">{thread.title}</Text>
+      </Row>
+      <Collapse id="body" open={open} duration={240}>
+        <Text>{thread.body}</Text>
+      </Collapse>
+    </VStack>
+  );
+}
+
+export function Threads({ threads }: { threads: Thread[] }) {
+  const list = useMugenVirtualizer({ items: threads });
+  return (
+    <MugenVList instance={list} getKey={(t) => t.id} render={ThreadRow}
+      font="15px Inter" lineHeight={22} />
+  );
+}
+```
+
+The children render at full size inside a clipped box pinned to the tween's
+current height — the clip is what keeps paint inside the computed box while it
+moves. Children are measured like a `VStack`'s (a vertical stack, no gap or
+padding of its own); put spacing *inside* the `Collapse` so it animates too.
+
+| Prop | Type | Default | |
+| --- | --- | --- | --- |
+| `id` | `string` | — | Names the animation slot — unique within the row. |
+| `open` | `boolean` | — | The target state. Toggling animates. |
+| `duration` | `number` | `200` | ms per toggle. `0` snaps. |
+| `easing` | `MugenEasing` | `'ease-out'` | Named curve or a `t => progress` function. |
+
+Two behaviors worth knowing:
+
+- **Only `open` toggles animate.** Content that changes size *while* open — text
+  streaming into an expanded trace — snaps to its new height, so the collapse
+  composes with [`stickToBottom`](/docs/scrolling)'s spring instead of fighting
+  it. (Mid-toggle, a content change re-aims the running animation.)
+- **Interruption is free.** Toggling back mid-flight retargets from the current
+  height — hammer the disclosure and it never jumps or escapes its bounds.
+
+The "Thought for…" traces in the [AI chat recipe](/docs/recipes#ai-chat-with-thinking--steps)
+are `Collapse`s — open one and watch the turns below slide with the scrollbar
+tracking exactly.
+
+## `useMugenTween`
+
+The value-level form: an animated number for anything declared. When `target`
+changes, the value tweens from wherever it currently is; feed it a `height`, a
+`padding`, a `gap` — each frame re-measures the row with the current value, so
+the layout it drives stays exact while it moves.
+
+```tsx twoslash
+import { Text, VStack, useMugenState, useMugenTween } from '@wingleeio/mugen';
+
+export function BannerRow() {
+  const [dismissed, setDismissed] = useMugenState(false);
+  const h = useMugenTween(dismissed ? 0 : 64, { duration: 180, easing: 'ease-in-out' });
+  return (
+    <VStack height={h} style={{ overflow: 'hidden' }} onClick={() => setDismissed(true)}>
+      <Text>Click to dismiss</Text>
+    </VStack>
+  );
+}
+```
+
+| Option | Type | Default | |
+| --- | --- | --- | --- |
+| `duration` | `number` | `200` | ms from retarget to settle. `0` snaps. |
+| `easing` | `'linear' \| 'ease-in' \| 'ease-out' \| 'ease-in-out' \| (t: number) => number` | `'ease-out'` | |
+
+Call it at the root of `render` like the other hooks; in a nested component use
+[`useMugenRow(id).tween(...)`](/docs/state#usemugenrow--hooks-in-nested-components).
+Retargeting mid-flight starts from the current value (springs-style continuity,
+minus the velocity). The tween lives in the list instance, so a row scrolled
+out mid-animation keeps animating — its off-screen offsets stay exact, which is
+the whole point.
+
+## What a frame costs
+
+One row re-measure (analytic, no DOM reads), one O(log n) Fenwick patch, and one
+render of the visible window — the same cost as one scroll event, which the
+stick-to-bottom spring already pays per frame. Rows above the animating row keep
+identical props and skip re-rendering entirely. The clock stops the moment the
+last tween settles.
+
+Animating `font` or `lineHeight` stays off the table — the font pretext measures
+with must be the font the CSS paints with — and so do CSS `transition`s on any
+layout-affecting property: they'd move the painted box without telling the
+walker, which is exactly the desync mugen exists to prevent.

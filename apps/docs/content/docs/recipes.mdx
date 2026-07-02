@@ -8,8 +8,9 @@ description: Chat, accordions, deep links, and shrink-to-fit bubbles.
 A modern assistant transcript is a stress test for a virtualizer: every turn is a
 different height, reasoning traces collapse and expand, and the newest turn keeps
 growing as it streams. It maps cleanly onto mugen — each turn is a pure
-`item → tree` using all three hooks. `useMugenState` collapses the “Thought for…”
-trace (toggling re-measures just that row); `useMugenEffect` streams the final
+`item → tree` using all three hooks. `useMugenState` + [`Collapse`](/docs/animations#collapse)
+animate the “Thought for…” trace open and closed (the committed height tweens,
+so the rows below slide with exact offsets); `useMugenEffect` streams the final
 turn's answer in word by word; and `stickToBottom` follows it down with a smooth
 spring — scroll up to break free, scroll back to re-engage. It opens at the latest
 turn (`initialScroll="bottom"`); hit **Replay** to watch it stream again, or expand

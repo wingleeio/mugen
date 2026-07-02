@@ -7,8 +7,9 @@ A row is built from **primitives** — each one carries both an analytic `measur
 and a DOM `render`, so mugen can compute its height and paint it from one
 description. A raw `<div>` has no `measure`, so it breaks the walk and throws in
 development. There are three built-ins — `Text`, `VStack`, `HStack` — plus
-`definePrimitive(tag)` to make your own from any HTML element, and
-[`Escape`](#escape) for content the walker shouldn't measure at all.
+`definePrimitive(tag)` to make your own from any HTML element,
+[`Collapse`](#collapse) for animated disclosures, and [`Escape`](#escape) for
+content the walker shouldn't measure at all.
 
 > Every snippet below is type-checked — hover a primitive or prop to see its type,
 > and the ✗ lines show the actual compiler error.
@@ -99,6 +100,35 @@ const Toolbar = definePrimitive('div', { direction: 'horizontal' });
 
 This replaces the old `Pressable` (use a `button` and its `onClick`) and `Fixed`
 (use `width`/`height` on a box).
+
+## `Collapse`
+
+The animated disclosure. Toggling `open` tweens the row's **committed** height
+between 0 and the children's measured natural height — offsets, scrollbar, and
+paint agree at every intermediate frame, and rows below slide in lockstep. The
+children measure like a `VStack`'s and render at full size inside a clipped box
+pinned to the tween's current height.
+
+```tsx twoslash
+import { Collapse, Text } from '@wingleeio/mugen';
+declare const item: { id: string; body: string };
+declare const open: boolean;
+// ---cut---
+<Collapse id={item.id} open={open} duration={240}>
+  <Text>{item.body}</Text>
+</Collapse>;
+```
+
+| Prop | Type | Notes |
+| --- | --- | --- |
+| `id` | `string` | Required. Names the animation slot — unique within the row. |
+| `open` | `boolean` | The target state; toggling animates. |
+| `duration` | `number` | ms per toggle, default 200. `0` snaps. |
+| `easing` | `MugenEasing` | Named curve or `t => progress`; default `ease-out`. |
+
+Content that changes size *while* open (streaming text) snaps rather than
+animates, so it composes with `stickToBottom`; `prefers-reduced-motion` snaps
+everything. See [Animations](/docs/animations) for the model and `useMugenTween`.
 
 ## `Escape`
 

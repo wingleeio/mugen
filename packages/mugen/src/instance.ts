@@ -1,9 +1,18 @@
 import type { ReactNode } from 'react';
 import { OffsetIndex } from './offset/offset-index';
 import { runInert } from './state/dispatcher';
+import {
+  AnimationClock,
+  canAnimate,
+  resolveEasing,
+  DEFAULT_TWEEN_MS,
+  type MugenTweenOptions,
+  type TweenState,
+} from './state/clock';
 import { heightOf } from './walker';
 import { contentWidth, resolveMaxWidthPx } from './tokens-resolve';
 import { withSession, type MugenSession, type SessionMode, type SlotHost } from './session';
+import type { RowScopeRef } from './row-scope';
 import type { EffectCleanup } from './hooks';
 import type { TextDefaults } from './text-defaults';
 
@@ -55,11 +64,26 @@ interface EffectSlot {
   cleanup?: EffectCleanup;
   pending: object | null;
 }
-type Slot = StateSlot | MemoSlot | EffectSlot;
+interface TweenSlot extends TweenState {
+  kind: 'tween';
+  /** `Collapse` only: the last `open` it saw, to tell a toggle from content growth. */
+  lastOpen?: boolean;
+}
+type Slot = StateSlot | MemoSlot | EffectSlot | TweenSlot;
 
 interface RowRecord {
   item: unknown;
   slots: Slot[];
+  /** Scoped slots (`useMugenRow`, tweens) — keyed, so nested components can
+   *  address them from both the measure walk and the React render. They live
+   *  until the row is removed (there is no per-pass trim for scopes). */
+  keyed: Map<string, Slot>;
+  /** Bumped on every keyed-slot write and tween frame. Folded into the
+   *  walker's element-identity height memo, so a memo-stable ancestor element
+   *  can't serve a stale height over a changed nested slot. */
+  slotEpoch: number;
+  /** The stable per-row handle `RowScopeContext` provides (created lazily). */
+  scope: RowScopeRef | null;
   version: number;
   subs: Set<() => void>;
 }
@@ -342,6 +366,13 @@ export class MugenInstance<T> implements SlotHost {
         slot.cleanup?.();
       }
     }
+    for (const slot of rec.keyed.values()) {
+      if (slot.kind === 'effect') {
+        slot.pending = null;
+        slot.cleanup?.();
+      }
+    }
+    this.clock.untrackRow(key);
     this.rows.delete(key);
   }
 
@@ -371,10 +402,17 @@ export class MugenInstance<T> implements SlotHost {
   private ensureRow(key: string, item: unknown): RowRecord {
     let rec = this.rows.get(key);
     if (!rec) {
-      rec = { item, slots: [], version: 0, subs: new Set() };
+      rec = { item, slots: [], keyed: new Map(), slotEpoch: 0, scope: null, version: 0, subs: new Set() };
       this.rows.set(key, rec);
     }
     return rec;
+  }
+
+  /** @internal The stable per-row handle `<MugenVList>` provides via context. */
+  scopeRef(key: string): RowScopeRef {
+    const rec = this.ensureRow(key, undefined);
+    if (!rec.scope) rec.scope = { host: this, rowKey: key };
+    return rec.scope;
   }
 
   /** Measure one row at the current content width: run `render(item)` in the
@@ -388,11 +426,23 @@ export class MugenInstance<T> implements SlotHost {
       host: this,
       rowKey: key,
       mode: 'measure',
+      phase: 'root',
+      hookIndex: { current: 0 },
+    };
+    // The walk gets its own session (phase `walk`): the walker calls nested
+    // components as plain functions, and `useMugenRow` scopes resolve through
+    // it — while positional hooks, whose call order the walk can't reproduce,
+    // throw a pointer at useMugenRow.
+    const walkSession: MugenSession = {
+      host: this,
+      rowKey: key,
+      mode: 'measure',
+      phase: 'walk',
       hookIndex: { current: 0 },
     };
     const height = runInert(() => {
       const tree = withSession(session, () => this.config!.render(item));
-      return heightOf(tree, width, this.config!.defaults);
+      return withSession(walkSession, () => heightOf(tree, width, this.config!.defaults));
     });
     this.trimSlots(rec, session.hookIndex.current);
     this.activeRec = null;
@@ -480,7 +530,15 @@ export class MugenInstance<T> implements SlotHost {
     } else if (slot.kind !== 'effect') {
       throw hookOrderError('useMugenEffect');
     }
-    const es = slot as EffectSlot;
+    this.scheduleEffect(slot as EffectSlot, effect, deps, mode);
+  }
+
+  private scheduleEffect(
+    es: EffectSlot,
+    effect: () => void | EffectCleanup,
+    deps: readonly unknown[],
+    mode: SessionMode,
+  ): void {
     // Only the measure pass schedules; the render pass just claims the slot.
     if (mode !== 'measure') return;
     if (es.deps !== null && shallowEqual(es.deps, deps)) return;
@@ -499,6 +557,183 @@ export class MugenInstance<T> implements SlotHost {
         if (typeof console !== 'undefined') console.error('mugen: effect failed', err);
       }
     });
+  }
+
+  // ── Keyed slots (useMugenRow scopes in nested components) ───────────────────
+
+  private keyedSlot(rec: RowRecord, slotKey: string, kind: Slot['kind']): Slot | undefined {
+    const slot = rec.keyed.get(slotKey);
+    if (slot && slot.kind !== kind) {
+      throw new Error(
+        `mugen: the scoped slot "${slotKey}" was previously a ${slot.kind} slot. Scope ids ` +
+          `must be unique per row, and a scope's hooks must run unconditionally in the same order.`,
+      );
+    }
+    return slot;
+  }
+
+  keyedState(key: string, slotKey: string, init: unknown): unknown {
+    const rec = this.ensureRow(key, undefined);
+    let slot = this.keyedSlot(rec, slotKey, 'state');
+    if (!slot) {
+      slot = { kind: 'state', value: typeof init === 'function' ? (init as () => unknown)() : init };
+      rec.keyed.set(slotKey, slot);
+    }
+    return (slot as StateSlot).value;
+  }
+
+  setKeyedState(key: string, slotKey: string, updater: unknown): void {
+    const rec = this.rows.get(key);
+    const slot = rec?.keyed.get(slotKey);
+    if (!rec || !slot || slot.kind !== 'state') return;
+    const prev = slot.value;
+    const next = typeof updater === 'function' ? (updater as (p: unknown) => unknown)(prev) : updater;
+    if (Object.is(next, prev)) return;
+    slot.value = next;
+    // A nested slot changed under elements the row may hold stable across
+    // renders (useMugenMemo): bump the epoch so the walker's height memo
+    // re-walks this row instead of serving the pre-change height.
+    rec.slotEpoch++;
+    this.invalidate(key);
+  }
+
+  keyedMemo(key: string, slotKey: string, factory: () => unknown, deps: readonly unknown[]): unknown {
+    const rec = this.ensureRow(key, undefined);
+    let slot = this.keyedSlot(rec, slotKey, 'memo');
+    if (!slot) {
+      slot = { kind: 'memo', value: factory(), deps };
+      rec.keyed.set(slotKey, slot);
+    } else if (!shallowEqual((slot as MemoSlot).deps, deps)) {
+      (slot as MemoSlot).value = factory();
+      (slot as MemoSlot).deps = deps;
+    }
+    return (slot as MemoSlot).value;
+  }
+
+  keyedEffect(
+    key: string,
+    slotKey: string,
+    effect: () => void | EffectCleanup,
+    deps: readonly unknown[],
+    mode: SessionMode,
+  ): void {
+    const rec = this.ensureRow(key, undefined);
+    let slot = this.keyedSlot(rec, slotKey, 'effect');
+    if (!slot) {
+      slot = { kind: 'effect', deps: null, pending: null };
+      rec.keyed.set(slotKey, slot);
+    }
+    this.scheduleEffect(slot as EffectSlot, effect, deps, mode);
+  }
+
+  // ── Animated values (the clock advances them; measure and paint read them) ──
+
+  private clock = new AnimationClock((rowKeys) => {
+    for (const rowKey of rowKeys) {
+      const rec = this.rows.get(rowKey);
+      // Tween frames change measured output without any element changing, so
+      // they bust the height memo the same way keyed writes do.
+      if (rec) rec.slotEpoch++;
+      this.invalidate(rowKey);
+    }
+  });
+
+  /** @internal Number of in-flight tweens (tests / diagnostics). */
+  activeTweenCount(): number {
+    return this.clock.size;
+  }
+
+  private ensureTweenSlot(rec: RowRecord, slotKey: string, initial: number): TweenSlot {
+    let slot = this.keyedSlot(rec, slotKey, 'tween') as TweenSlot | undefined;
+    if (!slot) {
+      slot = {
+        kind: 'tween',
+        value: initial,
+        from: initial,
+        target: initial,
+        start: 0,
+        duration: 0,
+        ease: resolveEasing(undefined),
+        active: false,
+      };
+      rec.keyed.set(slotKey, slot);
+    }
+    return slot;
+  }
+
+  private startTween(
+    rowKey: string,
+    slot: TweenSlot,
+    target: number,
+    options: MugenTweenOptions | undefined,
+  ): void {
+    const duration = options?.duration ?? DEFAULT_TWEEN_MS;
+    if (duration <= 0 || !canAnimate()) {
+      slot.value = slot.from = slot.target = target;
+      slot.active = false;
+      this.clock.untrack(slot);
+      return;
+    }
+    slot.from = slot.value;
+    slot.target = target;
+    slot.start = performance.now();
+    slot.duration = duration;
+    slot.ease = resolveEasing(options?.easing);
+    slot.active = true;
+    this.clock.track(rowKey, slot);
+  }
+
+  tween(
+    key: string,
+    slotKey: string,
+    target: number,
+    options: MugenTweenOptions | undefined,
+    retarget: boolean,
+  ): number {
+    const rec = this.ensureRow(key, undefined);
+    const slot = this.ensureTweenSlot(rec, slotKey, target);
+    // Only the measure pass retargets (state changes always measure before they
+    // paint); the render pass just reads the value the clock last wrote.
+    if (retarget && target !== slot.target) this.startTween(key, slot, target, options);
+    return slot.value;
+  }
+
+  collapseTween(
+    key: string,
+    slotKey: string,
+    open: boolean,
+    natural: number,
+    options: MugenTweenOptions | undefined,
+  ): number {
+    const rec = this.ensureRow(key, undefined);
+    const target = open ? natural : 0;
+    const existing = this.keyedSlot(rec, slotKey, 'tween') as TweenSlot | undefined;
+    if (!existing) {
+      const slot = this.ensureTweenSlot(rec, slotKey, target);
+      slot.lastOpen = open;
+      return slot.value;
+    }
+    if (open !== existing.lastOpen) {
+      existing.lastOpen = open;
+      this.startTween(key, existing, target, options);
+    } else if (target !== existing.target) {
+      // The content changed size without a toggle (text streaming into an open
+      // collapse, a resize re-wrap). Mid-flight, re-aim the running animation;
+      // settled, snap — animating every growth tick would fight scroll
+      // anchoring and the stick-to-bottom spring.
+      if (existing.active) this.startTween(key, existing, target, options);
+      else existing.value = existing.from = existing.target = target;
+    }
+    return existing.value;
+  }
+
+  tweenValue(key: string, slotKey: string): number | null {
+    const slot = this.rows.get(key)?.keyed.get(slotKey);
+    return slot && slot.kind === 'tween' ? slot.value : null;
+  }
+
+  slotEpoch(key: string): number {
+    return this.rows.get(key)?.slotEpoch ?? 0;
   }
 
   // ── The one height-changing path ─────────────────────────────────────────────

@@ -9,8 +9,10 @@ mounting** (the walker measures every row off-screen) and a change to it must
 **re-measure** the row. They mirror `useState` / `useMemo` / `useEffect`.
 
 > Call them directly inside the `render` function (or a plain function it calls),
-> in the same order every render — the usual rules of hooks. They throw if used
-> in a nested JSX-element component, an event handler, or outside a list.
+> in the same order every render — the usual rules of hooks. They throw in an
+> event handler or outside a list; in a **nested component** (a JSX element the
+> row composes), use [`useMugenRow`](#usemugenrow--hooks-in-nested-components)
+> instead.
 
 ## `useMugenState`
 
@@ -91,6 +93,48 @@ Run a side effect per row when `deps` change — to transform content (parse
 markdown, highlight, load) and then `set` height-affecting state. It runs for
 **every** row, on- or off-screen, so the height becomes exact the moment the work
 resolves. See [Effects](/docs/effects) for the full pattern.
+
+## `useMugenRow` — hooks in nested components
+
+The positional hooks above only work at the root of `render`: their identity is
+call order, and a nested component's call order can't be matched between the
+measure walk and the React render. `useMugenRow(id)` is the form that can go
+anywhere in the row's tree — it names a **scope**, and its methods mirror the
+root hooks one-to-one:
+
+```tsx twoslash
+import { Text, VStack, useMugenRow } from '@wingleeio/mugen';
+
+// A nested component the row composes — not the render root.
+export function ReplyBox({ threadId, body }: { threadId: string; body: string }) {
+  const row = useMugenRow(`reply:${threadId}`);
+  const [open, setOpen] = row.state(false);
+  return (
+    <VStack onClick={() => setOpen((o) => !o)}>
+      <Text font="600 13px Inter">Reply</Text>
+      {open ? <Text>{body}</Text> : null}
+    </VStack>
+  );
+}
+```
+
+`row.state` / `row.memo` / `row.effect` behave exactly like their root
+counterparts (state lives in the list instance, a `set` re-measures just that
+row, effects run for every row on- or off-screen); `row.tween` is the scoped
+[`useMugenTween`](/docs/animations#usemugentween). Two rules:
+
+- **`id` must be unique within the row** — two instances of the same component
+  need different ids, so derive one from a prop.
+- **Call the scope's methods unconditionally, in a fixed order** — they're
+  positional *within* the scope, like any hooks.
+
+There's no re-render tax hiding in this: the scope resolves through a context
+whose value is one frozen object per row that never changes identity, so the
+context itself never re-renders anything. Each consumer subscribes to its row's
+version instead — which also means it stays fresh even when an ancestor element
+is memo-stable (`useMugenMemo`) and React bails out of the subtree, and the
+measure walk stays fresh the same way (a scoped write busts the walker's height
+memo for that row).
 
 ## Item updates are height triggers too
 

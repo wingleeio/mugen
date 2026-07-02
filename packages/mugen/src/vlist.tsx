@@ -12,6 +12,7 @@ import {
   type ReactNode,
 } from 'react';
 import { MugenInstance, type MugenScrollAlign } from './instance';
+import { RowScopeContext } from './row-scope';
 import { withSession, type MugenSession } from './session';
 import { TextDefaultsContext, type TextDefaults } from './text-defaults';
 import type { Font, WhiteSpaceMode, WordBreakMode } from './text-defaults';
@@ -151,6 +152,7 @@ const RowView = memo(function RowView<T>(props: {
     host: instance as unknown as MugenSession['host'],
     rowKey,
     mode: 'render',
+    phase: 'root',
     hookIndex: { current: 0 },
   };
   const tree = withSession(session, () => instance.renderRow(item));
@@ -167,7 +169,12 @@ const RowView = memo(function RowView<T>(props: {
         justifyContent: centered ? 'center' : 'stretch',
       }}
     >
-      <div style={{ width: centered ? `${cw}px` : '100%', maxWidth: `${cw}px` }}>{tree}</div>
+      <div style={{ width: centered ? `${cw}px` : '100%', maxWidth: `${cw}px` }}>
+        {/* One frozen scope object per row — the value never changes identity,
+            so this provider never causes context re-renders; it exists purely
+            so useMugenRow can resolve (host, rowKey) in nested components. */}
+        <RowScopeContext.Provider value={instance.scopeRef(rowKey)}>{tree}</RowScopeContext.Provider>
+      </div>
     </div>
   );
 }) as <T>(props: {
