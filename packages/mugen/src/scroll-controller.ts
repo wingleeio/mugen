@@ -170,9 +170,17 @@ export class ScrollController {
     }
   }
 
-  private release(): void {
+  /** Break the stick now — a user gesture or a programmatic scroll away from
+   *  the bottom (`scrollToIndex`). Without this the spring keeps writing
+   *  `scrollTop` every frame while content streams (and for a grace window
+   *  after), which cancels a native smooth scroll before it moves a pixel. */
+  escape(): void {
     this.escaped = true;
     this.stop();
+  }
+
+  private release(): void {
+    this.escape();
   }
 
   // ── Scrolling to the bottom ────────────────────────────────────────────────

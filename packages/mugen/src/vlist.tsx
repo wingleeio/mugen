@@ -305,6 +305,9 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     }
   };
 
+  // Let `scrollToIndex` break the stick before scrolling up (see instance.ts).
+  instance.stickInterrupt = () => ctl.escape();
+
   // If a route/page reuses the same mounted list component for a different data
   // set, `initialScroll` should apply to the new page too. Appends and prepends
   // preserve one edge key, so keep their normal scroll anchoring/stick behavior.

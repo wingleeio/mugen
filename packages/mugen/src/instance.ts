@@ -210,6 +210,11 @@ export class MugenInstance<T> implements SlotHost {
     if (!el) return;
     const target = this.scrollTargetForIndex(index, options.align);
     if (target == null) return;
+    // Scrolling up leaves the bottom on purpose — break the stick the way a
+    // wheel-up would, or the spring cancels this scroll and pins us back.
+    // (A same-position or downward target keeps the stick: escaping at the
+    // bottom would silently disable it with no scroll event to re-engage.)
+    if (target < el.scrollTop - 1) this.stickInterrupt?.();
     el.scrollTo({ top: target, behavior: options.behavior ?? 'auto' });
   }
 
@@ -744,6 +749,12 @@ export class MugenInstance<T> implements SlotHost {
   /** Set by the list: drive `scrollToBottom` through the scroll controller (spring
    *  for `smooth`, jump otherwise) so it re-engages the stick and tracks growth. */
   scrollToBottomDriver: ((behavior: MugenScrollBehavior) => void) | null = null;
+
+  /** Set by the list: break the stick-to-bottom spring before a programmatic
+   *  scroll *up*. The controller only releases on user input, so without this
+   *  its frame loop out-writes (and thereby cancels) the scroll during and
+   *  just after streamed growth. */
+  stickInterrupt: (() => void) | null = null;
 
   /** Re-measure a single row, patch the index, re-anchor, notify row + list. */
   invalidate(key: string): void {
