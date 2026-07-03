@@ -1,5 +1,11 @@
 # @wingleeio/mugen
 
+## 0.4.1
+
+### Patch Changes
+
+- [`795d6f7`](https://github.com/wingleeio/mugen/commit/795d6f7b77c5b53456b2eafb142e0c71accca746) Thanks [@wingleeio](https://github.com/wingleeio)! - Break the stick-to-bottom spring before a programmatic scroll up. `scrollToItem`/`scrollToIndex` used a bare native `scrollTo`, and the controller only released on user input — so while content streamed (and for the settle-grace window after), the spring's frame loop kept writing `scrollTop`, cancelling the smooth scroll before it moved. Clicking a minimap/rail entry during or just after a streamed reply did nothing.
+
 ## 0.4.0
 
 ### Minor Changes
