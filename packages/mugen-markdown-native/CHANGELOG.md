@@ -1,5 +1,16 @@
 # @wingleeio/mugen-markdown-native
 
+## 0.1.1
+
+### Patch Changes
+
+- [`30b0d87`](https://github.com/wingleeio/mugen/commit/30b0d87e6f96069b396beda212cef1041e6153f4) Thanks [@wingleeio](https://github.com/wingleeio)! - Upgrade `@chenglou/pretext` to 0.0.8. Line breaking no longer splits slash-joined word tokens ("pipeline/features/packages", "and/or") where browsers offer no break opportunity — computed row heights previously undershot the paint by one line whenever such a token straddled a wrap point, overlapping rows in virtualized transcripts. Includes a browser regression test with the real-world failing paragraph across nine widths.
+
+- Updated dependencies [[`30b0d87`](https://github.com/wingleeio/mugen/commit/30b0d87e6f96069b396beda212cef1041e6153f4), [`db917ad`](https://github.com/wingleeio/mugen/commit/db917ad49a4a0a2dfef8f520ade5c5d40858fb7c)]:
+  - @wingleeio/mugen@0.5.1
+  - @wingleeio/mugen-markdown@0.5.1
+  - @wingleeio/mugen-native@0.2.0
+
 ## 0.1.0
 
 ### Minor Changes
