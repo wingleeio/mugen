@@ -85,6 +85,15 @@ const contentView = (r: ReactTestRenderer): ReactTestInstance => {
   return scroll.findAllByType('rn-view' as never)[0]!;
 };
 
+/** The spacer's height — its style is an array (conditional transform entry). */
+const contentHeight = (r: ReactTestRenderer): number => {
+  const style = (contentView(r).props as { style: unknown }).style;
+  const flat = Object.assign({}, ...(Array.isArray(style) ? style : [style]).filter(Boolean)) as {
+    height: number;
+  };
+  return flat.height;
+};
+
 const lineTexts = (n: ReactTestInstance): string[] =>
   n.findAllByType('rn-text' as never).map((t) => String((t.props as { children: unknown }).children));
 
@@ -102,8 +111,7 @@ describe('MugenVList (native)', () => {
       r = create(<App items={items} />);
     });
 
-    const content = contentView(r);
-    const total = (content.props as { style: { height: number } }).style.height;
+    const total = contentHeight(r);
     // Row 1: 3 lines × 110 = 330. Row 2: 1 line × 110 = 110. Total 440.
     expect(total).toBe(440);
 
@@ -124,7 +132,7 @@ describe('MugenVList (native)', () => {
     act(() => {
       r = create(<App items={items} padding={50} />);
     });
-    const total = (contentView(r).props as { style: { height: number } }).style.height;
+    const total = contentHeight(r);
     expect(total).toBe(2 * 110 + 100);
   });
 
@@ -169,7 +177,7 @@ describe('MugenVList (native)', () => {
       );
     });
     // Row height = max(40, 2 × 110) = 220.
-    const total = (contentView(r).props as { style: { height: number } }).style.height;
+    const total = contentHeight(r);
     expect(total).toBe(220);
     // And the painted text broke at the distributed width, not the row width.
     const rows = findRows(r);
@@ -184,7 +192,7 @@ describe('MugenVList (native)', () => {
         <App items={items} renderRow={() => <Escape height={123}>{null}</Escape>} />,
       );
     });
-    const total = (contentView(r).props as { style: { height: number } }).style.height;
+    const total = contentHeight(r);
     expect(total).toBe(123);
   });
 
@@ -236,10 +244,10 @@ describe('MugenVList (native)', () => {
     act(() => {
       r = create(<App items={items} />);
     });
-    expect((contentView(r).props as { style: { height: number } }).style.height).toBe(330);
+    expect(contentHeight(r)).toBe(330);
     act(() => {
       r.update(<App items={[...items, { id: '3', text: 'AAAA AAAA AAAA' }]} />);
     });
-    expect((contentView(r).props as { style: { height: number } }).style.height).toBe(330 + 330);
+    expect(contentHeight(r)).toBe(330 + 330);
   });
 });

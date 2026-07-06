@@ -462,29 +462,43 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     bottom: null,
   });
 
-  // Consume the pending scroll-anchor shift DURING render and ship it through
-  // the `contentOffset` prop, so the native side applies the taller content
-  // and the corrected offset in one transaction. The web applies anchor
-  // shifts post-commit, which is fine there (same-frame, pre-paint); on RN an
-  // imperative scrollTo after the commit lands a frame late — every prepend
-  // (history pagination) flashed the content shifted down for one frame.
-  // (Consuming during render trades strict concurrent-safety for atomicity;
-  // a discarded render loses at most one anchor delta, off by a prepend.)
+  // ── Flicker-free scroll anchoring (prepends) ──
+  // The web applies anchor shifts post-commit, pre-paint. On RN the
+  // corrective scroll cannot land with the commit: an imperative scrollTo is
+  // a frame late (one-frame flash of the wrong content), and a `contentOffset`
+  // prop update is applied by Fabric BEFORE the content grows, so iOS clamps
+  // it to the OLD max (verified: the offset silently stayed put and the
+  // viewport drifted a full page per prepend). Instead, two commits that are
+  // each visually seamless: commit A renders the taller content WITH a
+  // counter-translation of the whole canvas (identical pixels, offset still
+  // old), then the corrective scrollTo lands and commit B drops the
+  // translation (identical pixels again, offset now correct).
+  // (Consuming the delta during render trades strict concurrent-safety for
+  // atomicity; a discarded render loses at most one prepend's anchor.)
+  const [pendingAnchor, setPendingAnchor] = useState<{ y: number; delta: number } | null>(null);
   {
     const anchorDelta = instance.takeScrollAnchorDelta();
     if (anchorDelta !== 0) {
       const max = Math.max(0, instance.totalHeight() - vh);
       const next = Math.max(0, Math.min(adapter.scrollTop + anchorDelta, max));
-      adapter.onNativeScroll(next); // bookkeeping only — no imperative scroll
+      const applied = next - adapter.scrollTop;
+      adapter.onNativeScroll(next); // bookkeeping — the scroll itself is staged
       instance.scrollTop = next;
-      anchorOffsetRef.current = { x: 0, y: next };
       if (instance.totalHeight() > vh + 1 && instance.length > 0) {
         reachedRef.current.top = instance.keyAt(0);
         reachedRef.current.bottom = instance.keyAt(instance.length - 1);
       }
-      if (scrollTop !== next) setScrollTop(next); // render-phase update
+      // Render-phase updates: React re-runs this component before committing.
+      setPendingAnchor((cur) => ({ y: next, delta: (cur?.delta ?? 0) + applied }));
+      if (scrollTop !== next) setScrollTop(next);
     }
   }
+
+  // Commit A is on screen — send the corrective scroll; its onScroll clears
+  // the translation (commit B).
+  useLayoutEffect(() => {
+    if (pendingAnchor !== null) adapter.scrollFn?.(pendingAnchor.y, false);
+  }, [pendingAnchor, adapter]);
 
   const total = instance.totalHeight();
   const overscan = props.overscan ?? 200;
@@ -597,6 +611,9 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const st = e.nativeEvent.contentOffset.y;
+    // The corrective scroll for a staged anchor landed — drop the
+    // counter-translation (commit B of the anchoring choreography).
+    setPendingAnchor((cur) => (cur === null ? cur : null));
     adapter.onNativeScroll(st);
     instance.setScrollTop(st); // updates scrollTop + wakes useMugenSelector
     setScrollTop(st);
@@ -625,7 +642,16 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
       contentOffset={anchorOffsetRef.current ?? undefined}
       style={[props.height != null ? { height: props.height, flexGrow: 0 } : { flex: 1 }, props.style]}
     >
-      <View style={{ height: total, width: '100%' }}>
+      <View
+        // Counter-translation while a corrective anchor scroll is in flight:
+        // the taller canvas paints pixel-identically at the stale offset.
+        // Cleared by the scroll's own onScroll. (A conditional entry, not a
+        // `transform: undefined` key — RN's style validator rejects that.)
+        style={[
+          { height: total, width: '100%' },
+          pendingAnchor !== null ? { transform: [{ translateY: -pendingAnchor.delta }] } : null,
+        ]}
+      >
         <TextDefaultsContext.Provider value={defaults}>
           {topSlot}
           {rows}
