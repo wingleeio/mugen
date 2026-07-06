@@ -125,6 +125,12 @@ export interface MugenVListProps<T> {
   topReachedThreshold?: number;
   /** Px from the bottom that counts as reached. Default 0. */
   bottomReachedThreshold?: number;
+
+  // ── Keyboard (chat composers live below lists; pass through to ScrollView) ──
+  /** How drags dismiss the keyboard. RN's default is `'none'`; chat UIs want `'interactive'`. */
+  keyboardDismissMode?: 'none' | 'on-drag' | 'interactive';
+  /** Whether taps land on children while the keyboard is up. */
+  keyboardShouldPersistTaps?: 'always' | 'never' | 'handled';
   style?: StyleProp<ViewStyle>;
 }
 
@@ -560,6 +566,8 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
       // mugen does its own scroll anchoring; the platform's would double-adjust.
       maintainVisibleContentPosition={undefined}
       removeClippedSubviews={false}
+      keyboardDismissMode={props.keyboardDismissMode}
+      keyboardShouldPersistTaps={props.keyboardShouldPersistTaps}
       style={[props.height != null ? { height: props.height, flexGrow: 0 } : { flex: 1 }, props.style]}
     >
       <View style={{ height: total, width: '100%' }}>
