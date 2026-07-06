@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from 'react';
 import {
+  Animated,
   Platform,
   ScrollView,
   View,
@@ -22,6 +23,7 @@ import {
 } from 'react-native';
 import {
   MugenInstance,
+  type MugenHeightCache,
   RowScopeContext,
   withSession,
   TextDefaultsContext,
@@ -84,6 +86,14 @@ export interface StickToBottomOptions extends Partial<SpringOptions> {
 export interface UseMugenVirtualizerOptions<T> {
   /** The data. New array identity triggers a re-key + re-measure. */
   items: T[];
+  /**
+   * Persistent height store. Heights are pure functions of (content, width,
+   * fonts) — an app that persists them (sqlite, MMKV) opens a list with every
+   * offset known and walks ZERO rows. Compose content identity, width, and a
+   * font signature into your storage key; skip volatile keys (live/streaming
+   * rows). See `MugenHeightCache`.
+   */
+  heightCache?: MugenHeightCache;
 }
 
 /**
@@ -94,6 +104,7 @@ export interface UseMugenVirtualizerOptions<T> {
 export function useMugenVirtualizer<T>(options: UseMugenVirtualizerOptions<T>): MugenInstance<T> {
   const ref = useRef<MugenInstance<T> | null>(null);
   if (ref.current === null) ref.current = new MugenInstance<T>();
+  ref.current.heightCache = options.heightCache ?? null;
   ref.current.setItems(options.items);
   return ref.current;
 }
@@ -136,7 +147,16 @@ export interface MugenVListProps<T> {
    * in resident mode.
    */
   overscan?: number;
-  /** ScrollView passthrough — chat transcripts usually hide it. */
+  /**
+   * Show the scroll indicator (default true). mugen draws its OWN indicator —
+   * a native-driver overlay whose geometry comes from the engine's exact
+   * heights — because the platform indicator misreads the iOS headroom canvas
+   * (it re-derives its size from the huge content size + shifting inset and
+   * visibly resizes). Ours is exact at every frame: position and proportion
+   * are (scrollTop / totalHeight), values mugen knows analytically. It shows
+   * during user scrolls and fades when motion stops; programmatic and
+   * streaming growth scrolls don't flash it.
+   */
   showsVerticalScrollIndicator?: boolean;
   /** Called once each time the scroll position enters the top threshold. */
   onTopReached?: (index: number) => void;
@@ -234,6 +254,35 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
   const measured = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
   const velocityRef = useRef(0);
   const scrollSampleRef = useRef<{ t: number; y: number } | null>(null);
+
+  // ── mugen-drawn scroll indicator ──
+  // The native offset in canvas coordinates, driven on the UI thread — the
+  // indicator tracks every scroll frame with zero JS work.
+  const indicatorY = useRef(new Animated.Value(0)).current;
+  const indicatorOpacity = useRef(new Animated.Value(0)).current;
+  const indicatorShownRef = useRef(false);
+  const indicatorHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Only user gestures (and their momentum) show the bar — streaming growth
+  // and programmatic jumps scroll too, and flashing it there reads as noise.
+  const indicatorPokeUntilRef = useRef(0);
+  const pokeIndicator = () => {
+    if (performance.now() > indicatorPokeUntilRef.current) return;
+    if (!indicatorShownRef.current) {
+      indicatorShownRef.current = true;
+      Animated.timing(indicatorOpacity, { toValue: 1, duration: 80, useNativeDriver: true }).start();
+    }
+    if (indicatorHideTimer.current) clearTimeout(indicatorHideTimer.current);
+    indicatorHideTimer.current = setTimeout(() => {
+      indicatorShownRef.current = false;
+      Animated.timing(indicatorOpacity, { toValue: 0, duration: 350, useNativeDriver: true }).start();
+    }, 650);
+  };
+  useEffect(
+    () => () => {
+      if (indicatorHideTimer.current) clearTimeout(indicatorHideTimer.current);
+    },
+    [],
+  );
 
   // Re-render whenever any row is invalidated.
   const subscribeGlobal = useCallback((cb: () => void) => instance.subscribeGlobal(cb), [instance]);
@@ -713,63 +762,115 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     setPendingJump((cur) => (cur === null ? cur : null));
     adapter.onNativeScroll(st);
     instance.setScrollTop(st); // updates scrollTop + wakes useMugenSelector
+    pokeIndicator();
     // Resident mode: nothing about the committed tree depends on the scroll
     // position — scrolling costs zero React work.
     if (Number.isFinite(props.overscan ?? 200)) setScrollTop(st);
     if (stickOn) ctl.handleScroll(stickThreshold);
   };
 
+  // Indicator geometry — exact, from the engine's totals. Proportion is
+  // vh/total; position maps the canvas offset range onto the track. Both
+  // recompute on every commit (heights/origin changes), while per-frame
+  // position runs natively off `indicatorY`.
+  const indicator = (() => {
+    if (props.showsVerticalScrollIndicator === false) return null;
+    if (vh <= 0 || total <= vh + 1) return null;
+    const trackPad = 2;
+    const trackLen = vh - trackPad * 2;
+    const barH = Math.min(trackLen, Math.max(36, (vh / total) * trackLen));
+    const origin = originRef.current;
+    return (
+      <Animated.View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          right: 3,
+          top: 0,
+          width: 3,
+          height: barH,
+          borderRadius: 1.5,
+          backgroundColor: 'rgba(150, 150, 150, 0.65)',
+          opacity: indicatorOpacity,
+          transform: [
+            {
+              translateY: indicatorY.interpolate({
+                inputRange: [origin, origin + (total - vh)],
+                outputRange: [trackPad, trackPad + trackLen - barH],
+                extrapolate: 'clamp',
+              }),
+            },
+          ],
+        }}
+      />
+    );
+  })();
+
   return (
-    <ScrollView
-      ref={scrollViewRef}
+    <View
       onLayout={controlledWidth != null && props.height != null ? undefined : onLayout}
-      onScroll={onScroll}
-      scrollEventThrottle={16}
-      // Break the stick from user *input* — a drag is the RN analog of the web's
-      // touchstart/touchend pair (wheel has no mobile equivalent).
-      onScrollBeginDrag={stickOn ? () => ctl.handleTouchStart() : undefined}
-      onScrollEndDrag={stickOn ? () => ctl.handleTouchEnd(stickThreshold) : undefined}
-      // mugen does its own scroll anchoring; the platform's would double-adjust.
-      maintainVisibleContentPosition={undefined}
-      removeClippedSubviews={false}
-      keyboardDismissMode={props.keyboardDismissMode}
-      keyboardShouldPersistTaps={props.keyboardShouldPersistTaps}
-      showsVerticalScrollIndicator={props.showsVerticalScrollIndicator}
-      // Mount-time anchor in canvas coordinates (Fabric honors contentOffset
-      // only at mount; later corrections use origin absorption instead).
-      contentOffset={anchorOffsetRef.current ?? undefined}
-      // The occupied region of the headroom canvas — clamps scrolling so the
-      // unused space above the oldest row is unreachable.
-      contentInset={
-        CANVAS_HEADROOM > 0
-          ? { top: -originRef.current, left: 0, bottom: 0, right: 0 }
-          : undefined
-      }
-      scrollIndicatorInsets={
-        CANVAS_HEADROOM > 0
-          ? { top: -originRef.current, left: 0, bottom: 0, right: 0 }
-          : undefined
-      }
-      automaticallyAdjustContentInsets={false}
-      contentInsetAdjustmentBehavior="never"
       style={[props.height != null ? { height: props.height, flexGrow: 0 } : { flex: 1 }, props.style]}
     >
-      <View
-        // Counter-translation while a corrective anchor scroll is in flight:
-        // the taller canvas paints pixel-identically at the stale offset.
-        // Cleared by the scroll's own onScroll. (A conditional entry, not a
-        // `transform: undefined` key — RN's style validator rejects that.)
-        style={[
-          { height: originRef.current + total, width: '100%' },
-          pendingAnchor !== null ? { transform: [{ translateY: -pendingAnchor.delta }] } : null,
-        ]}
+      <Animated.ScrollView
+        // Animated.ScrollView forwards the host ref; at runtime this receives
+        // the plain ScrollView instance (scrollTo works). The cast bridges the
+        // AnimatedComponent wrapper's ref typing.
+        ref={scrollViewRef as never}
+        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: indicatorY } } }], {
+          useNativeDriver: true,
+          listener: onScroll as (e: NativeSyntheticEvent<NativeScrollEvent>) => void,
+        })}
+        scrollEventThrottle={16}
+        // Break the stick from user *input* — a drag is the RN analog of the web's
+        // touchstart/touchend pair (wheel has no mobile equivalent). Drags also
+        // arm the scroll indicator (programmatic motion never shows it).
+        onScrollBeginDrag={() => {
+          indicatorPokeUntilRef.current = Number.MAX_SAFE_INTEGER;
+          if (stickOn) ctl.handleTouchStart();
+        }}
+        onScrollEndDrag={() => {
+          indicatorPokeUntilRef.current = performance.now() + 2500; // momentum window
+          if (stickOn) ctl.handleTouchEnd(stickThreshold);
+        }}
+        // mugen does its own scroll anchoring; the platform's would double-adjust.
+        maintainVisibleContentPosition={undefined}
+        removeClippedSubviews={false}
+        keyboardDismissMode={props.keyboardDismissMode}
+        keyboardShouldPersistTaps={props.keyboardShouldPersistTaps}
+        // Always off: mugen draws its own (see showsVerticalScrollIndicator doc).
+        showsVerticalScrollIndicator={false}
+        // Mount-time anchor in canvas coordinates (Fabric honors contentOffset
+        // only at mount; later corrections use origin absorption instead).
+        contentOffset={anchorOffsetRef.current ?? undefined}
+        // The occupied region of the headroom canvas — clamps scrolling so the
+        // unused space above the oldest row is unreachable.
+        contentInset={
+          CANVAS_HEADROOM > 0
+            ? { top: -originRef.current, left: 0, bottom: 0, right: 0 }
+            : undefined
+        }
+        automaticallyAdjustContentInsets={false}
+        contentInsetAdjustmentBehavior="never"
+        style={{ flex: 1 }}
       >
-        <TextDefaultsContext.Provider value={defaults}>
-          {topSlot}
-          {rows}
-          {bottomSlot}
-        </TextDefaultsContext.Provider>
-      </View>
-    </ScrollView>
+        <View
+          // Counter-translation while a corrective anchor scroll is in flight:
+          // the taller canvas paints pixel-identically at the stale offset.
+          // Cleared by the scroll's own onScroll. (A conditional entry, not a
+          // `transform: undefined` key — RN's style validator rejects that.)
+          style={[
+            { height: originRef.current + total, width: '100%' },
+            pendingAnchor !== null ? { transform: [{ translateY: -pendingAnchor.delta }] } : null,
+          ]}
+        >
+          <TextDefaultsContext.Provider value={defaults}>
+            {topSlot}
+            {rows}
+            {bottomSlot}
+          </TextDefaultsContext.Provider>
+        </View>
+      </Animated.ScrollView>
+      {indicator}
+    </View>
   );
 }

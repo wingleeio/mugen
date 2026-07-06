@@ -24,6 +24,7 @@ export type {
   MugenScrollAlign,
   MugenScrollState,
   MugenConfig,
+  MugenHeightCache,
 } from './instance';
 
 // ── Height interpretation (the walker) ──

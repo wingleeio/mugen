@@ -17,7 +17,7 @@ import {
   notifyFontsChanged,
 } from '@wingleeio/mugen/native-core';
 import { clearParseCache, clearRichTextCache } from '@wingleeio/mugen-markdown/native-core';
-import { MugenVList, useMugenVirtualizer } from '@wingleeio/mugen-native';
+import { CANVAS_HEADROOM, MugenVList, useMugenVirtualizer } from '@wingleeio/mugen-native';
 import { Markdown, renderMarkdown, defineMarkdownComponents } from './index';
 import { VStack } from '@wingleeio/mugen-native';
 import type { DeepPartial, MarkdownTheme } from './theme';
@@ -91,7 +91,13 @@ function App(props: { source: string; fade?: boolean }) {
 const totalHeight = (r: ReactTestRenderer): number => {
   const scroll = r.root.findByType('rn-scrollview' as never);
   const content = scroll.findAllByType('rn-view' as never)[0]!;
-  return (content.props as { style: { height: number } }).style.height;
+  // The canvas style is an array (conditional transform entry) and its height
+  // includes the iOS headroom origin — flatten and normalize.
+  const style = (content.props as { style: unknown }).style;
+  const flat = Object.assign({}, ...(Array.isArray(style) ? style : [style]).filter(Boolean)) as {
+    height: number;
+  };
+  return flat.height - CANVAS_HEADROOM;
 };
 
 const textsOf = (r: ReactTestRenderer): string[] =>

@@ -50,6 +50,46 @@ describe('MugenInstance scroll state', () => {
     expect(calls).toBe(2);
   });
 
+  it('memoizes row heights by item identity: an append re-walks only the new row', async () => {
+    const { layout } = await import('@chenglou/pretext');
+    const inst = makeInstance(50);
+    const before = vi.mocked(layout).mock.calls.length;
+    const items = Array.from({ length: 51 }, (_, i) => ({ id: String(i) }));
+    // Keep the first 50 item identities? makeInstance created its own array —
+    // rebuild with fresh identities for old rows too: identity misses re-walk.
+    inst.setItems(items);
+    inst.sync();
+    const afterFresh = vi.mocked(layout).mock.calls.length;
+    expect(afterFresh).toBeGreaterThan(before); // fresh identities re-measured
+    // Now append with PRESERVED identities: only the new row walks.
+    const grown = [...items, { id: '51' }];
+    inst.setItems(grown);
+    inst.sync();
+    const afterAppend = vi.mocked(layout).mock.calls.length;
+    expect(afterAppend - afterFresh).toBe(1);
+    expect(inst.totalHeight()).toBe(52 * 20);
+  });
+
+  it('consults the persistent height cache for never-seen rows and writes fresh walks', () => {
+    const store = new Map<string, number>();
+    const get = vi.fn((key: string) => store.get(key));
+    const set = vi.fn((key: string, _w: number, h: number) => void store.set(key, h));
+    store.set('0', 20); // pre-seeded: row 0 must not walk
+    const inst = new MugenInstance<{ id: string }>();
+    inst.heightCache = { get: (k) => get(k), set: (k, w, h) => set(k, w, h) };
+    inst.setItems([{ id: '0' }, { id: '1' }]);
+    inst.configure({
+      getKey: (it) => it.id,
+      render: () => <Text font="16px Inter">row</Text>,
+      defaults: { font: '16px Inter', lineHeight: 20 },
+    });
+    inst.setViewport(300, 100, 16);
+    inst.sync();
+    expect(inst.totalHeight()).toBe(40);
+    expect(get).toHaveBeenCalledWith('0');
+    expect(store.get('1')).toBe(20); // fresh walk written back
+  });
+
   it('scrollToBottom drives the scroll element to the bottom', () => {
     const inst = makeInstance(10);
     const calls: Array<{ top: number; behavior?: string }> = [];

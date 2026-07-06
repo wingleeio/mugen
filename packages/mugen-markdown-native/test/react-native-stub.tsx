@@ -65,7 +65,20 @@ export const Animated = {
   // Distinct host tags so tests can detect what's animated.
   View: (props: AnyProps) => createElement('rn-animated-view', props, props.children),
   Text: (props: AnyProps) => createElement('rn-animated-text', props, props.children),
+  ScrollView: forwardRef(function AnimatedScrollView(props: AnyProps, ref) {
+    useImperativeHandle(ref, () => ({
+      scrollTo: (opts: { y?: number; animated?: boolean }) => {
+        scrollToCalls.push(opts);
+      },
+    }));
+    return createElement('rn-scrollview', props, props.children);
+  }),
   Value: AnimatedValue,
+  event:
+    (_mapping: unknown, cfg?: { listener?: (e: unknown) => void }) =>
+    (e: unknown) => {
+      cfg?.listener?.(e);
+    },
   timing: (_value: unknown, _config: unknown) => ({
     start: (cb?: (r: { finished: boolean }) => void) => cb?.({ finished: true }),
   }),

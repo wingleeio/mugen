@@ -23,7 +23,7 @@ export {
 export type { FontFaceResolver, FontFaceRequest } from './font-style';
 
 // ── The list ──
-export { useMugenVirtualizer, MugenVList } from './vlist';
+export { useMugenVirtualizer, MugenVList, CANVAS_HEADROOM } from './vlist';
 export type {
   UseMugenVirtualizerOptions,
   MugenVListProps,

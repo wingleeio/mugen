@@ -29,6 +29,38 @@ export const ScrollView = forwardRef(function ScrollView(props: AnyProps, ref) {
   return createElement('rn-scrollview', props, props.children);
 });
 
+/** Animated stand-in: values hold numbers, `event` unwraps to its listener,
+ *  timings apply instantly. Enough for the indicator + native-driver scroll
+ *  wiring to render and for tests to keep firing `onScroll` directly. */
+class AnimatedValueStub {
+  constructor(private v: number) {}
+  setValue(v: number): void {
+    this.v = v;
+  }
+  interpolate(): AnimatedValueStub {
+    return this;
+  }
+}
+
+export const Animated = {
+  Value: AnimatedValueStub,
+  View: (props: AnyProps) => createElement('rn-animated-view', props, props.children),
+  ScrollView: forwardRef(function AnimatedScrollView(props: AnyProps, ref) {
+    useImperativeHandle(ref, () => ({
+      scrollTo: (opts: { y?: number; animated?: boolean }) => {
+        scrollToCalls.push(opts);
+      },
+    }));
+    return createElement('rn-scrollview', props, props.children);
+  }),
+  event:
+    (_mapping: unknown, cfg?: { listener?: (e: unknown) => void }) =>
+    (e: unknown) => {
+      cfg?.listener?.(e);
+    },
+  timing: (_v: unknown, _cfg: unknown) => ({ start: () => {} }),
+};
+
 export const StyleSheet = {
   create: <T,>(styles: T): T => styles,
   flatten: (style: unknown): unknown => style,

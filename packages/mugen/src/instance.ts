@@ -47,6 +47,23 @@ export interface MugenConfig<T> {
   maxW?: number | string;
 }
 
+/**
+ * A persistent height store the host app can plug in (`instance.heightCache`).
+ * Heights are pure functions of (row content, content width, font tables), so
+ * an app with stable row keys can persist them across instances — and across
+ * process launches — and a list then opens with every offset known without
+ * walking a single row. The cache is consulted only for rows this instance has
+ * never measured; rows whose slot state has diverged from default (a fold
+ * toggled open) re-measure live and are NEVER written back, so the store only
+ * ever holds default-state heights. The app owns invalidation: the key it
+ * derives must change when the row's content, the content width, or the font
+ * set changes (compose those into the storage key).
+ */
+export interface MugenHeightCache {
+  get(key: string, width: number): number | undefined;
+  set(key: string, width: number, height: number): void;
+}
+
 // ── Per-row slot store (the home for useMugenState/Memo/Effect) ──────────────
 
 interface StateSlot {
@@ -126,6 +143,19 @@ export class MugenInstance<T> implements SlotHost {
   private geometryDirty = false;
   private lastDefaultsKey = '';
   private lastMaxW: number | string | undefined;
+
+  /** Optional persistent height store (see `MugenHeightCache`). */
+  heightCache: MugenHeightCache | null = null;
+  /**
+   * Per-instance height memo, keyed by row key and guarded by item identity —
+   * the row-level analog of `React.memo`. Without it every `setItems` re-walks
+   * EVERY row (each streamed append re-measures the whole transcript): free
+   * under a JIT, ruinous on Hermes. With it an append is O(rows) map lookups
+   * plus one real walk for the new row. `invalidate` (the one legitimate
+   * height-changing path) overwrites its row's entry; geometry/font changes
+   * clear the whole memo.
+   */
+  private heightMemo = new Map<string, { item: unknown; height: number }>();
 
   // Subscriptions: one global (the list windows on it) + one per row (RowView).
   private globalSubs = new Set<() => void>();
@@ -289,6 +319,7 @@ export class MugenInstance<T> implements SlotHost {
     const skipAnchor = this.geometryDirty && !this.itemsDirty;
     const anchor = !skipAnchor && this.keys.length > 0 ? this.captureScrollAnchor() : null;
     if (this.itemsDirty) this.recomputeKeys();
+    if (this.geometryDirty) this.heightMemo.clear(); // widths/fonts changed: every height is stale
     if (this.itemsDirty || this.geometryDirty) this.remeasureAll();
     else this.remeasureSlots();
     if (anchor) this.queueScrollAnchor(anchor);
@@ -321,6 +352,7 @@ export class MugenInstance<T> implements SlotHost {
   /** Re-measure everything (e.g. after web fonts settle). Compute-only. */
   remeasure(): void {
     if (!this.ready()) return;
+    this.heightMemo.clear(); // new font tables: every height is stale
     this.remeasureAll();
     this.notifyGlobal();
   }
@@ -363,6 +395,7 @@ export class MugenInstance<T> implements SlotHost {
   }
 
   private removeRow(key: string): void {
+    this.heightMemo.delete(key);
     const rec = this.rows.get(key);
     if (!rec) return;
     for (const slot of rec.slots) {
@@ -385,7 +418,22 @@ export class MugenInstance<T> implements SlotHost {
     const width = this.contentWidth();
     const heights = new Float64Array(this.items.length);
     for (let i = 0; i < this.items.length; i++) {
-      heights[i] = this.measureRow(this.keys[i]!, this.items[i]!, width);
+      const key = this.keys[i]!;
+      const item = this.items[i]!;
+      const memo = this.heightMemo.get(key);
+      if (memo !== undefined && memo.item === item) {
+        heights[i] = memo.height;
+        continue;
+      }
+      // Never measured by this instance: a persistent cache (if plugged in)
+      // knows the default-state height without walking the row.
+      let h = memo === undefined ? this.heightCache?.get(key, width) : undefined;
+      if (h === undefined) {
+        h = this.measureRow(key, item, width);
+        if (memo === undefined) this.heightCache?.set(key, width, h);
+      }
+      this.heightMemo.set(key, { item, height: h });
+      heights[i] = h;
     }
     this.offset = new OffsetIndex(heights);
     this.remeasureSlots();
@@ -765,6 +813,10 @@ export class MugenInstance<T> implements SlotHost {
     const oldTop = this.offset.offsetOf(i);
     const oldHeight = this.offset.heightAt(i);
     const newHeight = this.measureRow(key, this.items[i]!, width);
+    // Update the memo — NOT the persistent cache: this row's slot state may
+    // have diverged from default (that's usually why it invalidated), and the
+    // store must only ever hold default-state heights.
+    this.heightMemo.set(key, { item: this.items[i]!, height: newHeight });
     const delta = this.offset.setHeight(i, newHeight);
     if (delta !== 0 && this.scrollAnchor && oldTop + oldHeight <= this.scrollTop) {
       this.scrollAnchor(delta); // row was entirely above the fold: keep content stable

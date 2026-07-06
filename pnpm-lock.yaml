@@ -282,9 +282,6 @@ importers:
       '@wingleeio/mugen-markdown':
         specifier: workspace:^
         version: link:../mugen-markdown
-      '@wingleeio/mugen-native':
-        specifier: workspace:^
-        version: link:../mugen-native
     devDependencies:
       '@types/react':
         specifier: ^19.2.15
@@ -292,6 +289,9 @@ importers:
       '@types/react-test-renderer':
         specifier: ^19.1.0
         version: 19.1.0
+      '@wingleeio/mugen-native':
+        specifier: workspace:^
+        version: link:../mugen-native
       '@wingleeio/pretext-native':
         specifier: workspace:^
         version: link:../pretext-native
