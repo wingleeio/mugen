@@ -1,5 +1,16 @@
 # @wingleeio/mugen
 
+## 0.5.0
+
+### Minor Changes
+
+- [`69b8e82`](https://github.com/wingleeio/mugen/commit/69b8e82fd5d04bc246a8cf220d80c30b961ca346) Thanks [@wingleeio](https://github.com/wingleeio)! - Add a `@wingleeio/mugen/native-core` entry: the renderer-agnostic engine
+  (walker, offset index, `MugenInstance`, row hooks, scroll spring, animation
+  clock, primitive measure halves) exported without any react-dom in its module
+  graph, so non-DOM renderers — `@wingleeio/mugen-native` — can build on the
+  exact same code. Also exports `distribute` and `resolveText` for platform
+  renderers. No behavior change for web consumers.
+
 ## 0.4.1
 
 ### Patch Changes

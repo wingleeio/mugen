@@ -1,5 +1,17 @@
 # @wingleeio/mugen-markdown
 
+## 0.5.0
+
+### Minor Changes
+
+- [`69b8e82`](https://github.com/wingleeio/mugen/commit/69b8e82fd5d04bc246a8cf220d80c30b961ca346) Thanks [@wingleeio](https://github.com/wingleeio)! - Add a `@wingleeio/mugen-markdown/native-core` entry (the renderer-agnostic
+  pipeline — parsing, theme, dispatcher, tokenizer, primitive measure halves —
+  with no react-dom in its module graph) and a `primitives` option on
+  `renderMarkdown` so non-DOM renderers can inject their own `Stack`/`RichText`.
+  Runtime imports now come from `@wingleeio/mugen/native-core` (same modules,
+  react-dom-free), so the peer range floor moves to mugen 0.5. No behavior
+  change for web consumers.
+
 ## 0.4.4
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@wingleeio/mugen",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Virtualized React lists with analytic row heights — measured with pretext, never the DOM.",
   "license": "MIT",
   "author": "Wing Lee <contact@winglee.io>",
