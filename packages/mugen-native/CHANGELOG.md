@@ -1,5 +1,16 @@
 # @wingleeio/mugen-native
 
+## 0.4.0
+
+### Minor Changes
+
+- [`983ae81`](https://github.com/wingleeio/mugen/commit/983ae813a57417751a387532f6415b9c4eb350c6) Thanks [@wingleeio](https://github.com/wingleeio)! - mugen now draws its own scroll indicator: a native-driver overlay whose proportion and position come from the engine's exact heights, replacing the platform indicator (which misreads the iOS headroom canvas and visibly resizes as history loads). It shows on user scrolls, tracks every frame on the UI thread with zero JS, and fades on idle; programmatic and streaming scrolls never flash it. `showsVerticalScrollIndicator={false}` hides it. Also: `useMugenVirtualizer({ heightCache })` plugs a persistent height store into the engine, and `CANVAS_HEADROOM` is exported for tests.
+
+### Patch Changes
+
+- Updated dependencies [[`983ae81`](https://github.com/wingleeio/mugen/commit/983ae813a57417751a387532f6415b9c4eb350c6)]:
+  - @wingleeio/mugen@0.6.0
+
 ## 0.3.0
 
 ### Minor Changes

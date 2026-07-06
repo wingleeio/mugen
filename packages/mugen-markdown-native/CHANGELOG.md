@@ -1,5 +1,14 @@
 # @wingleeio/mugen-markdown-native
 
+## 0.1.3
+
+### Patch Changes
+
+- [`983ae81`](https://github.com/wingleeio/mugen/commit/983ae813a57417751a387532f6415b9c4eb350c6) Thanks [@wingleeio](https://github.com/wingleeio)! - `@wingleeio/mugen-native` moved from dependencies to peerDependencies (>=0.2.0). As a regular dependency, a consumer upgrading mugen-native past the pinned range got a SECOND nested copy — and module state (the font registry) split between them, silently rendering markdown text blank. A peer guarantees exactly one copy in the app graph.
+
+- Updated dependencies [[`983ae81`](https://github.com/wingleeio/mugen/commit/983ae813a57417751a387532f6415b9c4eb350c6)]:
+  - @wingleeio/mugen@0.6.0
+
 ## 0.1.2
 
 ### Patch Changes
