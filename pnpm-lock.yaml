@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@chenglou/pretext':
+    hash: a4c1308d0ac610318c8f88db8cf693e97a59dfd7f1dc4cdaba2633cfcf7f28c5
+    path: patches/@chenglou__pretext.patch
+
 importers:
 
   .:
@@ -171,7 +176,7 @@ importers:
     dependencies:
       '@chenglou/pretext':
         specifier: 0.0.7
-        version: 0.0.7
+        version: 0.0.7(patch_hash=a4c1308d0ac610318c8f88db8cf693e97a59dfd7f1dc4cdaba2633cfcf7f28c5)
       use-sync-external-store:
         specifier: ^1.6.0
         version: 1.6.0(react@19.2.7)
@@ -220,7 +225,7 @@ importers:
     dependencies:
       '@chenglou/pretext':
         specifier: 0.0.7
-        version: 0.0.7
+        version: 0.0.7(patch_hash=a4c1308d0ac610318c8f88db8cf693e97a59dfd7f1dc4cdaba2633cfcf7f28c5)
       '@incremark/core':
         specifier: ^1.0.2
         version: 1.0.2
@@ -272,7 +277,7 @@ importers:
     dependencies:
       '@chenglou/pretext':
         specifier: 0.0.7
-        version: 0.0.7
+        version: 0.0.7(patch_hash=a4c1308d0ac610318c8f88db8cf693e97a59dfd7f1dc4cdaba2633cfcf7f28c5)
       '@types/mdast':
         specifier: ^4.0.4
         version: 4.0.4
@@ -318,7 +323,7 @@ importers:
     dependencies:
       '@chenglou/pretext':
         specifier: 0.0.7
-        version: 0.0.7
+        version: 0.0.7(patch_hash=a4c1308d0ac610318c8f88db8cf693e97a59dfd7f1dc4cdaba2633cfcf7f28c5)
       '@wingleeio/mugen':
         specifier: workspace:^
         version: link:../mugen
@@ -355,7 +360,7 @@ importers:
     dependencies:
       '@chenglou/pretext':
         specifier: 0.0.7
-        version: 0.0.7
+        version: 0.0.7(patch_hash=a4c1308d0ac610318c8f88db8cf693e97a59dfd7f1dc4cdaba2633cfcf7f28c5)
     devDependencies:
       tsdown:
         specifier: ^0.22.2
@@ -8613,7 +8618,7 @@ snapshots:
       human-id: 4.2.0
       prettier: 2.8.8
 
-  '@chenglou/pretext@0.0.7': {}
+  '@chenglou/pretext@0.0.7(patch_hash=a4c1308d0ac610318c8f88db8cf693e97a59dfd7f1dc4cdaba2633cfcf7f28c5)': {}
 
   '@cloudflare/workerd-darwin-64@1.20260603.1':
     optional: true
