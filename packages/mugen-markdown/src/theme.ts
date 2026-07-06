@@ -118,6 +118,15 @@ export interface MarkdownTheme {
     borderColor: string;
     /** Corner radius in px (clip only — no height impact). */
     radius: number;
+    /**
+     * Reasonable minimum rendered column width in px (padding included). A column
+     * whose content is naturally narrower keeps its content width; wider columns
+     * wrap down to this floor but no further. When the columns' minimums can't
+     * fit the available width the table scrolls horizontally instead of crushing
+     * every column into per-character wrapping. Affects wrapping (hence height),
+     * so it lives here and is baked into the primitive's props.
+     */
+    minColumnWidth: number;
   };
 
   rule: { thickness: number; color: string; gap: number };
@@ -198,6 +207,7 @@ export const defaultTheme: MarkdownTheme = {
     headerBackground: 'rgba(127, 127, 127, 0.12)',
     borderColor: 'rgba(127, 127, 127, 0.35)',
     radius: 8,
+    minColumnWidth: 96,
   },
 
   rule: { thickness: 1, color: 'rgba(127, 127, 127, 0.4)', gap: 8 },

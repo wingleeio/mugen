@@ -133,25 +133,34 @@ class RowScopeImpl implements MugenRowScope {
  */
 export function useMugenRow(id: string): MugenRowScope {
   const ambient = currentSession();
-  if (ambient) {
-    // Measure pass (root or walk) or the row root's render call: resolve
-    // ambiently, no React hooks needed. A given call site is always either
-    // ambient (measure / row root) or nested-render (context path below) —
-    // never both across renders of one fiber — so React's per-fiber hook
-    // order stays consistent.
-    return new RowScopeImpl(ambient.host, ambient.rowKey, ambient.mode, id);
-  }
-  /* eslint-disable react-hooks/rules-of-hooks -- deterministic per fiber, see above */
+  // ALWAYS call the same React hooks, in the same order, with NO early return
+  // in between — otherwise a nested component that renders once with an ambient
+  // session set (0 hooks) and once without (these 4 hooks) trips React's
+  // "rendered fewer hooks than expected … accidental early return" invariant.
+  // In the measure walk the inert dispatcher makes these no-ops (they read the
+  // ambient scope, not the context), so calling them there is harmless; in a
+  // real fiber render they subscribe the component to its row version. The
+  // scope SOURCE is chosen after the hooks: the ambient session when one is
+  // installed (measure walk or row root), else the RowScopeContext value.
   const ctx = useContext(RowScopeContext);
-  if (!ctx) {
+  const scope = ambient
+    ? { host: ambient.host, rowKey: ambient.rowKey, mode: ambient.mode as SessionMode }
+    : ctx
+      ? { host: ctx.host, rowKey: ctx.rowKey, mode: 'render' as SessionMode }
+      : null;
+  const rowKey = scope?.rowKey ?? '';
+  const host = scope?.host;
+  const subscribe = useCallback(
+    (cb: () => void) => (host ? host.subscribeRow(rowKey, cb) : () => {}),
+    [host, rowKey],
+  );
+  const getVersion = useCallback(() => (host ? host.rowVersion(rowKey) : 0), [host, rowKey]);
+  useSyncExternalStore(subscribe, getVersion, getVersion);
+  if (scope === null) {
     throw new Error(
       'mugen: useMugenRow() found no row scope. It only works in components rendered ' +
         'inside a <MugenVList> row.',
     );
   }
-  const subscribe = useCallback((cb: () => void) => ctx.host.subscribeRow(ctx.rowKey, cb), [ctx]);
-  const getVersion = useCallback(() => ctx.host.rowVersion(ctx.rowKey), [ctx]);
-  useSyncExternalStore(subscribe, getVersion, getVersion);
-  /* eslint-enable react-hooks/rules-of-hooks */
-  return new RowScopeImpl(ctx.host, ctx.rowKey, 'render', id);
+  return new RowScopeImpl(scope.host, scope.rowKey, scope.mode, id);
 }

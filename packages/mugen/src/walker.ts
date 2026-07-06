@@ -2,6 +2,7 @@ import { Fragment, isValidElement, type ReactElement, type ReactNode } from 'rea
 import { getPrimitiveDef, typeName, type MeasureContext } from './primitives/core';
 import { fontEpoch } from './pretext/fonts';
 import { currentSession } from './session';
+import { runInert } from './state/dispatcher';
 import type { TextDefaults } from './text-defaults';
 
 /**
@@ -117,9 +118,20 @@ function measureElement(element: ReactElement, width: number, defaults: TextDefa
     // measure that. Positional mugen hooks throw here (their call order can't
     // be reproduced across the walk and the React render); `useMugenRow(id)`
     // scopes resolve through the ambient walk session.
+    //
+    // ALWAYS under the inert dispatcher. The engine's measureRow installs it,
+    // but the walk is ALSO entered from render paths (an HStack distributing
+    // widths measures its children DURING a real fiber render) — there the
+    // live dispatcher would charge the called component's hooks to the
+    // rendering fiber, and because the height memo above skips the call on a
+    // cache hit, the fiber's hook count varied between renders: React's
+    // "rendered fewer hooks than expected". Inert here makes a walked
+    // component's hooks never touch any fiber, no matter who entered the walk.
     const name = typeName(element.type);
     try {
-      const rendered = (element.type as (props: object) => ReactNode)(element.props as object);
+      const rendered = runInert(() =>
+        (element.type as (props: object) => ReactNode)(element.props as object),
+      );
       return measureNode(rendered, width, defaults);
     } catch (err) {
       throw annotateComponent(err, name);
@@ -199,7 +211,12 @@ export function naturalWidthOf(node: ReactNode, ctx: MeasureContext): number | n
     }
     if (typeof element.type !== 'function') return null;
     try {
-      cur = (element.type as (props: object) => ReactNode)(element.props as object);
+      // Inert for the same reason as measureElement: this unwrap runs from
+      // render paths too (HStack width distribution), where the live
+      // dispatcher would charge the component's hooks to the rendering fiber.
+      cur = runInert(() =>
+        (element.type as (props: object) => ReactNode)(element.props as object),
+      );
     } catch {
       return null; // let measureNode surface the real error with its component path
     }
@@ -222,7 +239,10 @@ export function isOutOfFlow(node: ReactNode): boolean {
     if (def) return def.outOfFlow === true;
     if (typeof element.type !== 'function') return false;
     try {
-      cur = (element.type as (props: object) => ReactNode)(element.props as object);
+      // Inert: also entered from render paths (see measureElement).
+      cur = runInert(() =>
+        (element.type as (props: object) => ReactNode)(element.props as object),
+      );
     } catch {
       return false;
     }
