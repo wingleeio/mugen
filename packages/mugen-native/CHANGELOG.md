@@ -1,5 +1,11 @@
 # @wingleeio/mugen-native
 
+## 0.6.1
+
+### Patch Changes
+
+- [`808d52d`](https://github.com/wingleeio/mugen/commit/808d52d896db4dcc49c5a8f124902485548d638d) Thanks [@wingleeio](https://github.com/wingleeio)! - Render-phase slot reassignments now deliver their notifications AFTER the commit (a layout effect wakes exactly the changed slots) instead of synchronously during `MugenVList`'s render — which was a cross-component setState-in-render (React: "Cannot update a component (`Slot`) while rendering a different component (`MugenVList`)"). Same-frame delivery, no visual change; onScroll reassignments still notify immediately (event handlers are legal).
+
 ## 0.6.0
 
 ### Minor Changes
