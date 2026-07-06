@@ -20,7 +20,7 @@ import {
   type RichTextRun,
 } from '@wingleeio/mugen-markdown/native-core';
 import { WidthContext, fontShorthandToTextStyle } from '@wingleeio/mugen-native';
-import { FadeLine } from './fade';
+import { FadeLine, useInFadeScope } from './fade';
 
 export type { RichTextRun };
 
@@ -68,6 +68,20 @@ interface PaintedFragment {
   width: number;
 }
 
+/** A run is collapsible into a shared multi-line `<Text>` only if it carries
+ *  no per-fragment interaction or inline box (those must stay their own node)
+ *  and it's the sole fragment of its line. Its style signature keys the merge. */
+function collapseSignature(run: RichTextRun, fallbackFont: Font | undefined): string | null {
+  if (run.advance != null || run.href != null || run.onClick != null) return null;
+  return [
+    resolveRunFont(run, fallbackFont),
+    run.color ?? '',
+    run.letterSpacing ?? '',
+    run.decoration ?? '',
+    run.background ?? '',
+  ].join('');
+}
+
 /**
  * The native render half of `RichText`.
  *
@@ -84,6 +98,9 @@ interface PaintedFragment {
 function RichTextComponent(props: RichTextProps): ReactElement | null {
   const width = useContext(WidthContext);
   const epoch = fontEpoch();
+  // In a streaming turn, keep per-line fragment nodes so each new line can
+  // fade in independently; collapse only settled (persisted) rows.
+  const inFadeScope = useInFadeScope();
   const { runs, lineHeight } = props;
 
   const painted = useMemo(() => {
@@ -93,30 +110,35 @@ function RichTextComponent(props: RichTextProps): ReactElement | null {
     const hasBreak = runs.some((r) => r.break);
     if (!hasText && !hasBreak) return null;
 
-    const fragments: PaintedFragment[] = [];
+    // Fragments grouped per painted line, so the render can collapse runs of
+    // single-fragment same-style lines into one <Text> (see below).
+    const lines: PaintedFragment[][] = [];
     let top = 0;
     for (let si = 0; si < segments.length; si++) {
       const seg = segments[si]!;
       if (seg.items.length === 0) {
-        top += lineHeight; // blank line (hard break) — measured as one line
+        lines.push([]); // blank line (hard break) — measured as one line
+        top += lineHeight;
         continue;
       }
       const prepared = prepareCached(seg.items);
       const ranges: RichInlineLineRange[] = [];
       walkRichInlineLineRanges(prepared, Math.max(0, width), (r) => ranges.push(r));
       if (ranges.length === 0) {
+        lines.push([]);
         top += lineHeight; // mirror the measure's `max(1, lineCount)`
         continue;
       }
       for (let li = 0; li < ranges.length; li++) {
         const line = materializeRichInlineLineRange(prepared, ranges[li]!);
         let x = alignOffset(props.align, width, line.width);
+        const lineFrags: PaintedFragment[] = [];
         for (let fi = 0; fi < line.fragments.length; fi++) {
           const frag = line.fragments[fi]!;
           x += frag.gapBefore;
           const run = seg.runs[frag.itemIndex];
           if (run == null) continue;
-          fragments.push({
+          lineFrags.push({
             key: `${si}:${li}:${fi}`,
             left: x,
             top,
@@ -126,17 +148,33 @@ function RichTextComponent(props: RichTextProps): ReactElement | null {
           });
           x += frag.occupiedWidth;
         }
+        lines.push(lineFrags);
         top += lineHeight;
       }
     }
-    return { fragments, height: top };
+    return { lines, height: top };
     // `epoch` invalidates when fonts (re)register and metrics change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runs, props.font, props.align, lineHeight, width, epoch]);
 
   if (painted === null) return null;
 
-  const children: ReactNode[] = painted.fragments.map((f) => {
+  const styleForRun = (run: RichTextRun): TextStyle => ({
+    ...fontShorthandToTextStyle(resolveRunFont(run, props.font)),
+    lineHeight: props.lineHeight,
+    ...(run.letterSpacing != null ? { letterSpacing: run.letterSpacing } : null),
+    ...(run.color != null
+      ? { color: run.color }
+      : props.color != null
+        ? { color: props.color }
+        : null),
+    ...(run.background != null ? { backgroundColor: run.background } : null),
+    ...(decorationLine(run.decoration) != null
+      ? { textDecorationLine: decorationLine(run.decoration) }
+      : null),
+  });
+
+  const paintFragment = (f: PaintedFragment): ReactNode => {
     const run = f.run;
     if (run.advance != null) {
       // Inline box — paint the caller's content inside exactly the reserved
@@ -158,20 +196,6 @@ function RichTextComponent(props: RichTextProps): ReactElement | null {
         </View>
       );
     }
-    const style: TextStyle = {
-      ...fontShorthandToTextStyle(resolveRunFont(run, props.font)),
-      lineHeight: props.lineHeight,
-      ...(run.letterSpacing != null ? { letterSpacing: run.letterSpacing } : null),
-      ...(run.color != null
-        ? { color: run.color }
-        : props.color != null
-          ? { color: props.color }
-          : null),
-      ...(run.background != null ? { backgroundColor: run.background } : null),
-      ...(decorationLine(run.decoration) != null
-        ? { textDecorationLine: decorationLine(run.decoration) }
-        : null),
-    };
     const href = run.href;
     const onPress =
       (run.onClick as (() => void) | undefined) ??
@@ -183,13 +207,62 @@ function RichTextComponent(props: RichTextProps): ReactElement | null {
           ellipsizeMode="clip"
           selectable={props.selectable}
           onPress={onPress}
-          style={[{ position: 'absolute', left: f.left, top: f.top }, style]}
+          style={[{ position: 'absolute', left: f.left, top: f.top }, styleForRun(run)]}
         >
           {f.text}
         </RNText>
       </FadeLine>
     );
-  });
+  };
+
+  // Collapse maximal runs of consecutive lines that are each a SINGLE
+  // collapsible fragment (plain text, same style, same left) into one
+  // multi-line `<Text>` joined by '\n' — one Fabric node for a whole
+  // paragraph instead of one per line, matching the web's mount cost. Lines
+  // with inline marks (bold word, code span, link) keep their per-fragment
+  // nodes. `numberOfLines` caps the merged node at its line count, so the
+  // pretext-owned height can't grow (a sub-pixel shaper disagreement clips).
+  const children: ReactNode[] = [];
+  const lines = painted.lines;
+  let i = 0;
+  while (i < lines.length) {
+    const frags = lines[i]!;
+    const sig =
+      !inFadeScope && frags.length === 1 ? collapseSignature(frags[0]!.run, props.font) : null;
+    if (sig !== null) {
+      const first = frags[0]!;
+      const group: PaintedFragment[] = [first];
+      let j = i + 1;
+      while (j < lines.length) {
+        const nf = lines[j]!;
+        if (nf.length !== 1) break;
+        const f2 = nf[0]!;
+        if (f2.left !== first.left || collapseSignature(f2.run, props.font) !== sig) break;
+        group.push(f2);
+        j++;
+      }
+      children.push(
+        <FadeLine key={`grp:${first.key}`}>
+          <RNText
+            numberOfLines={group.length}
+            ellipsizeMode="clip"
+            selectable={props.selectable}
+            style={[
+              { position: 'absolute', left: first.left, top: first.top, right: 0 },
+              styleForRun(first.run),
+            ]}
+          >
+            {group.map((g) => g.text).join('\n')}
+          </RNText>
+        </FadeLine>,
+      );
+      i = j;
+      continue;
+    }
+    // Mixed / interactive line: paint each fragment as its own node.
+    for (const f of frags) children.push(paintFragment(f));
+    i++;
+  }
 
   return <View style={{ height: painted.height }}>{children}</View>;
 }

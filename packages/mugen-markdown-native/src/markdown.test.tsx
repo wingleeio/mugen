@@ -119,6 +119,22 @@ describe('native markdown heights', () => {
     expect(textsOf(r)).toContain('AAAA');
   });
 
+  test('a plain multi-line paragraph collapses to ONE text node (web-parity mount cost)', () => {
+    // Five wrapped lines of plain text. The old renderer painted one <Text>
+    // per line (5 Fabric nodes); collapsed, it's a single multi-line node
+    // capped at the measured line count.
+    const src = 'AAAA AAAA AAAA AAAA AAAA'; // each 240px word wraps → 5 lines
+    let r!: ReactTestRenderer;
+    act(() => {
+      r = create(<App source={src} />);
+    });
+    expect(totalHeight(r)).toBe(5 * 110);
+    const texts = r.root.findAllByType('rn-text' as never);
+    expect(texts.length).toBe(1);
+    expect((texts[0]!.props as { numberOfLines?: number }).numberOfLines).toBe(5);
+    expect(String((texts[0]!.props as { children: unknown }).children).split('\n').length).toBe(5);
+  });
+
   test('heading, code block, and list heights are exact', () => {
     const md = ['# AA', '', '```js', 'AAAA', 'BB', '```', '', '- AA', '- BB'].join('\n');
     let r!: ReactTestRenderer;

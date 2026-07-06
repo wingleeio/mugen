@@ -41,16 +41,22 @@ const webTextDef = getPrimitiveDef(WebText)!;
  *
  * On the web, measure and paint agree because pretext models the browser's own
  * line breaker. React Native's text engine (CoreText/Minikin) breaks lines by
- * *its* rules, which pretext does not model — so instead of trusting it, the
- * native `Text` paints pretext's **materialized lines**: each measured line is
- * its own single-line `<Text>` pinned at `i × lineHeight` inside a box of
- * exactly the measured height. The same prepared handle feeds the walker's
- * height and this paint, so they cannot disagree — the web invariant,
- * re-established on RN's terms.
+ * *its* rules, which pretext does not model — so pretext computes the breaks
+ * and this component hands RN the text ALREADY BROKEN, as one `<Text>` whose
+ * lines are joined by hard `\n`. RN then never has to choose break points
+ * (the source of the disagreement); it only lays out lines that already fit.
  *
- * Lines never re-wrap natively (`numberOfLines={1}`, clipped): a sub-pixel
- * advance disagreement between pretext-native's font tables and the platform
- * shaper degrades to a clipped glyph edge, never to a reflow.
+ * Why one node and not one-per-line: a native `<Text>` is a Fabric view, and
+ * rows mount during scroll. One node per wrapped line made a paragraph cost
+ * ~10× the views of the web's single node, and mounting a screenful of them
+ * on a fling exceeded a frame → bare canvas. One node per block matches the
+ * web's mount cost, so plain windowing keeps up with a hard fling.
+ *
+ * Height stays exact via `numberOfLines = lines.length` inside a box of the
+ * measured height with `overflow: hidden`: the same prepared handle feeds the
+ * walker's height and this paint, and the cap guarantees a sub-pixel advance
+ * disagreement (pretext font tables vs the platform shaper) can only clip a
+ * glyph edge on the last line — never grow the box or reflow.
  */
 function TextComponent(props: TextProps): ReactElement | null {
   const defaults = useContext(TextDefaultsContext);
@@ -67,7 +73,9 @@ function TextComponent(props: TextProps): ReactElement | null {
     const prepared = prepareTextSegments(text, r.font, r.opts);
     // Mirrors `layout()`'s break decisions — the exact call the measure made.
     const { lines, height } = layoutWithLines(prepared, width, r.lineHeight);
-    return { lines, height, width };
+    // Join at pretext's break points with hard newlines: RN renders exactly
+    // these lines, in one node, without re-choosing any breaks.
+    return { text: lines.map((l) => l.text).join('\n'), count: lines.length, height, width };
     // `epoch` invalidates when fonts (re)register and metrics change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text, r.font, r.lineHeight, r.letterSpacing, r.whiteSpace, r.wordBreak, rowWidth, props.shrink, epoch]);
@@ -89,26 +97,16 @@ function TextComponent(props: TextProps): ReactElement | null {
         ...(props.shrink ? { width: laidOut.width, flexGrow: 0, flexShrink: 0 } : null),
       }}
     >
-      {laidOut.lines.map((line, i) => (
-        <RNText
-          key={i}
-          numberOfLines={1}
-          ellipsizeMode="clip"
-          selectable={props.selectable}
-          style={[
-            {
-              position: 'absolute',
-              top: i * r.lineHeight,
-              left: 0,
-              right: 0,
-            },
-            lineStyle,
-            props.style,
-          ]}
-        >
-          {line.text}
-        </RNText>
-      ))}
+      <RNText
+        // Cap at the measured line count so RN can never grow the box: exact
+        // height, clip-on-disagreement (the per-line invariant, one node).
+        numberOfLines={laidOut.count}
+        ellipsizeMode="clip"
+        selectable={props.selectable}
+        style={[{ position: 'absolute', top: 0, left: 0, right: 0 }, lineStyle, props.style]}
+      >
+        {laidOut.text}
+      </RNText>
     </View>
   );
 }

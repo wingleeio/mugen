@@ -37,6 +37,13 @@ interface FadeScope {
 
 const FadeContext = createContext<FadeScope | null>(null);
 
+/** True when inside a `FadeMarkdown` (a streaming turn). RichText uses this to
+ *  keep per-line fragment nodes there — line collapse would defeat the per-line
+ *  fade. Persisted (non-fading) rows have no scope and collapse freely. */
+export function useInFadeScope(): boolean {
+  return useContext(FadeContext) !== null;
+}
+
 const FADE_MS = 180;
 
 /**

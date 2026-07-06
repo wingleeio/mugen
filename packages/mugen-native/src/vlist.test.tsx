@@ -12,8 +12,19 @@ import { create, act, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { installPretextPolyfills, registerFont } from '@wingleeio/pretext-native';
 import { buildTestFont } from '@wingleeio/pretext-native/testing';
 import { clearTextCache, clearHeightCache, notifyFontsChanged } from '@wingleeio/mugen/native-core';
-import { MugenVList, useMugenVirtualizer, Text, VStack, HStack, Escape } from './index';
+import { MugenVList, useMugenVirtualizer, Text, VStack, HStack, Escape, Collapse, useMugenRow } from './index';
 import { CANVAS_HEADROOM } from './vlist';
+import * as React from 'react';
+
+// The animation clock (Collapse tweens) drives itself on rAF, absent in Node.
+const g = globalThis as unknown as {
+  requestAnimationFrame?: (cb: (t: number) => void) => number;
+  cancelAnimationFrame?: (h: number) => void;
+};
+if (g.requestAnimationFrame === undefined) {
+  g.requestAnimationFrame = (cb) => setTimeout(() => cb(16), 0) as unknown as number;
+  g.cancelAnimationFrame = (h) => clearTimeout(h as unknown as ReturnType<typeof setTimeout>);
+}
 
 // Test font: unitsPerEm 1000, 'A'-'Z' plus a few — advances set so that at
 // `100px Test` an 'A' is exactly 60px wide and a space 25px.
@@ -96,8 +107,93 @@ const contentHeight = (r: ReactTestRenderer): number => {
   return flat.height - CANVAS_HEADROOM;
 };
 
+// A block renders as one <Text> whose lines are joined by '\n' (one Fabric
+// node per block, not per line — primitives/text.tsx). Split back into the
+// materialized lines the assertions reason about.
 const lineTexts = (n: ReactTestInstance): string[] =>
-  n.findAllByType('rn-text' as never).map((t) => String((t.props as { children: unknown }).children));
+  n
+    .findAllByType('rn-text' as never)
+    .flatMap((t) => String((t.props as { children: unknown }).children).split('\n'));
+
+const blockNumberOfLines = (n: ReactTestInstance): number[] =>
+  n
+    .findAllByType('rn-text' as never)
+    .map((t) => (t.props as { numberOfLines?: number }).numberOfLines ?? -1);
+
+describe('nested useMugenRow hook stability (ToolGroup repro)', () => {
+  // Mirrors comet's ToolGroup/ToolChipRow: a nested component uses useMugenRow
+  // then renders a conditional, animated Collapse; the group grows as a stream
+  // arrives. Reproduces "Rendered fewer hooks than expected" if useMugenRow's
+  // ambient/nested branch ever flips for a fiber.
+  function Chip({ id, hasOutput }: { id: string; hasOutput: boolean }) {
+    const row = useMugenRow(`chip-${id}`);
+    const [open, setOpen] = row.state(false);
+    void setOpen;
+    return (
+      <VStack>
+        <Text>{`chip ${id}`}</Text>
+        {hasOutput ? (
+          <Collapse id={`out-${id}`} open={open}>
+            <Text>{`output for ${id}`}</Text>
+          </Collapse>
+        ) : null}
+      </VStack>
+    );
+  }
+  function Group({ ids, streaming }: { ids: string[]; streaming: boolean }) {
+    const row = useMugenRow(`group`);
+    const [pinned] = row.state<boolean | null>(null);
+    const open = pinned ?? streaming;
+    return (
+      <Collapse id="group" open={open}>
+        <VStack>
+          {ids.map((id, i) => (
+            <Chip key={id} id={id} hasOutput={!streaming || i < ids.length - 1} />
+          ))}
+        </VStack>
+      </Collapse>
+    );
+  }
+
+  function ToolApp(props: { ids: string[]; streaming: boolean }) {
+    const items = [{ id: 'g', ids: props.ids, streaming: props.streaming }];
+    const instance = useMugenVirtualizer({ items });
+    return (
+      <MugenVList
+        instance={instance}
+        getKey={(m) => m.id}
+        width={400}
+        height={600}
+        overscan={0}
+        stickToBottom
+        font="100px Test"
+        lineHeight={110}
+        render={(m) => <Group ids={m.ids} streaming={m.streaming} />}
+      />
+    );
+  }
+
+  test('a streaming tool group that grows does not flip useMugenRow hooks', () => {
+    let r!: ReactTestRenderer;
+    act(() => {
+      r = create(<ToolApp ids={['a']} streaming />);
+    });
+    // Stream more tool calls in, each re-render growing the group and toggling
+    // the last chip's output on/off (running → done).
+    for (let n = 2; n <= 6; n++) {
+      const ids = Array.from({ length: n }, (_, i) => String.fromCharCode(97 + i));
+      act(() => {
+        r.update(<ToolApp ids={ids} streaming />);
+      });
+    }
+    // Settle (streaming → false): open state and hasOutput both change.
+    act(() => {
+      r.update(<ToolApp ids={['a', 'b', 'c', 'd', 'e', 'f']} streaming={false} />);
+    });
+    // Reaching here without a thrown "fewer hooks" is the assertion.
+    expect(r.root.findAllByType('rn-text' as never).length).toBeGreaterThan(0);
+  });
+});
 
 describe('MugenVList (native)', () => {
   test('computes exact analytic heights and paints pretext lines', () => {
@@ -122,9 +218,12 @@ describe('MugenVList (native)', () => {
     expect(rowTop(rows[0]!)).toBe(0);
     expect(rowTop(rows[1]!)).toBe(330);
 
-    // The painted lines are pretext's materialized breaks, one <Text> each.
+    // One <Text> per block, broken at pretext's points by '\n'; numberOfLines
+    // caps at the measured line count so height can't grow.
     expect(lineTexts(rows[0]!)).toEqual(['AAAA ', 'AAAA ', 'AAAA']);
+    expect(blockNumberOfLines(rows[0]!)).toEqual([3]);
     expect(lineTexts(rows[1]!)).toEqual(['AA']);
+    expect(blockNumberOfLines(rows[1]!)).toEqual([1]);
   });
 
   test('padding is chrome in the height, and narrows the text width', () => {
