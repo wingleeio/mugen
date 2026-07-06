@@ -1,5 +1,11 @@
 # @wingleeio/mugen-native
 
+## 0.2.2
+
+### Patch Changes
+
+- [`5960e60`](https://github.com/wingleeio/mugen/commit/5960e60a082def519b82976fb11cd2ae25581ccf) Thanks [@wingleeio](https://github.com/wingleeio)! - Programmatic scroll writes re-window rows at JS speed instead of waiting for the native onScroll round-trip, and writes larger than the overscan go through the anchor choreography. Previously the row window trailed the native offset by a frame, so a big instant jump — the stick-to-bottom catching up after a large live append, `scrollToBottom('instant')`, `scrollToItem` — could paint bare canvas for one frame (a visible black flash).
+
 ## 0.2.1
 
 ### Patch Changes
