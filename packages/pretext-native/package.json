@@ -61,7 +61,7 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
-    "@chenglou/pretext": "0.0.7"
+    "@chenglou/pretext": "0.0.8"
   },
   "devDependencies": {
     "tsdown": "^0.22.2",

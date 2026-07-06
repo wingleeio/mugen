@@ -28,9 +28,6 @@
     "onlyBuiltDependencies": [
       "esbuild",
       "sharp"
-    ],
-    "patchedDependencies": {
-      "@chenglou/pretext": "patches/@chenglou__pretext.patch"
-    }
+    ]
   }
 }

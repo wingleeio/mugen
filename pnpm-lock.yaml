@@ -4,11 +4,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-patchedDependencies:
-  '@chenglou/pretext':
-    hash: a4c1308d0ac610318c8f88db8cf693e97a59dfd7f1dc4cdaba2633cfcf7f28c5
-    path: patches/@chenglou__pretext.patch
-
 importers:
 
   .:
@@ -176,7 +171,7 @@ importers:
     dependencies:
       '@chenglou/pretext':
         specifier: 0.0.8
-        version: 0.0.8(patch_hash=a4c1308d0ac610318c8f88db8cf693e97a59dfd7f1dc4cdaba2633cfcf7f28c5)
+        version: 0.0.8
       use-sync-external-store:
         specifier: ^1.6.0
         version: 1.6.0(react@19.2.7)
@@ -225,7 +220,7 @@ importers:
     dependencies:
       '@chenglou/pretext':
         specifier: 0.0.8
-        version: 0.0.8(patch_hash=a4c1308d0ac610318c8f88db8cf693e97a59dfd7f1dc4cdaba2633cfcf7f28c5)
+        version: 0.0.8
       '@incremark/core':
         specifier: ^1.0.2
         version: 1.0.2
@@ -277,7 +272,7 @@ importers:
     dependencies:
       '@chenglou/pretext':
         specifier: 0.0.8
-        version: 0.0.8(patch_hash=a4c1308d0ac610318c8f88db8cf693e97a59dfd7f1dc4cdaba2633cfcf7f28c5)
+        version: 0.0.8
       '@types/mdast':
         specifier: ^4.0.4
         version: 4.0.4
@@ -323,7 +318,7 @@ importers:
     dependencies:
       '@chenglou/pretext':
         specifier: 0.0.8
-        version: 0.0.8(patch_hash=a4c1308d0ac610318c8f88db8cf693e97a59dfd7f1dc4cdaba2633cfcf7f28c5)
+        version: 0.0.8
       '@wingleeio/mugen':
         specifier: workspace:^
         version: link:../mugen
@@ -359,8 +354,8 @@ importers:
   packages/pretext-native:
     dependencies:
       '@chenglou/pretext':
-        specifier: 0.0.7
-        version: 0.0.7(patch_hash=a4c1308d0ac610318c8f88db8cf693e97a59dfd7f1dc4cdaba2633cfcf7f28c5)
+        specifier: 0.0.8
+        version: 0.0.8
     devDependencies:
       tsdown:
         specifier: ^0.22.2
@@ -959,9 +954,6 @@ packages:
 
   '@changesets/write@0.4.0':
     resolution: {integrity: sha512-CdTLvIOPiCNuH71pyDu3rA+Q0n65cmAbXnwWH84rKGiFumFzkmHNT8KHTMEchcxN+Kl8I54xGUhJ7l3E7X396Q==}
-
-  '@chenglou/pretext@0.0.7':
-    resolution: {integrity: sha512-FV5hj3fGqpBlzbANUbR+s+6XuNRrghVVyuNs33zdH2SzU7MvK+7GlW6xREjDCreixKbexEn7OEkDgAFeWuu5Hg==}
 
   '@chenglou/pretext@0.0.8':
     resolution: {integrity: sha512-yqm2GMxnPI7VHcHwe84P8ZF0JK/2d2DMKPqMN+s95jQhwDMYYXKVFVJUMEaVWckQStdsjdLav/0Vu+d9YbtGxA==}
@@ -8621,9 +8613,7 @@ snapshots:
       human-id: 4.2.0
       prettier: 2.8.8
 
-  '@chenglou/pretext@0.0.7(patch_hash=a4c1308d0ac610318c8f88db8cf693e97a59dfd7f1dc4cdaba2633cfcf7f28c5)': {}
-
-  '@chenglou/pretext@0.0.8(patch_hash=a4c1308d0ac610318c8f88db8cf693e97a59dfd7f1dc4cdaba2633cfcf7f28c5)': {}
+  '@chenglou/pretext@0.0.8': {}
 
   '@cloudflare/workerd-darwin-64@1.20260603.1':
     optional: true
