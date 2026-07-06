@@ -175,8 +175,8 @@ importers:
   packages/mugen:
     dependencies:
       '@chenglou/pretext':
-        specifier: 0.0.7
-        version: 0.0.7(patch_hash=a4c1308d0ac610318c8f88db8cf693e97a59dfd7f1dc4cdaba2633cfcf7f28c5)
+        specifier: 0.0.8
+        version: 0.0.8(patch_hash=a4c1308d0ac610318c8f88db8cf693e97a59dfd7f1dc4cdaba2633cfcf7f28c5)
       use-sync-external-store:
         specifier: ^1.6.0
         version: 1.6.0(react@19.2.7)
@@ -224,8 +224,8 @@ importers:
   packages/mugen-markdown:
     dependencies:
       '@chenglou/pretext':
-        specifier: 0.0.7
-        version: 0.0.7(patch_hash=a4c1308d0ac610318c8f88db8cf693e97a59dfd7f1dc4cdaba2633cfcf7f28c5)
+        specifier: 0.0.8
+        version: 0.0.8(patch_hash=a4c1308d0ac610318c8f88db8cf693e97a59dfd7f1dc4cdaba2633cfcf7f28c5)
       '@incremark/core':
         specifier: ^1.0.2
         version: 1.0.2
@@ -276,8 +276,8 @@ importers:
   packages/mugen-markdown-native:
     dependencies:
       '@chenglou/pretext':
-        specifier: 0.0.7
-        version: 0.0.7(patch_hash=a4c1308d0ac610318c8f88db8cf693e97a59dfd7f1dc4cdaba2633cfcf7f28c5)
+        specifier: 0.0.8
+        version: 0.0.8(patch_hash=a4c1308d0ac610318c8f88db8cf693e97a59dfd7f1dc4cdaba2633cfcf7f28c5)
       '@types/mdast':
         specifier: ^4.0.4
         version: 4.0.4
@@ -322,8 +322,8 @@ importers:
   packages/mugen-native:
     dependencies:
       '@chenglou/pretext':
-        specifier: 0.0.7
-        version: 0.0.7(patch_hash=a4c1308d0ac610318c8f88db8cf693e97a59dfd7f1dc4cdaba2633cfcf7f28c5)
+        specifier: 0.0.8
+        version: 0.0.8(patch_hash=a4c1308d0ac610318c8f88db8cf693e97a59dfd7f1dc4cdaba2633cfcf7f28c5)
       '@wingleeio/mugen':
         specifier: workspace:^
         version: link:../mugen
@@ -962,6 +962,9 @@ packages:
 
   '@chenglou/pretext@0.0.7':
     resolution: {integrity: sha512-FV5hj3fGqpBlzbANUbR+s+6XuNRrghVVyuNs33zdH2SzU7MvK+7GlW6xREjDCreixKbexEn7OEkDgAFeWuu5Hg==}
+
+  '@chenglou/pretext@0.0.8':
+    resolution: {integrity: sha512-yqm2GMxnPI7VHcHwe84P8ZF0JK/2d2DMKPqMN+s95jQhwDMYYXKVFVJUMEaVWckQStdsjdLav/0Vu+d9YbtGxA==}
 
   '@cloudflare/workerd-darwin-64@1.20260603.1':
     resolution: {integrity: sha512-cEXDWu6V3ZrpmwWkM4OJE9AeXjdAgOY5rh8EHhcBVCuP5rxnzUbPzLtrVOHx0UUUAcCrFq0Xsa6mZKL1VUZsKQ==}
@@ -8619,6 +8622,8 @@ snapshots:
       prettier: 2.8.8
 
   '@chenglou/pretext@0.0.7(patch_hash=a4c1308d0ac610318c8f88db8cf693e97a59dfd7f1dc4cdaba2633cfcf7f28c5)': {}
+
+  '@chenglou/pretext@0.0.8(patch_hash=a4c1308d0ac610318c8f88db8cf693e97a59dfd7f1dc4cdaba2633cfcf7f28c5)': {}
 
   '@cloudflare/workerd-darwin-64@1.20260603.1':
     optional: true

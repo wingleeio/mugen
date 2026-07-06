@@ -52,7 +52,7 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
-    "@chenglou/pretext": "0.0.7",
+    "@chenglou/pretext": "0.0.8",
     "@types/mdast": "^4.0.4",
     "@wingleeio/mugen": "workspace:^",
     "@wingleeio/mugen-markdown": "workspace:^",
