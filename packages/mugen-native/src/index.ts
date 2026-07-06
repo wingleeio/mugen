@@ -41,6 +41,7 @@ export type {
   MugenScrollAlign,
   MugenScrollState,
   MugenConfig,
+  MugenHeightCache,
 } from '@wingleeio/mugen/native-core';
 
 // ── Row hooks (used inside `render`; `useMugenRow` also in nested components) ──
