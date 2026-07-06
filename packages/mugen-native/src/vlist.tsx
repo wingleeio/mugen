@@ -128,8 +128,16 @@ export interface MugenVListProps<T> {
   stickToBottom?: boolean | StickToBottomOptions;
   /** Override the measured viewport width (tests); skips onLayout. */
   width?: number;
-  /** Extra px rendered above/below the viewport. Default 200. */
+  /**
+   * Extra px rendered above/below the viewport. Default 200. Pass `Infinity`
+   * for RESIDENT mode: every row stays mounted (exact analytic heights make
+   * this affordable) and scrolling involves ZERO JavaScript — no window to
+   * chase, so no velocity can ever outrun it. Reach callbacks are inactive
+   * in resident mode.
+   */
   overscan?: number;
+  /** ScrollView passthrough — chat transcripts usually hide it. */
+  showsVerticalScrollIndicator?: boolean;
   /** Called once each time the scroll position enters the top threshold. */
   onTopReached?: (index: number) => void;
   /** Called once each time the scroll position enters the bottom threshold. */
@@ -562,8 +570,24 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
   adapter.contentHeight = total;
   adapter.viewportHeight = vh;
 
+  const resident = !Number.isFinite(overscan);
   const rows: ReactNode[] = [];
-  if (instance.length > 0 && vh > 0 && cw > 0) {
+  if (resident && instance.length > 0 && vh > 0 && cw > 0) {
+    for (let i = 0; i < instance.length; i++) {
+      const key = instance.keyAt(i);
+      rows.push(
+        <RowView
+          key={key}
+          instance={instance}
+          rowKey={key}
+          item={instance.itemAt(i)}
+          top={originRef.current + instance.offsetOf(i)}
+          cw={cw}
+          centered={centered}
+        />,
+      );
+    }
+  } else if (instance.length > 0 && vh > 0 && cw > 0) {
     // Velocity-aware overscan: heights are analytic and cached, so painting
     // ahead in the fling direction is cheap — the fixed overscan alone loses
     // to a hard fling (the window trails native scroll by ~2 frames of JS
@@ -689,7 +713,9 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     setPendingJump((cur) => (cur === null ? cur : null));
     adapter.onNativeScroll(st);
     instance.setScrollTop(st); // updates scrollTop + wakes useMugenSelector
-    setScrollTop(st);
+    // Resident mode: nothing about the committed tree depends on the scroll
+    // position — scrolling costs zero React work.
+    if (Number.isFinite(props.overscan ?? 200)) setScrollTop(st);
     if (stickOn) ctl.handleScroll(stickThreshold);
   };
 
@@ -708,6 +734,7 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
       removeClippedSubviews={false}
       keyboardDismissMode={props.keyboardDismissMode}
       keyboardShouldPersistTaps={props.keyboardShouldPersistTaps}
+      showsVerticalScrollIndicator={props.showsVerticalScrollIndicator}
       // Mount-time anchor in canvas coordinates (Fabric honors contentOffset
       // only at mount; later corrections use origin absorption instead).
       contentOffset={anchorOffsetRef.current ?? undefined}

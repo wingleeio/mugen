@@ -240,6 +240,42 @@ describe('MugenVList (native)', () => {
     expect(rowTop(rows[rows.length - 1]!)).toBe(10890);
   });
 
+  test('resident mode (overscan Infinity): all rows mounted, scroll is free', () => {
+    const items = Array.from({ length: 100 }, (_, i) => ({ id: String(i), text: 'AA' }));
+    function ResidentApp() {
+      const instance = useMugenVirtualizer({ items });
+      return (
+        <MugenVList
+          instance={instance}
+          getKey={(m) => m.id}
+          width={400}
+          height={600}
+          overscan={Infinity}
+          font="100px Test"
+          lineHeight={110}
+          render={(m) => (
+            <VStack>
+              <Text>{m.text}</Text>
+            </VStack>
+          )}
+        />
+      );
+    }
+    let r!: ReactTestRenderer;
+    act(() => {
+      r = create(<ResidentApp />);
+    });
+    expect(findRows(r).length).toBe(100);
+    // Scrolling re-windows nothing — every row is already there.
+    const scroll = r.root.findByType('rn-scrollview' as never);
+    act(() => {
+      (scroll.props as { onScroll: (e: unknown) => void }).onScroll({
+        nativeEvent: { contentOffset: { y: CANVAS_HEADROOM + 5000 } },
+      });
+    });
+    expect(findRows(r).length).toBe(100);
+  });
+
   test('growth with items appended patches offsets', () => {
     const items = Array.from({ length: 3 }, (_, i) => ({ id: String(i), text: 'AA' }));
     let r!: ReactTestRenderer;
