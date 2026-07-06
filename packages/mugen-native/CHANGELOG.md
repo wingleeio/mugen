@@ -1,5 +1,16 @@
 # @wingleeio/mugen-native
 
+## 0.2.1
+
+### Patch Changes
+
+- [`ed743a7`](https://github.com/wingleeio/mugen/commit/ed743a73f4283bd74c63a562356a515265565de0) Thanks [@wingleeio](https://github.com/wingleeio)! - `MugenVList` resolves `initialScroll` during the first render when the viewport is controlled (`width` + `height`), seeding the row window at the anchor and handing the offset to the ScrollView as its mount-time `contentOffset`. The previous imperative scrollTo raced the native content layout: the viewport could be stranded past the content (blank list, rows at negative y), and the first measure paid for the top-of-list window it was about to jump away from.
+
+- [`49036d2`](https://github.com/wingleeio/mugen/commit/49036d20b117d37d46a899bf8f85004d0e2474d7) Thanks [@wingleeio](https://github.com/wingleeio)! - Flicker-free scroll anchoring on React Native. The web applies anchor shifts post-commit pre-paint; on RN an imperative scrollTo lands a frame late (one-frame flash of the wrong content on every history prepend), and a `contentOffset` prop update is applied by Fabric BEFORE the content grows, so iOS clamps it to the old max and the viewport silently drifts. Anchoring is now a two-commit choreography, each frame pixel-identical: the taller content commits with a counter-translation of the canvas, the corrective scroll dispatches, and its own onScroll drops the translation. Also seeds `initialScroll` through the mount-time `contentOffset` (the one moment Fabric honors it), windowing the first measure at the anchor.
+
+- Updated dependencies [[`bf8b139`](https://github.com/wingleeio/mugen/commit/bf8b1395cbdbfecabfd1de293062ed93829c1c31)]:
+  - @wingleeio/pretext-native@0.1.2
+
 ## 0.2.0
 
 ### Minor Changes
