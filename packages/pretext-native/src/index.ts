@@ -63,6 +63,7 @@ export type InstallPretextPolyfillsResult = {
 type PolyfillTarget = {
   OffscreenCanvas?: unknown;
   Intl?: { Segmenter?: unknown };
+  navigator?: { userAgent?: unknown };
 };
 
 /**
@@ -95,6 +96,21 @@ export function installPretextPolyfills(
   }
   if (typeof g.Intl.Segmenter === 'undefined' || options?.force?.segmenter === true) {
     g.Intl.Segmenter = PretextSegmenter;
+  }
+
+  // React Native defines `navigator` (product: 'ReactNative') but no
+  // `userAgent`; pretext's engine profile sniffs UA strings and would crash on
+  // `undefined.includes(...)`. An empty string lands it on the neutral
+  // profile — correct here, since the font-table ruler has no browser
+  // line-breaker quirks to model.
+  const nav = g.navigator;
+  if (nav !== undefined && typeof nav.userAgent !== 'string') {
+    try {
+      nav.userAgent = '';
+    } catch {
+      // A frozen navigator without userAgent can't be helped from here;
+      // environments that freeze navigator ship a userAgent.
+    }
   }
 
   return {

@@ -74,6 +74,22 @@ configureMugenNative({
 See [`apps/native-example`](../../apps/native-example) for a complete Expo app
 (streaming markdown chat, stick-to-bottom, collapse).
 
+## React Compiler
+
+mugen's walker calls your row components during the **measure pass**, outside
+React's render — there is no dispatcher there. The React Compiler's injected
+memo cache (`useMemoCache`) needs one, so compiled row components crash with
+`dispatcher.useMemoCache is not a function`. Opt row-authoring modules out
+(Expo SDK 54+ enables the compiler by default):
+
+```tsx
+// components/rows.tsx — everything rendered inside MugenVList's `render`
+'use no memo';
+```
+
+Inside rows, use the row-scoped hooks (`useMugenRow`) instead of React state —
+they live in the list instance and survive virtualization.
+
 ## Develop
 
 ```bash
