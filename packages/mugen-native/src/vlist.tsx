@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from 'react';
 import {
+  Platform,
   ScrollView,
   View,
   type LayoutChangeEvent,
@@ -41,6 +42,18 @@ import {
 } from '@wingleeio/mugen/native-core';
 import { NativeScrollElement } from './scroll-adapter';
 import { WidthContext } from './width-context';
+
+/**
+ * iOS canvas headroom. Rows render into a canvas whose top edge (the
+ * "origin") starts a million px down and MOVES UP as history prepends —
+ * `contentInset` clamps the scrollable range to the occupied region. A
+ * prepend then never needs a corrective scroll at all: the commit is atomic
+ * (existing rows keep their canvas coordinates), which is the only way to be
+ * flash-free on Fabric, where a scroll command and a commit can land on
+ * different frames. Android's contentInset semantics differ, so it keeps the
+ * two-commit choreography instead. Exported for tests.
+ */
+export const CANVAS_HEADROOM = Platform.OS === 'ios' ? 1_000_000 : 0;
 
 export type { MugenScrollEase, SpringOptions };
 
@@ -207,8 +220,12 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
   if (adapterRef.current === null) adapterRef.current = new NativeScrollElement();
   const adapter = adapterRef.current;
   const el = adapter as unknown as HTMLElement;
+  // Canvas-space = engine-space + origin. Engine/adapter stay pure.
+  const originRef = useRef(CANVAS_HEADROOM);
   const [scrollTop, setScrollTop] = useState(0);
   const measured = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
+  const velocityRef = useRef(0);
+  const scrollSampleRef = useRef<{ t: number; y: number } | null>(null);
 
   // Re-render whenever any row is invalidated.
   const subscribeGlobal = useCallback((cb: () => void) => instance.subscribeGlobal(cb), [instance]);
@@ -219,7 +236,7 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
 
   // Wire the adapter to the ScrollView's imperative scroll.
   adapter.scrollFn = (y, animated) => {
-    scrollViewRef.current?.scrollTo({ y, animated });
+    scrollViewRef.current?.scrollTo({ y: y + originRef.current, animated });
   };
 
   // Attach the adapter as the engine's scroll element + re-anchoring hook.
@@ -446,7 +463,7 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
       y = instance.scrollTargetForIndex(initial.index, initial.align ?? 'start') ?? 0;
     }
     if (y > 0) {
-      anchorOffsetRef.current = { x: 0, y };
+      anchorOffsetRef.current = { x: 0, y: originRef.current + y };
       adapter.contentHeight = instance.totalHeight();
       adapter.viewportHeight = vh;
       adapter.onNativeScroll(y);
@@ -488,8 +505,15 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
         reachedRef.current.top = instance.keyAt(0);
         reachedRef.current.bottom = instance.keyAt(instance.length - 1);
       }
-      // Render-phase updates: React re-runs this component before committing.
-      setPendingAnchor((cur) => ({ y: next, delta: (cur?.delta ?? 0) + applied }));
+      if (CANVAS_HEADROOM > 0) {
+        // Origin absorption (iOS): the canvas top edge moves up instead of
+        // the scroll moving down. Existing rows keep their canvas coords and
+        // the native offset is never touched — nothing to race, no flash.
+        originRef.current = Math.max(0, originRef.current - applied);
+      } else {
+        setPendingAnchor((cur) => ({ y: next, delta: (cur?.delta ?? 0) + applied }));
+      }
+      // Render-phase update: React re-runs this component before committing.
       if (scrollTop !== next) setScrollTop(next);
     }
   }
@@ -509,13 +533,21 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
   // target content is already painted on the frame the jump lands.
   const overscanRef = useRef(props.overscan ?? 200);
   overscanRef.current = props.overscan ?? 200;
+  const [pendingJump, setPendingJump] = useState<{ from: number; to: number } | null>(null);
   adapter.onProgrammaticWrite = (next, prev) => {
     instance.scrollTop = next;
     setScrollTop(next);
     if (Math.abs(next - prev) <= overscanRef.current) return false;
-    setPendingAnchor((cur) => ({ y: next, delta: (cur?.delta ?? 0) + (next - prev) }));
+    // Big jump: paint BOTH the departure and destination windows in one
+    // commit, so neither ordering of (scroll command, commit) can show bare
+    // canvas. The landing onScroll drops the departure window.
+    setPendingJump({ from: prev, to: next });
     return true;
   };
+
+  useLayoutEffect(() => {
+    if (pendingJump !== null) adapter.scrollFn?.(pendingJump.to, false);
+  }, [pendingJump, adapter]);
 
   const total = instance.totalHeight();
   const overscan = props.overscan ?? 200;
@@ -532,22 +564,38 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
 
   const rows: ReactNode[] = [];
   if (instance.length > 0 && vh > 0 && cw > 0) {
-    const first = instance.indexAt(Math.max(0, scrollTop - overscan));
-    const last = instance.indexAt(scrollTop + vh + overscan);
-    for (let i = first; i <= last && i < instance.length; i++) {
-      const key = instance.keyAt(i);
-      rows.push(
-        <RowView
-          key={key}
-          instance={instance}
-          rowKey={key}
-          item={instance.itemAt(i)}
-          top={instance.offsetOf(i)}
-          cw={cw}
-          centered={centered}
-        />,
-      );
-    }
+    // Velocity-aware overscan: heights are analytic and cached, so painting
+    // ahead in the fling direction is cheap — the fixed overscan alone loses
+    // to a hard fling (the window trails native scroll by ~2 frames of JS
+    // round-trip, and velocity × 2 frames outruns it → bare canvas).
+    const v = velocityRef.current;
+    const lead = Math.min(2400, Math.abs(v) * 0.1);
+    const leadUp = v < 0 ? lead : 0;
+    const leadDown = v > 0 ? lead : 0;
+    const emitted = new Set<number>();
+    const emitWindow = (center: number, up: number, down: number): void => {
+      const first = instance.indexAt(Math.max(0, center - overscan - up));
+      const last = instance.indexAt(center + vh + overscan + down);
+      for (let i = first; i <= last && i < instance.length; i++) {
+        if (emitted.has(i)) continue;
+        emitted.add(i);
+        const key = instance.keyAt(i);
+        rows.push(
+          <RowView
+            key={key}
+            instance={instance}
+            rowKey={key}
+            item={instance.itemAt(i)}
+            top={originRef.current + instance.offsetOf(i)}
+            cw={cw}
+            centered={centered}
+          />,
+        );
+      }
+    };
+    emitWindow(scrollTop, leadUp, leadDown);
+    // Mid-jump: the departure window stays painted until the scroll lands.
+    if (pendingJump !== null) emitWindow(pendingJump.from, 0, 0);
   }
 
   useEffect(() => {
@@ -602,7 +650,7 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
 
   const topSlot =
     props.renderTop && cw > 0 ? (
-      <View style={slotStyle(0)}>
+      <View style={slotStyle(originRef.current)}>
         <View style={{ width: cw }}>
           <WidthContext.Provider value={cw}>{props.renderTop()}</WidthContext.Provider>
         </View>
@@ -611,7 +659,7 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
 
   const bottomSlot =
     props.renderBottom && cw > 0 ? (
-      <View style={slotStyle(bottomSlotTop)}>
+      <View style={slotStyle(originRef.current + bottomSlotTop)}>
         <View style={{ width: cw }}>
           <WidthContext.Provider value={cw}>{props.renderBottom()}</WidthContext.Provider>
         </View>
@@ -627,10 +675,18 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
   };
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const st = e.nativeEvent.contentOffset.y;
-    // The corrective scroll for a staged anchor landed — drop the
-    // counter-translation (commit B of the anchoring choreography).
+    const st = e.nativeEvent.contentOffset.y - originRef.current;
+    const now = performance.now();
+    const lastSample = scrollSampleRef.current;
+    if (lastSample !== null && now > lastSample.t) {
+      // Smoothed px/s — drives the directional overscan lead.
+      const inst = ((st - lastSample.y) / (now - lastSample.t)) * 1000;
+      velocityRef.current = velocityRef.current * 0.5 + inst * 0.5;
+    }
+    scrollSampleRef.current = { t: now, y: st };
+    // A staged correction landed (or the user scrolled) — drop transition state.
     setPendingAnchor((cur) => (cur === null ? cur : null));
+    setPendingJump((cur) => (cur === null ? cur : null));
     adapter.onNativeScroll(st);
     instance.setScrollTop(st); // updates scrollTop + wakes useMugenSelector
     setScrollTop(st);
@@ -652,11 +708,23 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
       removeClippedSubviews={false}
       keyboardDismissMode={props.keyboardDismissMode}
       keyboardShouldPersistTaps={props.keyboardShouldPersistTaps}
-      // The atomic offset channel: seeded at mount for `initialScroll`, and
-      // updated on scroll-anchor shifts so the corrected offset lands in the
-      // same native transaction as the content that moved. Stable identity
-      // between shifts — RN re-applies only on value change.
+      // Mount-time anchor in canvas coordinates (Fabric honors contentOffset
+      // only at mount; later corrections use origin absorption instead).
       contentOffset={anchorOffsetRef.current ?? undefined}
+      // The occupied region of the headroom canvas — clamps scrolling so the
+      // unused space above the oldest row is unreachable.
+      contentInset={
+        CANVAS_HEADROOM > 0
+          ? { top: -originRef.current, left: 0, bottom: 0, right: 0 }
+          : undefined
+      }
+      scrollIndicatorInsets={
+        CANVAS_HEADROOM > 0
+          ? { top: -originRef.current, left: 0, bottom: 0, right: 0 }
+          : undefined
+      }
+      automaticallyAdjustContentInsets={false}
+      contentInsetAdjustmentBehavior="never"
       style={[props.height != null ? { height: props.height, flexGrow: 0 } : { flex: 1 }, props.style]}
     >
       <View
@@ -665,7 +733,7 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
         // Cleared by the scroll's own onScroll. (A conditional entry, not a
         // `transform: undefined` key — RN's style validator rejects that.)
         style={[
-          { height: total, width: '100%' },
+          { height: originRef.current + total, width: '100%' },
           pendingAnchor !== null ? { transform: [{ translateY: -pendingAnchor.delta }] } : null,
         ]}
       >

@@ -13,6 +13,7 @@ import { installPretextPolyfills, registerFont } from '@wingleeio/pretext-native
 import { buildTestFont } from '@wingleeio/pretext-native/testing';
 import { clearTextCache, clearHeightCache, notifyFontsChanged } from '@wingleeio/mugen/native-core';
 import { MugenVList, useMugenVirtualizer, Text, VStack, HStack, Escape } from './index';
+import { CANVAS_HEADROOM } from './vlist';
 
 // Test font: unitsPerEm 1000, 'A'-'Z' plus a few — advances set so that at
 // `100px Test` an 'A' is exactly 60px wide and a space 25px.
@@ -76,8 +77,9 @@ const findRows = (r: ReactTestRenderer): ReactTestInstance[] =>
     .findAllByType('rn-view' as never)
     .filter((n) => (n.props as { style?: { position?: string } }).style?.position === 'absolute');
 
+// Row/canvas coordinates are biased by the iOS headroom origin — normalize.
 const rowTop = (n: ReactTestInstance): number =>
-  (n.props as { style: { top: number } }).style.top;
+  (n.props as { style: { top: number } }).style.top - CANVAS_HEADROOM;
 
 const contentView = (r: ReactTestRenderer): ReactTestInstance => {
   const scroll = r.root.findByType('rn-scrollview' as never);
@@ -91,7 +93,7 @@ const contentHeight = (r: ReactTestRenderer): number => {
   const flat = Object.assign({}, ...(Array.isArray(style) ? style : [style]).filter(Boolean)) as {
     height: number;
   };
-  return flat.height;
+  return flat.height - CANVAS_HEADROOM;
 };
 
 const lineTexts = (n: ReactTestInstance): string[] =>
@@ -151,7 +153,7 @@ describe('MugenVList (native)', () => {
     const scroll = r.root.findByType('rn-scrollview' as never);
     act(() => {
       (scroll.props as { onScroll: (e: unknown) => void }).onScroll({
-        nativeEvent: { contentOffset: { y: 2200 } },
+        nativeEvent: { contentOffset: { y: CANVAS_HEADROOM + 2200 } },
       });
     });
     rows = findRows(r);
@@ -230,7 +232,7 @@ describe('MugenVList (native)', () => {
     const scroll = r.root.findByType('rn-scrollview' as never);
     expect((scroll.props as { contentOffset?: { y: number } }).contentOffset).toEqual({
       x: 0,
-      y: 10400,
+      y: CANVAS_HEADROOM + 10400,
     });
     const rows = findRows(r);
     // Window at the anchor: first visible row starts at ⌊10400/110⌋ × 110.
