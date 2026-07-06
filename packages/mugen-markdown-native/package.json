@@ -1,6 +1,6 @@
 {
   "name": "@wingleeio/mugen-markdown-native",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Measurable markdown for mugen on React Native — the web pipeline (incremark, theme, tokenizer) with native primitives painting pretext's materialized lines.",
   "license": "MIT",
   "author": "Wing Lee <contact@winglee.io>",
