@@ -1,6 +1,6 @@
 {
   "name": "@wingleeio/pretext-native",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "React Native measurement backend for @chenglou/pretext — pure-JS font-table text metrics and Intl.Segmenter fallback for Hermes.",
   "license": "MIT",
   "author": "Wing Lee <contact@winglee.io>",
