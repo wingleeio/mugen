@@ -500,6 +500,23 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     if (pendingAnchor !== null) adapter.scrollFn?.(pendingAnchor.y, false);
   }, [pendingAnchor, adapter]);
 
+  // Programmatic writes re-window rows at JS speed. Following the native
+  // onScroll round-trip instead leaves the window a frame behind — a write
+  // larger than the overscan then paints bare canvas (a one-frame black
+  // flash, e.g. the stick catching up after a large live append). Small
+  // writes (spring frames) keep the immediate scroll; jumps beyond the
+  // overscan go through the same choreography as anchor shifts, so the
+  // target content is already painted on the frame the jump lands.
+  const overscanRef = useRef(props.overscan ?? 200);
+  overscanRef.current = props.overscan ?? 200;
+  adapter.onProgrammaticWrite = (next, prev) => {
+    instance.scrollTop = next;
+    setScrollTop(next);
+    if (Math.abs(next - prev) <= overscanRef.current) return false;
+    setPendingAnchor((cur) => ({ y: next, delta: (cur?.delta ?? 0) + (next - prev) }));
+    return true;
+  };
+
   const total = instance.totalHeight();
   const overscan = props.overscan ?? 200;
   const cw = instance.contentWidth();

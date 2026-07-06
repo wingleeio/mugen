@@ -29,6 +29,15 @@ export class NativeScrollElement {
   viewportHeight = 0;
   /** The imperative hook into the ScrollView (null until the ref attaches). */
   scrollFn: ((y: number, animated: boolean) => void) | null = null;
+  /**
+   * vlist's observer for programmatic writes (spring frames, instant jumps).
+   * Returning `true` means the observer took over delivery (a choreographed
+   * jump); `false` lets the immediate scrollFn dispatch proceed. Either way
+   * the observer can re-window rows at JS speed — following the native
+   * onScroll round-trip instead leaves the row window a frame behind, and a
+   * write larger than the overscan then paints bare canvas (a black flash).
+   */
+  onProgrammaticWrite: ((next: number, prev: number) => boolean) | null = null;
   /** Absorbs `style.scrollBehavior` writes from `setScrollTopInstant`. */
   readonly style: Record<string, unknown> = {};
 
@@ -39,8 +48,10 @@ export class NativeScrollElement {
   set scrollTop(value: number) {
     const max = Math.max(0, this.contentHeight - this.viewportHeight);
     const next = Math.min(Math.max(0, value), max);
+    const prev = this.top;
     this.top = next;
-    this.scrollFn?.(next, false);
+    const handled = this.onProgrammaticWrite?.(next, prev) ?? false;
+    if (!handled) this.scrollFn?.(next, false);
   }
 
   get scrollHeight(): number {
