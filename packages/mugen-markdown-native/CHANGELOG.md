@@ -1,5 +1,12 @@
 # @wingleeio/mugen-markdown-native
 
+## 0.1.2
+
+### Patch Changes
+
+- Updated dependencies [[`b4aca5a`](https://github.com/wingleeio/mugen/commit/b4aca5a1ab3aaff3fec79d8393e5d2ce84feb5e9)]:
+  - @wingleeio/mugen-native@0.3.0
+
 ## 0.1.1
 
 ### Patch Changes
