@@ -188,6 +188,48 @@ describe('MugenVList (native)', () => {
     expect(total).toBe(123);
   });
 
+  test('initialScroll bottom seeds the mount frame: contentOffset + window at anchor', () => {
+    // 100 rows × 110 = 11000; viewport 600 → anchor at 10400. With controlled
+    // dims the FIRST committed frame must already be at the bottom: offset via
+    // the ScrollView's mount-time contentOffset prop (an imperative scrollTo
+    // races native content layout and strands the viewport past the content),
+    // and the row window computed at the anchor, not the top.
+    const items = Array.from({ length: 100 }, (_, i) => ({ id: String(i), text: 'AA' }));
+    function BottomApp() {
+      const instance = useMugenVirtualizer({ items });
+      return (
+        <MugenVList
+          instance={instance}
+          getKey={(m) => m.id}
+          width={400}
+          height={600}
+          overscan={0}
+          font="100px Test"
+          lineHeight={110}
+          initialScroll="bottom"
+          render={(m) => (
+            <VStack>
+              <Text>{m.text}</Text>
+            </VStack>
+          )}
+        />
+      );
+    }
+    let r!: ReactTestRenderer;
+    act(() => {
+      r = create(<BottomApp />);
+    });
+    const scroll = r.root.findByType('rn-scrollview' as never);
+    expect((scroll.props as { contentOffset?: { y: number } }).contentOffset).toEqual({
+      x: 0,
+      y: 10400,
+    });
+    const rows = findRows(r);
+    // Window at the anchor: first visible row starts at ⌊10400/110⌋ × 110.
+    expect(rowTop(rows[0]!)).toBe(10340);
+    expect(rowTop(rows[rows.length - 1]!)).toBe(10890);
+  });
+
   test('growth with items appended patches offsets', () => {
     const items = Array.from({ length: 3 }, (_, i) => ({ id: String(i), text: 'AA' }));
     let r!: ReactTestRenderer;

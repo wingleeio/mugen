@@ -418,6 +418,42 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
   instance.setViewport(vw, vh, rootPx);
   instance.sync();
 
+  // ── Deterministic initial anchor ──
+  // When the viewport is already known at first render (controlled `width` +
+  // `height`), resolve `initialScroll` NOW and hand it to the ScrollView as
+  // its mount-time `contentOffset` — an imperative scrollTo racing the native
+  // content layout can strand the viewport past the content (blank screen,
+  // rows at negative y). Seeding also windows the FIRST measure/render at the
+  // anchor instead of paying for the top of the list and jumping.
+  const initialOffsetRef = useRef<number | null>(null);
+  if (
+    initialOffsetRef.current === null &&
+    !didInitialScroll.current &&
+    initial != null &&
+    (initial.behavior ?? 'instant') !== 'smooth' &&
+    vh > 0 &&
+    instance.contentWidth() > 0
+  ) {
+    let y = 0;
+    if (initial.to === 'bottom') {
+      y = Math.max(0, instance.totalHeight() - vh);
+    } else if (initial.to === 'index') {
+      y = instance.scrollTargetForIndex(initial.index, initial.align ?? 'start') ?? 0;
+    }
+    if (y > 0) {
+      initialOffsetRef.current = y;
+      adapter.contentHeight = instance.totalHeight();
+      adapter.viewportHeight = vh;
+      adapter.onNativeScroll(y);
+      instance.scrollTop = y;
+      didInitialScroll.current = true;
+      prevTotalRef.current = instance.totalHeight();
+      if (scrollTop !== y) setScrollTop(y); // render-phase update: re-runs before commit
+    } else {
+      initialOffsetRef.current = -1;
+    }
+  }
+
   const reachedRef = useRef<{ top: string | null; bottom: string | null }>({
     top: null,
     bottom: null,
@@ -568,6 +604,13 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
       removeClippedSubviews={false}
       keyboardDismissMode={props.keyboardDismissMode}
       keyboardShouldPersistTaps={props.keyboardShouldPersistTaps}
+      // Mount-time anchor (value never changes after the seed, so the native
+      // side applies it exactly once, atomically with the first content layout).
+      contentOffset={
+        initialOffsetRef.current != null && initialOffsetRef.current > 0
+          ? { x: 0, y: initialOffsetRef.current }
+          : undefined
+      }
       style={[props.height != null ? { height: props.height, flexGrow: 0 } : { flex: 1 }, props.style]}
     >
       <View style={{ height: total, width: '100%' }}>
