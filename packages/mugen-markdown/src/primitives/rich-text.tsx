@@ -14,7 +14,7 @@ import {
   type MeasureContext,
   type MeasurableStyle,
   type SafeClassName,
-} from '@wingleeio/mugen';
+} from '@wingleeio/mugen/native-core';
 import {
   prepareRichInline,
   measureRichInlineStats,
@@ -79,7 +79,8 @@ export interface RichTextProps<C extends string = string> {
   className?: SafeClassName<C>;
 }
 
-function resolveRunFont(run: RichTextRun, fallback: Font | undefined): Font {
+/** Resolve a run's font against the flow fallback (exported for native renderers). */
+export function resolveRunFont(run: RichTextRun, fallback: Font | undefined): Font {
   const font = run.font ?? fallback;
   if (font == null) {
     throw new Error(
@@ -97,26 +98,39 @@ function resolveRunFont(run: RichTextRun, fallback: Font | undefined): Font {
 // no width of its own. It's never painted (the DOM renders the box's `content`).
 const BOX_PLACEHOLDER = '‌';
 
-/** Split runs into hard-break-delimited segments, each a list of rich-inline items. */
-function segmentItems(runs: RichTextRun[], fallback: Font | undefined): RichInlineItem[][] {
-  const segments: RichInlineItem[][] = [];
-  let cur: RichInlineItem[] = [];
+/**
+ * One hard-break-delimited segment of the flow: the pretext items plus the
+ * source run behind each item (`runs[i]` produced `items[i]`), so a renderer
+ * that paints materialized line fragments (React Native) can map a fragment's
+ * `itemIndex` back to its run's color/decoration/link. The measure only reads
+ * `items`.
+ */
+export interface RichTextSegment {
+  items: RichInlineItem[];
+  runs: RichTextRun[];
+}
+
+/** Split runs into hard-break-delimited segments of rich-inline items. */
+export function segmentItems(runs: RichTextRun[], fallback: Font | undefined): RichTextSegment[] {
+  const segments: RichTextSegment[] = [];
+  let cur: RichTextSegment = { items: [], runs: [] };
   for (const run of runs) {
     if (run.break) {
       segments.push(cur);
-      cur = [];
+      cur = { items: [], runs: [] };
       continue;
     }
     if (run.advance != null) {
       // Inline box: a zero-advance placeholder keeps the item alive and
       // `extraWidth` is the whole reserved advance, laid out as one non-breaking
       // atom. See BOX_PLACEHOLDER.
-      cur.push({
+      cur.items.push({
         text: BOX_PLACEHOLDER,
         font: resolveRunFont(run, fallback),
         extraWidth: Math.max(0, run.advance),
         break: 'never',
       });
+      cur.runs.push(run);
       continue;
     }
     const text = run.text ?? '';
@@ -124,7 +138,8 @@ function segmentItems(runs: RichTextRun[], fallback: Font | undefined): RichInli
     const item: RichInlineItem = { text, font: resolveRunFont(run, fallback) };
     if (run.letterSpacing != null) item.letterSpacing = run.letterSpacing;
     if (run.noBreak) item.break = 'never';
-    cur.push(item);
+    cur.items.push(item);
+    cur.runs.push(run);
   }
   segments.push(cur);
   return segments;
@@ -145,7 +160,12 @@ function segmentKey(items: RichInlineItem[]): string {
   return key;
 }
 
-function prepareCached(items: RichInlineItem[]): PreparedRichInline {
+/**
+ * Prepare a segment's items with the shared LRU-ish cache (flushed on font
+ * epoch). Exported for the native renderer, which materializes lines from the
+ * exact same prepared handles the measure counted them on.
+ */
+export function prepareCached(items: RichInlineItem[]): PreparedRichInline {
   const epoch = fontEpoch();
   if (epoch !== cacheEpoch) {
     prepCache.clear();
@@ -165,19 +185,19 @@ function measureRichText(props: RichTextProps, ctx: MeasureContext): number {
   const { runs, lineHeight } = props;
   if (runs.length === 0) return 0;
   const segments = segmentItems(runs, props.font);
-  const hasText = segments.some((s) => s.length > 0);
+  const hasText = segments.some((s) => s.items.length > 0);
   const hasBreak = runs.some((r) => r.break);
   if (!hasText && !hasBreak) return 0;
 
   const width = Math.max(0, ctx.width);
   let lines = 0;
   for (const seg of segments) {
-    if (seg.length === 0) {
+    if (seg.items.length === 0) {
       // A blank line — e.g. the line a trailing/standalone hard break opens.
       lines += 1;
       continue;
     }
-    lines += Math.max(1, measureRichInlineStats(prepareCached(seg), width).lineCount);
+    lines += Math.max(1, measureRichInlineStats(prepareCached(seg.items), width).lineCount);
   }
   return lines * lineHeight;
 }
@@ -269,8 +289,8 @@ export const RichText = markPrimitive(
       const segments = segmentItems(p.runs, p.font);
       let max = 0;
       for (const seg of segments) {
-        if (seg.length === 0) continue;
-        max = Math.max(max, measureRichInlineStats(prepareCached(seg), 1e7).maxLineWidth);
+        if (seg.items.length === 0) continue;
+        max = Math.max(max, measureRichInlineStats(prepareCached(seg.items), 1e7).maxLineWidth);
       }
       return max;
     },

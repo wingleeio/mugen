@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    // "DOM" is here only so the *types* re-used from `@wingleeio/mugen/native-core`
+    // (e.g. `MugenInstance.attachScroller(el: HTMLElement)`) resolve; the runtime
+    // never touches the DOM — the scroll element is a React Native adapter that
+    // structurally satisfies the same surface. `skipLibCheck` absorbs the
+    // react-native/lib.dom global collisions.
+    "lib": ["ES2022", "DOM"],
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "declaration": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true,
+    "outDir": "dist"
+  },
+  "include": ["src", "test", "tsdown.config.ts", "vitest.config.ts"]
+}

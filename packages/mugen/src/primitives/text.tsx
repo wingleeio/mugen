@@ -26,7 +26,7 @@ export interface TextProps<C extends string = string> {
   className?: SafeClassName<C>;
 }
 
-interface ResolvedText {
+export interface ResolvedText {
   font: string;
   lineHeight: number;
   opts: PrepareOptions;
@@ -35,7 +35,10 @@ interface ResolvedText {
   wordBreak: WordBreakMode;
 }
 
-function resolveText(props: TextProps, defaults: TextDefaults): ResolvedText {
+// Exported (via `@wingleeio/mugen/native-core`) so platform renderers — e.g.
+// the React Native port — resolve props → font/lineHeight/opts with the exact
+// same fallback rules the measure half uses. Not part of the web public API.
+export function resolveText(props: TextProps, defaults: TextDefaults): ResolvedText {
   const font = props.font ?? defaults.font;
   if (font == null) {
     throw new Error(

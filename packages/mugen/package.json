@@ -44,6 +44,16 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       }
+    },
+    "./native-core": {
+      "import": {
+        "types": "./dist/native-core.d.mts",
+        "default": "./dist/native-core.mjs"
+      },
+      "require": {
+        "types": "./dist/native-core.d.cts",
+        "default": "./dist/native-core.cjs"
+      }
     }
   },
   "scripts": {

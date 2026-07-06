@@ -29,7 +29,7 @@
  * clip, so it provides no prefetch inside a scrollable list — and its async
  * delivery shows a flash of nothing where the code should be.
  */
-import type { Font } from '@wingleeio/mugen';
+import type { Font } from '@wingleeio/mugen/native-core';
 import type { LanguageProfile } from './languages';
 import { INITIAL_STATE, tokenizeLine, type LineState, type Token } from './tokenize';
 import type { CodeTokenColors } from './types';

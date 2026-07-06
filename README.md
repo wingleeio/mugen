@@ -70,6 +70,15 @@ height can never silently drift from what paints. See
 | --- | --- |
 | [`@wingleeio/mugen`](packages/mugen) | The virtualizer: list, primitives, hooks, scrolling. |
 | [`@wingleeio/mugen-markdown`](packages/mugen-markdown) | Measurable markdown — incremark-parsed, rendered with mugen primitives, streams incrementally. |
+| [`@wingleeio/mugen-native`](packages/mugen-native) | React Native renderer — the same engine on a `ScrollView`, painting pretext's materialized lines. |
+| [`@wingleeio/mugen-markdown-native`](packages/mugen-markdown-native) | Measurable markdown for React Native — same parser, theme, and exact heights as the web. |
+| [`@wingleeio/pretext-native`](packages/pretext-native) | Runs pretext on Hermes — pure-JS font-table text metrics + an `Intl.Segmenter` fallback. |
+
+React Native support shares the engine with the web packages (nothing is
+forked): heights come from the app's own font files via pretext-native, and
+`Text` paints the exact lines pretext measured. See
+[`apps/native-example`](apps/native-example) for a complete Expo app —
+streaming markdown chat with stick-to-bottom.
 
 ## Development
 

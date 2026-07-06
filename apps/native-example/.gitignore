@@ -1,0 +1,6 @@
+.expo/
+dist/
+ios/
+android/
+*.orig.*
+web-build/

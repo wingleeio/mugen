@@ -1,17 +1,21 @@
-import { createElement, type ReactNode } from 'react';
-import { VStack } from '@wingleeio/mugen';
+import { createElement, type FunctionComponent, type ReactNode } from 'react';
+// native-core: same modules as the main entry, but with no react-dom anywhere
+// in the import graph — keeps this file loadable by React Native bundlers.
+import { VStack } from '@wingleeio/mugen/native-core';
 import type { Image, RootContent } from 'mdast';
 import { parseMarkdown, type MarkdownParseOptions } from './parse';
 import { resolveTheme, type DeepPartial, type MarkdownTheme } from './theme';
 import { baseFormat, composeFont, flattenInline, type InlineFormat } from './inline';
-import { RichText, type RichTextRun } from './primitives/rich-text';
+import { RichText, type RichTextProps, type RichTextRun } from './primitives/rich-text';
 import { defaultComponents, mergeComponents } from './components';
 import type {
   InlineTextOptions,
   MarkdownComponent,
   MarkdownComponents,
+  MarkdownPrimitives,
   MarkdownRenderContext,
   ResolvedMarkdownComponents,
+  ResolvedMarkdownPrimitives,
 } from './types';
 
 export interface RenderMarkdownOptions {
@@ -21,6 +25,29 @@ export interface RenderMarkdownOptions {
   components?: MarkdownComponents;
   /** Parser options (gfm, math, containers). */
   parserOptions?: MarkdownParseOptions;
+  /**
+   * The two primitives the dispatcher itself constructs — the block `Stack`
+   * and the inline `RichText` flow. A non-DOM renderer (React Native) swaps in
+   * its own implementations here; the measure contract must be identical.
+   * Pass a **stable object identity** — the block memo caches key on it.
+   */
+  primitives?: MarkdownPrimitives;
+}
+
+const DEFAULT_PRIMITIVES: ResolvedMarkdownPrimitives = Object.freeze({
+  Stack: VStack as unknown as FunctionComponent<{ gap?: number; children?: ReactNode }>,
+  RichText: RichText as unknown as FunctionComponent<RichTextProps>,
+});
+
+// Resolve identical override objects once, so memo identity holds across ticks.
+const primitivesCache = new WeakMap<object, ResolvedMarkdownPrimitives>();
+function resolvePrimitives(overrides?: MarkdownPrimitives): ResolvedMarkdownPrimitives {
+  if (overrides == null) return DEFAULT_PRIMITIVES;
+  const cached = primitivesCache.get(overrides);
+  if (cached !== undefined) return cached;
+  const resolved = { ...DEFAULT_PRIMITIVES, ...overrides };
+  primitivesCache.set(overrides, resolved);
+  return resolved;
 }
 
 /** The default inner rendering for a node — inline `RichText` or rendered child blocks. */
@@ -55,7 +82,13 @@ function renderChildren(node: RootContent, ctx: MarkdownRenderContext): ReactNod
 // change. WeakMap, so nodes from an evicted/reset parser are GC'd.
 const blockCache = new WeakMap<
   object,
-  { el: ReactNode; theme: MarkdownTheme; components: ResolvedMarkdownComponents; variant: string }
+  {
+    el: ReactNode;
+    theme: MarkdownTheme;
+    components: ResolvedMarkdownComponents;
+    primitives: ResolvedMarkdownPrimitives;
+    variant: string;
+  }
 >();
 
 // Secondary, content-keyed cache. The node-reference cache above only catches
@@ -104,20 +137,33 @@ function memoElement(
     byRef !== undefined &&
     byRef.theme === ctx.theme &&
     byRef.components === ctx.components &&
+    byRef.primitives === ctx.primitives &&
     byRef.variant === variant
   ) {
     return byRef.el;
   }
-  const sigKey = `${idOf(ctx.theme)}:${idOf(ctx.components)}:${variant}:${blockSig(node)}`;
+  const sigKey = `${idOf(ctx.theme)}:${idOf(ctx.components)}:${idOf(ctx.primitives)}:${variant}:${blockSig(node)}`;
   const byContent = contentCache.get(sigKey);
   if (byContent !== undefined) {
     contentCache.delete(sigKey); // refresh LRU recency
     contentCache.set(sigKey, byContent);
-    blockCache.set(node, { el: byContent, theme: ctx.theme, components: ctx.components, variant });
+    blockCache.set(node, {
+      el: byContent,
+      theme: ctx.theme,
+      components: ctx.components,
+      primitives: ctx.primitives,
+      variant,
+    });
     return byContent;
   }
   const el = build();
-  blockCache.set(node, { el, theme: ctx.theme, components: ctx.components, variant });
+  blockCache.set(node, {
+    el,
+    theme: ctx.theme,
+    components: ctx.components,
+    primitives: ctx.primitives,
+    variant,
+  });
   if (contentCache.size >= MAX_CONTENT_CACHE) {
     const oldest = contentCache.keys().next().value;
     if (oldest !== undefined) contentCache.delete(oldest);
@@ -167,10 +213,12 @@ function dispatch(node: RootContent, ctx: MarkdownRenderContext, key?: string | 
 function createContext(
   theme: MarkdownTheme,
   components: ResolvedMarkdownComponents,
+  primitives: ResolvedMarkdownPrimitives,
 ): MarkdownRenderContext {
   const ctx: MarkdownRenderContext = {
     theme,
     components,
+    primitives,
     renderBlocks(nodes, gap = theme.blockGap) {
       const kids: ReactNode[] = [];
       for (let i = 0; i < nodes.length; i++) {
@@ -178,7 +226,7 @@ function createContext(
         if (el != null) kids.push(el);
       }
       if (kids.length === 0) return null;
-      return createElement(VStack, { gap }, kids);
+      return createElement(primitives.Stack, { gap }, kids);
     },
     renderBlock(node, key) {
       return memoDispatch(node, ctx, key);
@@ -203,7 +251,7 @@ function createContext(
       });
       const out: RichTextRun[] = [];
       flattenInline(nodes, fmt, theme, out, components.inline);
-      return createElement(RichText, {
+      return createElement(primitives.RichText, {
         runs: out,
         font: composeFont(fmt),
         lineHeight: opts.lineHeight ?? theme.lineHeight,
@@ -225,7 +273,8 @@ export function renderMarkdown(source: string, options: RenderMarkdownOptions = 
   const ast = parseMarkdown(source, options.parserOptions);
   const theme = resolveTheme(options.theme);
   const components = mergeComponents(options.components);
-  const ctx = createContext(theme, components);
+  const primitives = resolvePrimitives(options.primitives);
+  const ctx = createContext(theme, components, primitives);
   return ctx.renderBlocks(ast.children);
 }
 

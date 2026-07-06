@@ -11,7 +11,7 @@ import {
   measureChildren,
   naturalWidthOf,
   type MeasureContext,
-} from '@wingleeio/mugen';
+} from '@wingleeio/mugen/native-core';
 
 /**
  * Streaming fade-in for `<Markdown fade>`.

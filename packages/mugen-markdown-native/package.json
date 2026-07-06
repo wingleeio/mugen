@@ -1,0 +1,76 @@
+{
+  "name": "@wingleeio/mugen-markdown-native",
+  "version": "0.0.0",
+  "description": "Measurable markdown for mugen on React Native — the web pipeline (incremark, theme, tokenizer) with native primitives painting pretext's materialized lines.",
+  "license": "MIT",
+  "author": "Wing Lee <contact@winglee.io>",
+  "homepage": "https://mugen.winglee.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wingleeio/mugen.git",
+    "directory": "packages/mugen-markdown-native"
+  },
+  "bugs": "https://github.com/wingleeio/mugen/issues",
+  "keywords": [
+    "react-native",
+    "markdown",
+    "incremental",
+    "streaming",
+    "virtualization",
+    "mugen",
+    "gfm"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "check-types": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@chenglou/pretext": "0.0.7",
+    "@types/mdast": "^4.0.4",
+    "@wingleeio/mugen": "workspace:^",
+    "@wingleeio/mugen-markdown": "workspace:^",
+    "@wingleeio/mugen-native": "workspace:^"
+  },
+  "peerDependencies": {
+    "react": "^18.2.0 || ^19.0.0",
+    "react-native": ">=0.72.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.15",
+    "@types/react-test-renderer": "^19.1.0",
+    "@wingleeio/pretext-native": "workspace:^",
+    "react": "^19.2.6",
+    "react-native": "^0.81.0",
+    "react-test-renderer": "^19.2.0",
+    "tsdown": "^0.22.2",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  }
+}

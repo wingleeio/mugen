@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "name": "mugen native example",
+    "slug": "mugen-native-example",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "dev.winglee.mugen.example"
+    },
+    "android": {
+      "package": "dev.winglee.mugen.example"
+    }
+  }
+}

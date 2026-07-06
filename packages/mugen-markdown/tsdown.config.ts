@@ -5,7 +5,7 @@ import { defineConfig } from 'tsdown';
 // in the output, matching the `@wingleeio/mugen` build (Node >=22 can
 // `require()` these ESM-only graphs).
 export default defineConfig({
-  entry: ['src/index.ts'],
+  entry: ['src/index.ts', 'src/native-core.ts'],
   format: ['esm', 'cjs'],
   dts: true,
   clean: true,

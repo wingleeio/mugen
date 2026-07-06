@@ -94,7 +94,12 @@ function declaredWidth(node: ReactNode): number | null {
  * natural width is unknowable (a custom primitive without `naturalWidth`)
  * makes the row fall back to an equal split of the remainder.
  */
-function distribute(kids: ReactNode[], inner: number, gap: number, ctx: MeasureContext): number[] {
+export function distribute(
+  kids: ReactNode[],
+  inner: number,
+  gap: number,
+  ctx: MeasureContext,
+): number[] {
   const totalGap = gap * Math.max(0, kids.length - 1);
   let fixedTotal = 0;
   let growCount = 0;

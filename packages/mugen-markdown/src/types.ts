@@ -1,5 +1,5 @@
-import type { CSSProperties, ReactNode } from 'react';
-import type { Font } from '@wingleeio/mugen';
+import type { CSSProperties, FunctionComponent, ReactNode } from 'react';
+import type { Font } from '@wingleeio/mugen/native-core';
 import type {
   Blockquote,
   Code,
@@ -21,7 +21,22 @@ import type {
 } from 'mdast';
 import type { MarkdownTheme } from './theme';
 import type { InlineFormat } from './inline';
-import type { RichTextRun } from './primitives/rich-text';
+import type { RichTextProps, RichTextRun } from './primitives/rich-text';
+
+/**
+ * The two primitives the dispatcher constructs directly (everything else goes
+ * through {@link MarkdownComponents}). A non-DOM renderer swaps these for its
+ * own implementations with the identical measure contract — that's how
+ * `@wingleeio/mugen-markdown-native` reuses this package's entire pipeline.
+ */
+export interface MarkdownPrimitives {
+  /** Stacks block children with a `gap` (the web default is mugen's `VStack`). */
+  Stack?: FunctionComponent<{ gap?: number; children?: ReactNode }>;
+  /** The inline flow (the web default is this package's `RichText`). */
+  RichText?: FunctionComponent<RichTextProps>;
+}
+
+export type ResolvedMarkdownPrimitives = Required<MarkdownPrimitives>;
 
 /** Options for building a body/heading inline-text (`RichText`) element. */
 export interface InlineTextOptions {
@@ -46,6 +61,8 @@ export interface MarkdownRenderContext {
   readonly theme: MarkdownTheme;
   /** The resolved component set (defaults merged with user overrides). */
   readonly components: ResolvedMarkdownComponents;
+  /** The resolved dispatcher primitives (Stack + RichText; see {@link MarkdownPrimitives}). */
+  readonly primitives: ResolvedMarkdownPrimitives;
   /** Render a list of block nodes as a vertically-stacked subtree (gap defaults to `theme.blockGap`). */
   renderBlocks(nodes: readonly RootContent[], gap?: number): ReactNode;
   /** Render a single block node, dispatching to its component. */

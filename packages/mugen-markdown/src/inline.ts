@@ -1,5 +1,5 @@
 import type { PhrasingContent } from 'mdast';
-import type { Font } from '@wingleeio/mugen';
+import type { Font } from '@wingleeio/mugen/native-core';
 import type { MarkdownTheme } from './theme';
 import { measureInline, type RichTextRun } from './primitives/rich-text';
 import type { InlineComponent, InlineComponents, InlineRenderContext } from './types';

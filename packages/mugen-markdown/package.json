@@ -41,6 +41,16 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       }
+    },
+    "./native-core": {
+      "import": {
+        "types": "./dist/native-core.d.mts",
+        "default": "./dist/native-core.mjs"
+      },
+      "require": {
+        "types": "./dist/native-core.d.cts",
+        "default": "./dist/native-core.cjs"
+      }
     }
   },
   "scripts": {
@@ -58,7 +68,7 @@
     "@types/mdast": "^4.0.4"
   },
   "peerDependencies": {
-    "@wingleeio/mugen": ">=0.3.0 <1.0.0",
+    "@wingleeio/mugen": ">=0.5.0 <1.0.0",
     "react": "^18.2.0 || ^19.0.0"
   },
   "devDependencies": {

@@ -1,0 +1,71 @@
+{
+  "name": "@wingleeio/pretext-native",
+  "version": "0.0.0",
+  "description": "React Native measurement backend for @chenglou/pretext — pure-JS font-table text metrics and Intl.Segmenter fallback for Hermes.",
+  "license": "MIT",
+  "author": "Wing Lee <contact@winglee.io>",
+  "homepage": "https://mugen.winglee.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wingleeio/mugen.git",
+    "directory": "packages/pretext-native"
+  },
+  "bugs": "https://github.com/wingleeio/mugen/issues",
+  "keywords": [
+    "react-native",
+    "text-measurement",
+    "pretext",
+    "hermes",
+    "fonts",
+    "opentype"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./testing": {
+      "import": {
+        "types": "./dist/testing.d.mts",
+        "default": "./dist/testing.mjs"
+      },
+      "require": {
+        "types": "./dist/testing.d.cts",
+        "default": "./dist/testing.cjs"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "check-types": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@chenglou/pretext": "0.0.7"
+  },
+  "devDependencies": {
+    "tsdown": "^0.22.2",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  }
+}

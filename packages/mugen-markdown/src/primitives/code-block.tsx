@@ -16,7 +16,7 @@ import {
   type MeasureContext,
   type MeasurableStyle,
   type SafeClassName,
-} from '@wingleeio/mugen';
+} from '@wingleeio/mugen/native-core';
 import { profileFor, type LanguageProfile } from '../highlight/languages';
 import { HighlightSession, TAB_COLUMNS } from '../highlight/paint';
 import { defaultTokenColors, type CodeTokenColors } from '../highlight/types';

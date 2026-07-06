@@ -5,7 +5,7 @@ import {
   type MeasurableStyle,
   type MeasureContext,
   type SafeClassName,
-} from '@wingleeio/mugen';
+} from '@wingleeio/mugen/native-core';
 
 /**
  * A GFM table that *looks* like a table and is still exactly measurable.

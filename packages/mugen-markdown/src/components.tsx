@@ -1,5 +1,5 @@
 import { createElement, type ReactNode } from 'react';
-import { VStack, HStack, definePrimitive, type Font } from '@wingleeio/mugen';
+import { VStack, HStack, definePrimitive, type Font } from '@wingleeio/mugen/native-core';
 import type { Image, List, Table } from 'mdast';
 import { RichText, type RichTextRun } from './primitives/rich-text';
 import { CodeBlock } from './primitives/code-block';
