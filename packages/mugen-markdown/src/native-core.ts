@@ -59,8 +59,13 @@ export {
 export type { RichTextProps, RichTextRun, RichTextSegment } from './primitives/rich-text';
 export { CodeBlock } from './primitives/code-block';
 export type { CodeBlockProps, CodeBlockHeader } from './primitives/code-block';
-export { TableBlock } from './primitives/table-block';
-export type { TableBlockProps } from './primitives/table-block';
+export {
+  TableBlock,
+  tableColumns,
+  resolveColumnWidths,
+  DEFAULT_MIN_COLUMN_WIDTH,
+} from './primitives/table-block';
+export type { TableBlockProps, TableColumns } from './primitives/table-block';
 
 // ── Syntax highlighting core (pure; the canvas painter stays web-only) ──
 export { tokenizeLine, INITIAL_STATE } from './highlight/tokenize';

@@ -80,6 +80,7 @@ function renderTable(node: Table, ctx: MarkdownRenderContext): ReactNode {
     borderColor: theme.table.borderColor,
     headerBackground: theme.table.headerBackground,
     radius: theme.table.radius,
+    minColumnWidth: theme.table.minColumnWidth,
   });
 }
 

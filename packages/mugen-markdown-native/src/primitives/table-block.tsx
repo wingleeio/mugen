@@ -1,12 +1,17 @@
 import { useContext, type ReactElement, type ReactNode } from 'react';
-import { View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import {
   getPrimitiveDef,
   markPrimitive,
-  naturalWidthOf,
+  measureNode,
+  TextDefaultsContext,
   type MeasureContext,
 } from '@wingleeio/mugen/native-core';
-import { TableBlock as WebTableBlock } from '@wingleeio/mugen-markdown/native-core';
+import {
+  TableBlock as WebTableBlock,
+  tableColumns,
+  resolveColumnWidths,
+} from '@wingleeio/mugen-markdown/native-core';
 import { WidthContext } from '@wingleeio/mugen-native';
 
 export interface TableBlockProps {
@@ -20,57 +25,44 @@ export interface TableBlockProps {
   headerBackground: string;
   /** Corner radius in px (clip only — no height impact). */
   radius: number;
+  /**
+   * Reasonable minimum rendered column width in px (padding included). Wider
+   * columns wrap down to this floor; once the minimums no longer fit the row the
+   * table scrolls horizontally. Defaults inside the shared column math.
+   */
+  minColumnWidth?: number;
 }
 
 const webDef = getPrimitiveDef(WebTableBlock)!;
 
-// Same floor and stub context as the web renderer — the ratio arithmetic must
-// come out identical in the measure walk and this render.
-const MIN_COLUMN_CONTENT = 48;
+// Same stub context as the web renderer — the RichText cells' `naturalWidth`
+// ignores the context, so the column math comes out identical to the measure.
 const STUB_CTX: MeasureContext = { defaults: {}, width: 0, measure: () => 0 };
 
-function columnCount(rows: ReactNode[][]): number {
-  let n = 0;
-  for (const row of rows) n = Math.max(n, row.length);
-  return n;
-}
-
-function columnRatios(p: TableBlockProps): number[] {
-  const cols = columnCount(p.rows);
-  const ratios = new Array<number>(cols).fill(MIN_COLUMN_CONTENT);
-  for (const row of p.rows) {
-    for (let c = 0; c < row.length; c++) {
-      const cell = row[c];
-      if (cell == null) continue;
-      let w: number | null;
-      try {
-        w = naturalWidthOf(cell, STUB_CTX);
-      } catch {
-        return new Array<number>(cols).fill(1);
-      }
-      if (w == null) return new Array<number>(cols).fill(1);
-      if (w > ratios[c]!) ratios[c] = w;
-    }
-  }
-  return ratios.map((r) => r + 2 * p.cellPadding);
-}
-
 /**
- * The native render half: rows of explicit pixel-width cells. The web version
- * lets flexbox resolve `flex: ratio ratio 0`; here the same
- * `width × ratio / Σratios` arithmetic runs in JS and each cell gets its exact
- * width plus a `WidthContext` so the RichText inside wraps precisely where the
- * measure said. Hairlines are real Views (counted in the height); the outer
- * ring is an absolutely-positioned overlay (height-neutral, the web's inset
- * box-shadow analog).
+ * The native render half: rows of explicit pixel-width cells. Column widths come
+ * from the shared `resolveColumnWidths` — the exact arithmetic the measure runs
+ * — so each cell's width (and the `WidthContext` the RichText inside wraps at)
+ * matches the analytic height at any viewport.
+ *
+ * When the columns' minimums fit the viewport the table renders inline exactly
+ * as before (a plain plate with hairlines and an overlay ring). When they don't,
+ * the rows go inside a horizontal `ScrollView` sized to the shared measured
+ * height (React Native won't derive a horizontal scroller's cross-axis height on
+ * its own), the ring frames the fixed viewport, and the content scrolls under
+ * it — the native analogue of the web's clipped, scrollbar-hidden overflow.
  */
 function TableBlockComponent(props: TableBlockProps): ReactElement | null {
   const width = useContext(WidthContext);
-  const cols = columnCount(props.rows);
+  const defaults = useContext(TextDefaultsContext);
+
+  const colWidths = resolveColumnWidths(tableColumns(props, STUB_CTX), width);
+  const cols = colWidths.length;
   if (props.rows.length === 0 || cols === 0) return null;
-  const ratios = columnRatios(props);
-  const total = ratios.reduce((a, b) => a + b, 0);
-  const colWidths = ratios.map((r) => (total > 0 && width > 0 ? (width * r) / total : 0));
+  // `resolveColumnWidths` sums to `max(width, minTableWidth)`, so this exceeds
+  // the viewport exactly when the column minimums don't fit.
+  const tableWidth = colWidths.reduce((a, b) => a + b, 0);
+  const overflow = tableWidth > width + 0.5;
 
   const children: ReactNode[] = [];
   props.rows.forEach((row, r) => {
@@ -104,34 +96,61 @@ function TableBlockComponent(props: TableBlockProps): ReactElement | null {
     );
   });
 
+  const clip =
+    props.radius > 0 ? { borderRadius: props.radius, overflow: 'hidden' as const } : null;
+  // The outer border is an absolutely-positioned ring, not a real border — a
+  // border would inset the content box; the ring is height-neutral, exactly like
+  // the web's inset box-shadow. It frames the viewport, so the content scrolls
+  // beneath it.
+  const ring =
+    props.divider > 0 ? (
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          borderWidth: props.divider,
+          borderColor: props.borderColor,
+          ...(props.radius > 0 ? { borderRadius: props.radius } : null),
+        }}
+      />
+    ) : null;
+
+  if (!overflow) {
+    // Fits: content-driven height, identical to the pre-overflow renderer.
+    return (
+      <View style={clip ?? undefined}>
+        {children}
+        {ring}
+      </View>
+    );
+  }
+
+  // Overflow: the ScrollView needs an explicit cross-axis height. Reuse the
+  // shared measure (the very height the list positioned this row at) so the
+  // scroller and the row slot agree to the pixel.
+  const ctx: MeasureContext = {
+    width,
+    defaults,
+    measure: (node, w) => measureNode(node, w, defaults),
+  };
+  const height = webDef.measure(props as unknown as Record<string, unknown>, ctx);
+
   return (
-    <View
-      style={{
-        ...(props.radius > 0 ? { borderRadius: props.radius, overflow: 'hidden' } : null),
-      }}
-    >
-      {children}
-      {props.divider > 0 ? (
-        <View
-          pointerEvents="none"
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            borderWidth: props.divider,
-            borderColor: props.borderColor,
-            ...(props.radius > 0 ? { borderRadius: props.radius } : null),
-          }}
-        />
-      ) : null}
+    <View style={{ width, height, ...clip }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ height }}>
+        <View style={{ width: tableWidth }}>{children}</View>
+      </ScrollView>
+      {ring}
     </View>
   );
 }
 TableBlockComponent.displayName = 'TableBlock';
 
-/** Measured exactly like the web `TableBlock` (shared ratio + row-height math). */
+/** Measured exactly like the web `TableBlock` (shared column + row-height math). */
 export const TableBlock = markPrimitive(
   TableBlockComponent as (props: TableBlockProps) => ReactElement | null,
   {

@@ -411,3 +411,41 @@ describe('nested code block: overflow scrolls, never widens the column', () => {
     expect(root.scrollWidth).toBeLessThanOrEqual(WIDTH + 1);
   });
 });
+
+describe('wide table: overflow scrolls, never widens the column, height stays exact', () => {
+  // A six-column table on a phone width: the per-column minimums can't all fit,
+  // so the table scrolls horizontally inside its clipped viewport instead of
+  // crushing every column to per-character wrapping. The scroll affordance must
+  // add no height (scrollbar hidden), so computed still equals painted.
+  it('a many-column table scrolls inside the block and measures what it paints', () => {
+    const md = [
+      '| id | gateway model | capabilities | $/M in·out | access | credits |',
+      '|---|---|---|---|---|---|',
+      '| claude-5-sonnet | anthropic/claude-sonnet-5 | tools, reasoning, vision, documents | 2 · 10 | premium | 5 |',
+      '| qwen3.7-plus | alibaba/qwen3.7-plus | tools, reasoning, vision | 0.4 · 1.6 | account | 1 |',
+    ].join('\n');
+
+    const { container } = render(
+      createElement(
+        'div',
+        { style: { width: `${WIDTH}px` } },
+        createElement(Markdown, { source: md, theme: THEME }),
+      ),
+    );
+    const root = container.firstElementChild as HTMLElement;
+    const stack = root.firstElementChild!; // the VStack of blocks
+    const scroller = stack.firstElementChild as HTMLElement; // the table's viewport
+
+    // The columns' minimums exceed the viewport, so the table scrolls…
+    expect(scroller.scrollWidth).toBeGreaterThan(scroller.clientWidth + 1);
+    // …the block's own box never exceeds the available width…
+    expect(scroller.getBoundingClientRect().width).toBeLessThanOrEqual(WIDTH + 0.5);
+    // …nothing widens the container…
+    expect(root.scrollWidth).toBeLessThanOrEqual(WIDTH + 1);
+
+    // …and the hidden-scrollbar viewport adds no height: computed == painted.
+    const computed = computedHeight(md);
+    const painted = scroller.getBoundingClientRect().height;
+    expect(Math.abs(computed - painted)).toBeLessThanOrEqual(0.5);
+  });
+});

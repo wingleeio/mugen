@@ -282,7 +282,12 @@ class SlotStore<T> {
   get(i: number): SlotAssignment<T> | null {
     return this.assign[i] ?? null;
   }
-  set(i: number, next: SlotAssignment<T> | null, notify: boolean): void {
+  /** Returns whether the assignment actually changed. `notify` wakes the
+   *  slot's subscribers immediately — ONLY legal from event handlers
+   *  (onScroll); a render-phase caller must pass false and deliver the
+   *  notification post-commit via `notify()` (React forbids setState on
+   *  another component during render). */
+  set(i: number, next: SlotAssignment<T> | null, notify: boolean): boolean {
     this.ensure(i + 1);
     const cur = this.assign[i]!;
     if (
@@ -295,11 +300,16 @@ class SlotStore<T> {
         cur.cw === next.cw &&
         cur.centered === next.centered)
     ) {
-      return;
+      return false;
     }
     this.assign[i] = next;
     this.ver[i] = (this.ver[i] ?? 0) + 1;
     if (notify) for (const cb of this.subs[i]!) cb();
+    return true;
+  }
+  /** Wake a slot's subscribers (post-commit delivery of a silent `set`). */
+  notify(i: number): void {
+    for (const cb of this.subs[i] ?? []) cb();
   }
 }
 
@@ -365,6 +375,8 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
   const poolSizeRef = useRef(0);
   poolSizeRef.current = poolSize;
   const allocateRef = useRef<((center: number, notify: boolean) => void) | null>(null);
+  // Slots reassigned during a RENDER-phase allocate; woken post-commit.
+  const dirtySlotsRef = useRef<Set<number>>(new Set());
 
   // ── mugen-drawn scroll indicator ──
   // The native offset in canvas coordinates, driven on the UI thread — the
@@ -774,11 +786,13 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
       const key = instance.keyAt(i);
       used.add(slot);
       nextMap.set(key, slot);
-      slotStore.set(
+      const changed = slotStore.set(
         slot,
         { rowKey: key, item: instance.itemAt(i), top: origin + instance.offsetOf(i), cw, centered },
         notify,
       );
+      // Render-phase caller: deliver the wake post-commit (see layout effect).
+      if (changed && !notify) dirtySlotsRef.current.add(slot);
     };
     for (const i of need) {
       const s = prev.get(instance.keyAt(i));
@@ -791,10 +805,29 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
       put(scan, i);
       scan++;
     }
-    for (let s = 0; s < poolSizeRef.current; s++) if (!used.has(s)) slotStore.set(s, null, notify);
+    for (let s = 0; s < poolSizeRef.current; s++) {
+      if (!used.has(s)) {
+        const changed = slotStore.set(s, null, notify);
+        if (changed && !notify) dirtySlotsRef.current.add(s);
+      }
+    }
     rowToSlotRef.current = nextMap;
   };
   allocateRef.current = allocate;
+
+  // Deliver render-phase slot reassignments AFTER the commit. Calling a slot's
+  // subscribers during MugenVList's render is a cross-component setState in
+  // render (React: "Cannot update a component (`Slot`) while rendering a
+  // different component"); a layout effect fires synchronously post-commit,
+  // pre-paint — the woken slots reconcile within the same frame. Slots that
+  // MOUNT this commit read the store directly and won't be dirty-notified
+  // redundantly (the notify is a version poke; an unchanged snapshot no-ops).
+  useLayoutEffect(() => {
+    if (dirtySlotsRef.current.size === 0) return;
+    const ids = [...dirtySlotsRef.current];
+    dirtySlotsRef.current.clear();
+    for (const id of ids) slotStore.notify(id);
+  });
 
   const rows: ReactNode[] = [];
   if (resident && instance.length > 0 && vh > 0 && cw > 0) {
@@ -813,15 +846,13 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
       );
     }
   } else if (instance.length > 0 && vh > 0 && cw > 0) {
-    // Re-seed the pool for the current position and emit the fixed slot pool.
-    // `notify:true` matters: the slots are memoized, so on a data/geometry
-    // re-render their props are unchanged and they'd bail out — the notify
-    // wakes exactly the slots whose assignment changed (e.g. a streaming row
-    // whose content grew) so they reconcile the new content. Freshly-mounted
-    // slots read the store directly this commit; already-mounted ones need the
-    // wake. Scroll updates go through the same `allocate(st, true)` path in
-    // onScroll.
-    allocate(adapter.scrollTop, true);
+    // Re-seed the pool for the current position (SILENT — notifying here would
+    // setState the memoized Slots during MugenVList's render, which React
+    // forbids; the layout effect above wakes exactly the changed slots right
+    // after commit, e.g. a streaming row whose content grew). Freshly-mounted
+    // slots read the store directly this commit. Scroll updates go through
+    // `allocate(st, true)` in onScroll, where an immediate notify is legal.
+    allocate(adapter.scrollTop, false);
     for (let s = 0; s < poolSizeRef.current; s++) {
       rows.push(<Slot key={s} store={slotStore} id={s} instance={instance} />);
     }

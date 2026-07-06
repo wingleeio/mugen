@@ -140,6 +140,42 @@ describe('Markdown measurability (mugen walker)', () => {
     expect(tall).toBe(40);
   });
 
+  it('floors table columns and scrolls instead of crushing them on a narrow viewport', () => {
+    // Six ~12+ char columns: every column's minimum hits the 96px floor, so the
+    // table's minimum width (~576px) exceeds a phone viewport. Below that width
+    // the table stops shrinking and scrolls — its height no longer depends on
+    // the viewport, where the old proportional squeeze kept getting taller.
+    const table = [
+      '| AlphaBravoCharlie | DeltaEchoFoxtrot | GolfHotelIndia | JulietKiloLima | MikeOscar | PapaQuebec |',
+      '|---|---|---|---|---|---|',
+      '| one two three | four five six | seven eight | nine ten | eleven | twelve |',
+    ].join('\n');
+
+    const narrow = measure(table, 120);
+    const narrower = measure(table, 60);
+    // Floored + scrolling → width-independent below the minimum table width.
+    expect(narrow).toBe(narrower);
+
+    // A wide viewport wraps the columns less, so it is never taller than the
+    // floored, scrolling table (and both are real, multi-line tables).
+    const wide = measure(table, 1200);
+    expect(wide).toBeGreaterThan(0);
+    expect(wide).toBeLessThanOrEqual(narrow);
+  });
+
+  it('a larger minColumnWidth gives wider columns that wrap less', () => {
+    const table = [
+      '| Alpha | Bravo | Charlie | Delta | Echo |',
+      '|---|---|---|---|---|',
+      '| some words here | more words here | a few words | tiny bit | ok |',
+    ].join('\n');
+    // At a phone width both floor-and-scroll; the bigger floor forces wider
+    // columns, so cells wrap less → shorter. (Both are width-independent here.)
+    const wideFloor = measure(table, 200, { table: { minColumnWidth: 160 } });
+    const tightFloor = measure(table, 200, { table: { minColumnWidth: 72 } });
+    expect(wideFloor).toBeLessThan(tightFloor);
+  });
+
   it('renderMarkdown returns null for empty source', () => {
     expect(renderMarkdown('')).toBeNull();
   });
