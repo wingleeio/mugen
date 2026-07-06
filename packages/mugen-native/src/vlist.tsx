@@ -425,15 +425,20 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
   // content layout can strand the viewport past the content (blank screen,
   // rows at negative y). Seeding also windows the FIRST measure/render at the
   // anchor instead of paying for the top of the list and jumping.
-  const initialOffsetRef = useRef<number | null>(null);
+  // `anchorOffsetRef` doubles as the atomic channel for later scroll-anchor
+  // shifts (see below); RN only re-applies `contentOffset` when its value
+  // changes, so a stable object is inert across unrelated renders.
+  const anchorOffsetRef = useRef<{ x: number; y: number } | null>(null);
+  const didSeedRef = useRef(false);
   if (
-    initialOffsetRef.current === null &&
+    !didSeedRef.current &&
     !didInitialScroll.current &&
     initial != null &&
     (initial.behavior ?? 'instant') !== 'smooth' &&
     vh > 0 &&
     instance.contentWidth() > 0
   ) {
+    didSeedRef.current = true;
     let y = 0;
     if (initial.to === 'bottom') {
       y = Math.max(0, instance.totalHeight() - vh);
@@ -441,7 +446,7 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
       y = instance.scrollTargetForIndex(initial.index, initial.align ?? 'start') ?? 0;
     }
     if (y > 0) {
-      initialOffsetRef.current = y;
+      anchorOffsetRef.current = { x: 0, y };
       adapter.contentHeight = instance.totalHeight();
       adapter.viewportHeight = vh;
       adapter.onNativeScroll(y);
@@ -449,8 +454,6 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
       didInitialScroll.current = true;
       prevTotalRef.current = instance.totalHeight();
       if (scrollTop !== y) setScrollTop(y); // render-phase update: re-runs before commit
-    } else {
-      initialOffsetRef.current = -1;
     }
   }
 
@@ -459,18 +462,29 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     bottom: null,
   });
 
-  // Apply the pending scroll-anchor shift post-commit (concurrent-safe; see web).
-  useLayoutEffect(() => {
-    const scrollAnchorDelta = instance.takeScrollAnchorDelta();
-    if (scrollAnchorDelta === 0) return;
-    adapter.scrollTop += scrollAnchorDelta;
-    instance.scrollTop = adapter.scrollTop;
-    setScrollTop(adapter.scrollTop);
-    if (instance.totalHeight() > vh + 1 && instance.length > 0) {
-      reachedRef.current.top = instance.keyAt(0);
-      reachedRef.current.bottom = instance.keyAt(instance.length - 1);
+  // Consume the pending scroll-anchor shift DURING render and ship it through
+  // the `contentOffset` prop, so the native side applies the taller content
+  // and the corrected offset in one transaction. The web applies anchor
+  // shifts post-commit, which is fine there (same-frame, pre-paint); on RN an
+  // imperative scrollTo after the commit lands a frame late — every prepend
+  // (history pagination) flashed the content shifted down for one frame.
+  // (Consuming during render trades strict concurrent-safety for atomicity;
+  // a discarded render loses at most one anchor delta, off by a prepend.)
+  {
+    const anchorDelta = instance.takeScrollAnchorDelta();
+    if (anchorDelta !== 0) {
+      const max = Math.max(0, instance.totalHeight() - vh);
+      const next = Math.max(0, Math.min(adapter.scrollTop + anchorDelta, max));
+      adapter.onNativeScroll(next); // bookkeeping only — no imperative scroll
+      instance.scrollTop = next;
+      anchorOffsetRef.current = { x: 0, y: next };
+      if (instance.totalHeight() > vh + 1 && instance.length > 0) {
+        reachedRef.current.top = instance.keyAt(0);
+        reachedRef.current.bottom = instance.keyAt(instance.length - 1);
+      }
+      if (scrollTop !== next) setScrollTop(next); // render-phase update
     }
-  });
+  }
 
   const total = instance.totalHeight();
   const overscan = props.overscan ?? 200;
@@ -604,13 +618,11 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
       removeClippedSubviews={false}
       keyboardDismissMode={props.keyboardDismissMode}
       keyboardShouldPersistTaps={props.keyboardShouldPersistTaps}
-      // Mount-time anchor (value never changes after the seed, so the native
-      // side applies it exactly once, atomically with the first content layout).
-      contentOffset={
-        initialOffsetRef.current != null && initialOffsetRef.current > 0
-          ? { x: 0, y: initialOffsetRef.current }
-          : undefined
-      }
+      // The atomic offset channel: seeded at mount for `initialScroll`, and
+      // updated on scroll-anchor shifts so the corrected offset lands in the
+      // same native transaction as the content that moved. Stable identity
+      // between shifts — RN re-applies only on value change.
+      contentOffset={anchorOffsetRef.current ?? undefined}
       style={[props.height != null ? { height: props.height, flexGrow: 0 } : { flex: 1 }, props.style]}
     >
       <View style={{ height: total, width: '100%' }}>
