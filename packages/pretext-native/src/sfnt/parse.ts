@@ -483,6 +483,13 @@ export function parseFont(data: ArrayBuffer | Uint8Array): ParsedFont {
     }
   }
 
+  // Every adjacent glyph pair in every measured string consults kerning, and
+  // the GPOS path costs a handful of DataView reads per call — cheap on JIT
+  // engines, dominant on Hermes (no JIT; DataView methods are VM calls).
+  // Running text has a small set of distinct bigrams, so a per-pair memo
+  // collapses steady-state kerning to one Map hit.
+  const kernCache = new Map<number, number>();
+
   return {
     unitsPerEm,
     ascender,
@@ -495,9 +502,18 @@ export function parseFont(data: ArrayBuffer | Uint8Array): ParsedFont {
       return advances[glyphId]!;
     },
     kerningForPair(leftGlyph: number, rightGlyph: number): number {
-      if (gposKern !== null) return gposKern(leftGlyph, rightGlyph) ?? 0;
-      if (kernPairs !== null) return kernPairs.get((leftGlyph << 16) | rightGlyph) ?? 0;
-      return 0;
+      const key = (leftGlyph << 16) | rightGlyph;
+      let v = kernCache.get(key);
+      if (v === undefined) {
+        v =
+          gposKern !== null
+            ? (gposKern(leftGlyph, rightGlyph) ?? 0)
+            : kernPairs !== null
+              ? (kernPairs.get(key) ?? 0)
+              : 0;
+        kernCache.set(key, v);
+      }
+      return v;
     },
   };
 }
