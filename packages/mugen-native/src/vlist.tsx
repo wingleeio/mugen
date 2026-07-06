@@ -158,6 +158,13 @@ export interface MugenVListProps<T> {
    * streaming growth scrolls don't flash it.
    */
   showsVerticalScrollIndicator?: boolean;
+  /**
+   * Inset the drawn indicator's TRACK from the viewport edges (content still
+   * scrolls full-height underneath). Pass the floating header height as `top`
+   * and the floating composer height as `bottom` so the bar rides between
+   * them instead of under them — ChatGPT-style.
+   */
+  scrollIndicatorInsets?: { top?: number; bottom?: number };
   /** Called once each time the scroll position enters the top threshold. */
   onTopReached?: (index: number) => void;
   /** Called once each time the scroll position enters the bottom threshold. */
@@ -233,6 +240,100 @@ const RowView = memo(function RowView<T>(props: {
   centered: boolean;
 }) => ReactElement;
 
+// ── View recycling (the legend-list model) ──
+// Windowing that mounts/unmounts rows at the edges freezes on Hermes (mounting
+// a heavy markdown row costs real time) and re-renders the whole list every
+// scroll frame. Instead we keep a FIXED POOL of stable-key slots and, on
+// scroll, only change WHICH row each slot shows via `SlotStore` (an external
+// store the slots subscribe to individually) — the list never re-renders on
+// scroll, and a slot's `<RowView>` is REUSED across reassignments (no `key`),
+// so React reconciles new content into the existing view tree instead of
+// destroying and recreating it. For structurally-uniform rows (one Text node
+// per block) that reconcile is a cheap text update. Rows still in the window
+// are untouched; per frame we touch only the few slots a row entered or left.
+interface SlotAssignment<T> {
+  rowKey: string;
+  item: T;
+  top: number;
+  cw: number;
+  centered: boolean;
+}
+
+class SlotStore<T> {
+  private assign: (SlotAssignment<T> | null)[] = [];
+  private ver: number[] = [];
+  private subs: Set<() => void>[] = [];
+
+  ensure(size: number): void {
+    while (this.assign.length < size) {
+      this.assign.push(null);
+      this.ver.push(0);
+      this.subs.push(new Set());
+    }
+  }
+  subscribe(i: number, cb: () => void): () => void {
+    this.ensure(i + 1);
+    this.subs[i]!.add(cb);
+    return () => this.subs[i]!.delete(cb);
+  }
+  version(i: number): number {
+    return this.ver[i] ?? 0;
+  }
+  get(i: number): SlotAssignment<T> | null {
+    return this.assign[i] ?? null;
+  }
+  set(i: number, next: SlotAssignment<T> | null, notify: boolean): void {
+    this.ensure(i + 1);
+    const cur = this.assign[i]!;
+    if (
+      cur === next ||
+      (cur != null &&
+        next != null &&
+        cur.rowKey === next.rowKey &&
+        cur.item === next.item && // content identity — a streaming row keeps its
+        cur.top === next.top && //  key + position but its item changes; must update
+        cur.cw === next.cw &&
+        cur.centered === next.centered)
+    ) {
+      return;
+    }
+    this.assign[i] = next;
+    this.ver[i] = (this.ver[i] ?? 0) + 1;
+    if (notify) for (const cb of this.subs[i]!) cb();
+  }
+}
+
+// One pooled slot: subscribes to its store entry and paints its assigned row.
+// Stable `key={id}` means React never unmounts the slot on scroll. The
+// `<RowView>` inside is deliberately NOT keyed by rowKey, so a reassigned slot
+// REUSES the RowView fiber and reconciles new content into existing views
+// (cheap for same-shape rows) rather than remounting. The `useMugenRow` hook
+// flip that made this unsafe is fixed in the engine (notifications that fire
+// during the measure walk are deferred, so no nested component re-renders
+// while a measure session is ambient).
+const Slot = memo(function Slot<T>(props: {
+  store: SlotStore<T>;
+  id: number;
+  instance: MugenInstance<T>;
+}): ReactElement | null {
+  const { store, id, instance } = props;
+  const subscribe = useCallback((cb: () => void) => store.subscribe(id, cb), [store, id]);
+  const getVersion = useCallback(() => store.version(id), [store, id]);
+  useSyncExternalStore(subscribe, getVersion, getVersion);
+  const a = store.get(id);
+  if (a === null) return null;
+  return (
+    <RowView
+      instance={instance}
+      rowKey={a.rowKey}
+      item={a.item}
+      top={a.top}
+      cw={a.cw}
+      centered={a.centered}
+    />
+  );
+}) as <T>(props: { store: SlotStore<T>; id: number; instance: MugenInstance<T> }) => ReactElement | null;
+
 /**
  * The list component — a React Native `ScrollView` wearing the web `MugenVList`
  * brain. Windowing math, scroll anchoring, stick-to-bottom spring, initial
@@ -254,6 +355,16 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
   const measured = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
   const velocityRef = useRef(0);
   const scrollSampleRef = useRef<{ t: number; y: number } | null>(null);
+
+  // Recycling pool: a stable set of slots reassigned on scroll (see SlotStore).
+  const slotStoreRef = useRef<SlotStore<T> | null>(null);
+  if (slotStoreRef.current === null) slotStoreRef.current = new SlotStore<T>();
+  const slotStore = slotStoreRef.current;
+  const rowToSlotRef = useRef<Map<string, number>>(new Map());
+  const [poolSize, setPoolSize] = useState(0);
+  const poolSizeRef = useRef(0);
+  poolSizeRef.current = poolSize;
+  const allocateRef = useRef<((center: number, notify: boolean) => void) | null>(null);
 
   // ── mugen-drawn scroll indicator ──
   // The native offset in canvas coordinates, driven on the UI thread — the
@@ -620,6 +731,71 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
   adapter.viewportHeight = vh;
 
   const resident = !Number.isFinite(overscan);
+
+  // Assign the current window's rows to pool slots, reusing the slot a row
+  // already holds (rows staying in view are untouched) and filling vacated
+  // slots with rows that entered. `notify:false` seeds during render; `true`
+  // from onScroll wakes only the reassigned slots (no list re-render). Grows
+  // the pool (a rare state update) when a window needs more slots.
+  const allocate = (center: number, notify: boolean): void => {
+    if (resident || instance.length === 0 || vh <= 0 || cw <= 0) return;
+    const v = velocityRef.current;
+    const lead = Math.min(2400, Math.abs(v) * 0.1);
+    const leadUp = v < 0 ? lead : 0;
+    const leadDown = v > 0 ? lead : 0;
+    const origin = originRef.current;
+    const need: number[] = [];
+    const seen = new Set<number>();
+    const addRange = (c: number, up: number, down: number): void => {
+      const first = instance.indexAt(Math.max(0, c - overscan - up));
+      const last = instance.indexAt(c + vh + overscan + down);
+      for (let i = first; i <= last && i < instance.length; i++) {
+        if (!seen.has(i)) {
+          seen.add(i);
+          need.push(i);
+        }
+      }
+    };
+    addRange(center, leadUp, leadDown);
+    if (pendingJump !== null) addRange(pendingJump.from, 0, 0);
+
+    if (need.length + 2 > poolSizeRef.current) {
+      const grown = need.length + Math.max(6, Math.ceil(need.length * 0.3));
+      poolSizeRef.current = grown;
+      slotStore.ensure(grown);
+      setPoolSize(grown);
+    }
+
+    const prev = rowToSlotRef.current;
+    const used = new Set<number>();
+    const nextMap = new Map<string, number>();
+    const fresh: number[] = [];
+    const put = (slot: number, i: number): void => {
+      const key = instance.keyAt(i);
+      used.add(slot);
+      nextMap.set(key, slot);
+      slotStore.set(
+        slot,
+        { rowKey: key, item: instance.itemAt(i), top: origin + instance.offsetOf(i), cw, centered },
+        notify,
+      );
+    };
+    for (const i of need) {
+      const s = prev.get(instance.keyAt(i));
+      if (s != null && s < poolSizeRef.current && !used.has(s)) put(s, i);
+      else fresh.push(i);
+    }
+    let scan = 0;
+    for (const i of fresh) {
+      while (scan < poolSizeRef.current && used.has(scan)) scan++;
+      put(scan, i);
+      scan++;
+    }
+    for (let s = 0; s < poolSizeRef.current; s++) if (!used.has(s)) slotStore.set(s, null, notify);
+    rowToSlotRef.current = nextMap;
+  };
+  allocateRef.current = allocate;
+
   const rows: ReactNode[] = [];
   if (resident && instance.length > 0 && vh > 0 && cw > 0) {
     for (let i = 0; i < instance.length; i++) {
@@ -637,80 +813,22 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
       );
     }
   } else if (instance.length > 0 && vh > 0 && cw > 0) {
-    // Velocity-aware overscan: heights are analytic and cached, so painting
-    // ahead in the fling direction is cheap — the fixed overscan alone loses
-    // to a hard fling (the window trails native scroll by ~2 frames of JS
-    // round-trip, and velocity × 2 frames outruns it → bare canvas).
-    const v = velocityRef.current;
-    const lead = Math.min(2400, Math.abs(v) * 0.1);
-    const leadUp = v < 0 ? lead : 0;
-    const leadDown = v > 0 ? lead : 0;
-    const emitted = new Set<number>();
-    const emitWindow = (center: number, up: number, down: number): void => {
-      const first = instance.indexAt(Math.max(0, center - overscan - up));
-      const last = instance.indexAt(center + vh + overscan + down);
-      for (let i = first; i <= last && i < instance.length; i++) {
-        if (emitted.has(i)) continue;
-        emitted.add(i);
-        const key = instance.keyAt(i);
-        rows.push(
-          <RowView
-            key={key}
-            instance={instance}
-            rowKey={key}
-            item={instance.itemAt(i)}
-            top={originRef.current + instance.offsetOf(i)}
-            cw={cw}
-            centered={centered}
-          />,
-        );
-      }
-    };
-    emitWindow(scrollTop, leadUp, leadDown);
-    // Mid-jump: the departure window stays painted until the scroll lands.
-    if (pendingJump !== null) emitWindow(pendingJump.from, 0, 0);
+    // Re-seed the pool for the current position and emit the fixed slot pool.
+    // `notify:true` matters: the slots are memoized, so on a data/geometry
+    // re-render their props are unchanged and they'd bail out — the notify
+    // wakes exactly the slots whose assignment changed (e.g. a streaming row
+    // whose content grew) so they reconcile the new content. Freshly-mounted
+    // slots read the store directly this commit; already-mounted ones need the
+    // wake. Scroll updates go through the same `allocate(st, true)` path in
+    // onScroll.
+    allocate(adapter.scrollTop, true);
+    for (let s = 0; s < poolSizeRef.current; s++) {
+      rows.push(<Slot key={s} store={slotStore} id={s} instance={instance} />);
+    }
   }
 
-  useEffect(() => {
-    if (vh <= 0) return;
-    const st = adapter.scrollTop;
-    const topThreshold = Math.max(0, props.topReachedThreshold ?? 0);
-    const bottomThreshold = Math.max(0, props.bottomReachedThreshold ?? 0);
-    const atTop = st <= topThreshold;
-    const atBottom = st + vh >= total - bottomThreshold;
-    const topIndex = instance.length === 0 ? -1 : 0;
-    const bottomIndex = instance.length === 0 ? -1 : instance.length - 1;
-
-    if (atTop) {
-      if (props.onTopReached && reachedRef.current.top !== topEdgeKey) {
-        props.onTopReached(topIndex);
-        reachedRef.current.top = topEdgeKey;
-      }
-    } else {
-      reachedRef.current.top = null;
-    }
-
-    if (atBottom) {
-      if (props.onBottomReached && reachedRef.current.bottom !== bottomEdgeKey) {
-        props.onBottomReached(bottomIndex);
-        reachedRef.current.bottom = bottomEdgeKey;
-      }
-    } else {
-      reachedRef.current.bottom = null;
-    }
-  }, [
-    adapter,
-    bottomEdgeKey,
-    instance,
-    props.bottomReachedThreshold,
-    props.onBottomReached,
-    props.onTopReached,
-    props.topReachedThreshold,
-    scrollTop,
-    topEdgeKey,
-    total,
-    vh,
-  ]);
+  // Reach callbacks fire inline from onScroll (the recycling path doesn't
+  // re-render the list per scroll, so a scrollTop-effect wouldn't run).
 
   const slotStyle = (top: number): ViewStyle => ({
     position: 'absolute',
@@ -763,9 +881,27 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     adapter.onNativeScroll(st);
     instance.setScrollTop(st); // updates scrollTop + wakes useMugenSelector
     pokeIndicator();
-    // Resident mode: nothing about the committed tree depends on the scroll
-    // position — scrolling costs zero React work.
-    if (Number.isFinite(props.overscan ?? 200)) setScrollTop(st);
+    // Reassign pool slots directly — NO list re-render, no row mount/unmount.
+    // Only slots a row entered or left re-render, each reusing its RowView
+    // fiber. Rows still in view are untouched. Resident mode keeps everything
+    // mounted and needs nothing here.
+    if (Number.isFinite(props.overscan ?? 200)) allocateRef.current?.(st, true);
+    if (props.onTopReached || props.onBottomReached) {
+      const topT = Math.max(0, props.topReachedThreshold ?? 0);
+      const botT = Math.max(0, props.bottomReachedThreshold ?? 0);
+      if (st <= topT) {
+        if (props.onTopReached && reachedRef.current.top !== topEdgeKey) {
+          props.onTopReached(instance.length === 0 ? -1 : 0);
+          reachedRef.current.top = topEdgeKey;
+        }
+      } else reachedRef.current.top = null;
+      if (st + vh >= total - botT) {
+        if (props.onBottomReached && reachedRef.current.bottom !== bottomEdgeKey) {
+          props.onBottomReached(instance.length === 0 ? -1 : instance.length - 1);
+          reachedRef.current.bottom = bottomEdgeKey;
+        }
+      } else reachedRef.current.bottom = null;
+    }
     if (stickOn) ctl.handleScroll(stickThreshold);
   };
 
@@ -777,7 +913,13 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     if (props.showsVerticalScrollIndicator === false) return null;
     if (vh <= 0 || total <= vh + 1) return null;
     const trackPad = 2;
-    const trackLen = vh - trackPad * 2;
+    // Inset the track below the floating header and above the composer, so the
+    // bar sits between them (content still scrolls full-height underneath).
+    const insetTop = Math.max(0, props.scrollIndicatorInsets?.top ?? 0);
+    const insetBottom = Math.max(0, props.scrollIndicatorInsets?.bottom ?? 0);
+    const trackTop = insetTop + trackPad;
+    const trackLen = Math.max(0, vh - insetTop - insetBottom - trackPad * 2);
+    if (trackLen <= 0) return null;
     const barH = Math.min(trackLen, Math.max(36, (vh / total) * trackLen));
     const origin = originRef.current;
     return (
@@ -796,7 +938,7 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
             {
               translateY: indicatorY.interpolate({
                 inputRange: [origin, origin + (total - vh)],
-                outputRange: [trackPad, trackPad + trackLen - barH],
+                outputRange: [trackTop, trackTop + trackLen - barH],
                 extrapolate: 'clamp',
               }),
             },

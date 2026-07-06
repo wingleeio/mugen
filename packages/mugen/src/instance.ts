@@ -11,7 +11,7 @@ import {
 } from './state/clock';
 import { heightOf } from './walker';
 import { contentWidth, resolveMaxWidthPx } from './tokens-resolve';
-import { withSession, type MugenSession, type SessionMode, type SlotHost } from './session';
+import { withSession, currentSession, type MugenSession, type SessionMode, type SlotHost } from './session';
 import type { RowScopeRef } from './row-scope';
 import type { EffectCleanup } from './hooks';
 import type { TextDefaults } from './text-defaults';
@@ -325,6 +325,9 @@ export class MugenInstance<T> implements SlotHost {
     if (anchor) this.queueScrollAnchor(anchor);
     this.itemsDirty = false;
     this.geometryDirty = false;
+    // The measure walk unwound (ambient is null again) — deliver any row/global
+    // notifications that fired mid-walk, now safely (see flushDeferredNotifies).
+    this.flushDeferredNotifies();
   }
 
   private captureScrollAnchor(): { key: string; top: number } | null {
@@ -355,6 +358,7 @@ export class MugenInstance<T> implements SlotHost {
     this.heightMemo.clear(); // new font tables: every height is stale
     this.remeasureAll();
     this.notifyGlobal();
+    this.flushDeferredNotifies();
   }
 
   private ready(): boolean {
@@ -823,6 +827,7 @@ export class MugenInstance<T> implements SlotHost {
     }
     this.notifyRow(key);
     this.notifyGlobal();
+    this.flushDeferredNotifies();
   }
 
   // ── Windowing helpers (read by the list) ─────────────────────────────────────
@@ -857,7 +862,37 @@ export class MugenInstance<T> implements SlotHost {
   globalVersion(): number {
     return this.globalV;
   }
+  // Notifications that fire while a row session is ambient (the measure walk,
+  // or a row's render(item) call) are DEFERRED until the session unwinds. A
+  // notify calls subscribers' `useSyncExternalStore` callbacks, and React can
+  // re-render a subscribed component *synchronously* to resolve the store
+  // change — if that happens mid-walk (ambient set), a nested component's
+  // `useMugenRow` takes the ambient (0-hook) path where a normal render takes
+  // the 4-hook path, and the fiber throws "rendered fewer hooks than
+  // expected". Deferring to when ambient is null means any such re-render sees
+  // the correct (nested) path. Version bumps defer too, so getSnapshot can't
+  // tear mid-walk either.
+  private deferGlobal = false;
+  private deferRows = new Set<string>();
+
+  private flushDeferredNotifies(): void {
+    if (currentSession() !== null) return; // still inside a session — wait
+    if (this.deferGlobal) {
+      this.deferGlobal = false;
+      this.notifyGlobal();
+    }
+    if (this.deferRows.size > 0) {
+      const keys = [...this.deferRows];
+      this.deferRows.clear();
+      for (const key of keys) this.notifyRow(key);
+    }
+  }
+
   notifyGlobal(): void {
+    if (currentSession() !== null) {
+      this.deferGlobal = true;
+      return;
+    }
     this.globalV++;
     for (const cb of this.globalSubs) cb();
   }
@@ -871,6 +906,10 @@ export class MugenInstance<T> implements SlotHost {
     return this.rows.get(key)?.version ?? 0;
   }
   private notifyRow(key: string): void {
+    if (currentSession() !== null) {
+      this.deferRows.add(key);
+      return;
+    }
     const rec = this.rows.get(key);
     if (!rec) return;
     rec.version++;
