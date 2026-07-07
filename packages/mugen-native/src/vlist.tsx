@@ -400,9 +400,11 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
   const renderStarvedNearRef = useRef(false);
   const scheduleDrainRef = useRef<((near: boolean) => void) | null>(null);
   const idleDrainTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
     () => () => {
       if (idleDrainTimerRef.current !== null) clearTimeout(idleDrainTimerRef.current);
+      if (refineTimerRef.current !== null) clearTimeout(refineTimerRef.current);
     },
     [],
   );
@@ -960,12 +962,13 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     for (const [k, s] of prev) slotToKey.set(s, k);
     const needKeys = new Set<string>();
     for (const i of need) needKeys.add(instance.keyAt(i));
+    // Rows that will paint must carry REAL heights — resolve any estimates in
+    // the bind window as ONE batch (per-row resolution inside the scroll path
+    // is a notification storm: a re-render per row per event).
+    if (instance.estimatedCount() > 0) instance.refineKeys(needKeys);
 
     const put = (slot: number, i: number): void => {
       const key = instance.keyAt(i);
-      // An estimated height would mis-position every row after it in the
-      // window — resolve it to the real measure the moment it paints.
-      if (instance.isEstimated(key)) instance.ensureMeasured(key);
       used.add(slot);
       const evicted = slotToKey.get(slot);
       if (evicted !== undefined && evicted !== key) nextMap.delete(evicted);
@@ -1126,11 +1129,16 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
       true,
       Math.abs(velocityRef.current) > 2500 ? projectedRef.current : undefined,
     );
-    // Refine estimated heights in the same idle stream — a frame's worth per
-    // pass, viewport-stable (deltas flow through the anchor channel).
-    if (instance.estimatedCount() > 0) {
-      instance.refineEstimates(8);
-      scheduleDrainRef.current?.(false);
+    // Refine estimated heights at a yielding cadence (a frame's worth of
+    // measuring, then the thread is free) until the whole chat is exact —
+    // after which the engine behaves exactly like a fully pre-measured one.
+    if (instance.estimatedCount() > 0 && refineTimerRef.current === null) {
+      const pump = (): void => {
+        refineTimerRef.current = null;
+        const remaining = instance.refineEstimates(10);
+        if (remaining > 0) refineTimerRef.current = setTimeout(pump, 60);
+      };
+      refineTimerRef.current = setTimeout(pump, 60);
     }
   };
   scheduleDrainRef.current = (near: boolean) => {

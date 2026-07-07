@@ -520,6 +520,26 @@ export class MugenInstance<T> implements SlotHost {
   }
 
   /**
+   * Batch-resolve every estimated key in the set — ONE notification for the
+   * whole batch. The list calls this with its bind window before assigning
+   * slots: per-row resolution inside the scroll path is a notification storm
+   * (a re-render per row per scroll event).
+   */
+  refineKeys(keys: Iterable<string>): void {
+    let touched = false;
+    for (const key of keys) {
+      if (this.estimatedKeys.has(key)) {
+        this.refineOne(key);
+        touched = true;
+      }
+    }
+    if (touched) {
+      this.notifyGlobal();
+      this.flushDeferredNotifies();
+    }
+  }
+
+  /**
    * Refine estimated heights until `budgetMs` is spent, nearest-to-the-bottom
    * first (transcripts anchor at the bottom, so the rows just above the
    * measured tail are the ones a scroll reaches next). Returns how many
