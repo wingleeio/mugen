@@ -756,7 +756,7 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     const v = velocityRef.current;
     // Velocity-scaled directional lead: cover ~250ms of travel at the current
     // velocity so upcoming rows are bound before they're visible.
-    const lead = Math.min(3000, Math.abs(v) * 0.25);
+    const lead = Math.min(4500, Math.abs(v) * 0.3);
     const leadUp = v < 0 ? lead : 0;
     const leadDown = v > 0 ? lead : 0;
     const origin = originRef.current;
@@ -790,10 +790,12 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
       setPoolSize(grown);
     }
 
-    // Assign nearest-to-destination FIRST: where the viewport is heading is
-    // what must commit before it arrives; rows behind the motion can wait.
-    const anchor =
-      alsoCover !== undefined ? alsoCover + vh / 2 : center + vh / 2 + Math.max(-900, Math.min(900, v * 0.08));
+    // Priority: the NEAR FIELD first — what the viewport is about to cross
+    // must bind before it arrives; the projected landing zone is merely
+    // INCLUDED in `need` (protected from eviction, filled with each event's
+    // leftover budget across the ~1s of transit). Anchoring the sort at the
+    // far destination instead starves the near field and blanks the transit.
+    const anchor = center + vh / 2 + Math.max(-900, Math.min(900, v * 0.08));
     const dist = (i: number): number => Math.abs(instance.offsetOf(i) - anchor);
     need.sort((a, b) => dist(a) - dist(b));
 
@@ -837,9 +839,10 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     // batch is one long commit — the hitch that lets the viewport outrun the
     // window. Rows INTERSECTING the viewport bypass the budget: if a fling
     // lands in unbound territory, what the user is looking at binds NOW.
-    // 6 balances rebind throughput against event starvation: bigger batches
-    // are longer commits, fewer processed events, teleporting offsets.
-    const FRESH_PER_EVENT = 6;
+    // 6 balances rebind throughput against event starvation; at extreme
+    // velocity each processed event carries a huge delta anyway, so a larger
+    // batch raises net throughput instead of starving events.
+    const FRESH_PER_EVENT = Math.abs(v) > 8000 ? 10 : 6;
     const cap = notify ? FRESH_PER_EVENT : Number.POSITIVE_INFINITY;
     const visLo = center - 200;
     const visHi = center + vh + 200;
@@ -1021,7 +1024,24 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     // Only slots a row entered or left re-render, each reusing its RowView
     // fiber. Rows still in view are untouched. Resident mode keeps everything
     // mounted and needs nothing here.
-    if (Number.isFinite(props.overscan ?? 200)) allocateRef.current?.(st, true);
+    if (Number.isFinite(props.overscan ?? 200)) {
+      // CONTINUOUS LANDING PROJECTION. iOS momentum is deterministic — from
+      // the live measured velocity, the stopping point is st + v·r/(1−r)
+      // (r = 0.998/ms). Re-aim every event: chained flings ACCUMULATE
+      // momentum far beyond any single drag's release velocity, so only the
+      // live velocity sees the true destination. The landing zone stays bound
+      // through the whole deceleration (it's covered by every allocate), and
+      // pretext's exact offsets identify precisely which rows sit there.
+      const vms = velocityRef.current / 1000; // px/ms
+      let projected: number | undefined;
+      if (Math.abs(vms) > 2.5) {
+        const travel = (vms * 0.998) / 0.002;
+        const maxSt = Math.max(0, instance.totalHeight() - vh);
+        const dest = Math.max(0, Math.min(st + travel, maxSt));
+        if (Math.abs(dest - st) > vh) projected = dest;
+      }
+      allocateRef.current?.(st, true, projected);
+    }
     if (props.onTopReached || props.onBottomReached) {
       const topT = Math.max(0, props.topReachedThreshold ?? 0);
       const botT = Math.max(0, props.bottomReachedThreshold ?? 0);
@@ -1108,22 +1128,6 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
         }}
         onScrollEndDrag={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
           indicatorPokeUntilRef.current = performance.now() + 2500; // momentum window
-          // FLING-DESTINATION PRE-BIND. iOS deceleration is deterministic:
-          // a release at velocity v travels ≈ v·r/(1−r) px (r = deceleration
-          // rate per ms) — and pretext's exact heights tell us precisely which
-          // rows sit at that landing point. Bind the landing zone NOW, while
-          // the fling flies over the (unreadable-at-speed) middle: by the
-          // time deceleration is slow enough to read, the destination is
-          // painted. This is what knowing every height up front buys.
-          const vel = e.nativeEvent.velocity?.y ?? 0; // px/ms, iOS sign: down-drag negative
-          if (Math.abs(vel) > 0.5 && Number.isFinite(props.overscan ?? 200)) {
-            const r = 0.998; // UIScrollView normal deceleration per ms
-            const travel = (vel * r) / (1 - r); // px, signed
-            const st = adapter.scrollTop;
-            const max = Math.max(0, instance.totalHeight() - vh);
-            const dest = Math.max(0, Math.min(st + travel, max));
-            if (Math.abs(dest - st) > vh) allocateRef.current?.(st, true, dest);
-          }
           if (stickOn) ctl.handleTouchEnd(stickThreshold);
         }}
         // mugen does its own scroll anchoring; the platform's would double-adjust.

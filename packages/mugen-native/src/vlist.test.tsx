@@ -274,23 +274,28 @@ describe('MugenVList (native)', () => {
     expect(rows.length).toBeLessThan(30);
   });
 
-  test('a fling-destination pre-bind paints the projected landing zone', () => {
+  test('the live-velocity projection binds the momentum landing zone ahead', async () => {
     const items = Array.from({ length: 100 }, (_, i) => ({ id: String(i), text: 'AA' }));
     let r!: ReactTestRenderer;
     act(() => {
       r = create(<App items={items} />);
     });
     const scroll = r.root.findByType('rn-scrollview' as never);
-    // Release a hard fling at the top: v = 12 px/ms downward → travel ≈
-    // 12·0.998/0.002 ≈ 5988px → destination ≈ 5988 (row ~54).
-    act(() => {
-      (scroll.props as { onScrollEndDrag: (e: unknown) => void }).onScrollEndDrag({
-        nativeEvent: { contentOffset: { y: CANVAS_HEADROOM + 0 }, velocity: { y: 12 } },
+    const fire = (y: number): void =>
+      act(() => {
+        (scroll.props as { onScroll: (e: unknown) => void }).onScroll({
+          nativeEvent: { contentOffset: { y: CANVAS_HEADROOM + y } },
+        });
       });
-    });
+    // Build measured velocity: two events ~15ms apart moving 90px →
+    // ~6000px/s → projected travel ≈ 6·0.998/0.002 ≈ 2994px past the offset.
+    fire(0);
+    await new Promise((res) => setTimeout(res, 15));
+    fire(90);
     const tops = findRows(r).map(rowTop);
-    // The landing zone (~5988) is bound BEFORE the fling arrives.
-    expect(tops.some((t) => t > 5300 && t < 6700)).toBe(true);
+    // Rows near the projected landing (~90+smoothed-travel; smoothing halves
+    // the first estimate, so expect binding well beyond the plain window).
+    expect(Math.max(...tops)).toBeGreaterThan(1200);
   });
 
   test('HStack distributes width; fixed children keep theirs', () => {
