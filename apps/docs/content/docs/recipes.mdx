@@ -14,7 +14,11 @@ so the rows below slide with exact offsets); `useMugenEffect` streams the final
 turn's answer in word by word; and `stickToBottom` follows it down with a smooth
 spring — scroll up to break free, scroll back to re-engage. It opens at the latest
 turn (`initialScroll="bottom"`); hit **Replay** to watch it stream again, or expand
-a reasoning trace and watch the list re-flow without losing your place:
+a reasoning trace and watch the list re-flow without losing your place. One turn
+answers with a wide comparison table: rather than crush its columns into
+per-character wrapping, it keeps a minimum column width (`theme.table.minColumnWidth`)
+and **scrolls horizontally** inside the row — so drag it sideways and the row height
+never budges:
 
 <Showcase example="ai-chat" filename="ai-chat.tsx" />
 

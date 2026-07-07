@@ -655,6 +655,9 @@ const CHAT_MD_THEME = {
   },
   blockquote: { borderColor: AC.rule, color: AC.muted, padding: 12, gap: 8, borderWidth: 3 },
   list: { gap: 6, indent: 24, markerColor: AC.muted },
+  // A slightly wider column floor than the default 96 — wide comparison tables
+  // then keep every column readable and scroll horizontally instead of crushing.
+  table: { minColumnWidth: 120 },
 };
 
 // ── Inline citation pills (the inline-box + override API) ─────────────────────
@@ -1050,6 +1053,24 @@ const TAIL: Turn[] = [
     ],
     body:
       'It holds. Everything hot is `O(log n)`:\n\n1. the offset index for height patches\n2. the binary search for the visible slice\n\nOnly the visible slice mounts, so a million rows scroll like a thousand — **your data size is the real ceiling**.',
+  },
+  {
+    id: '14b',
+    role: 'user',
+    body: 'Some answers include wide comparison tables. On a phone, does a many-column table just get crushed?',
+  },
+  {
+    id: '14c',
+    role: 'assistant',
+    thoughtFor: '1.8s',
+    thinking:
+      'Tables share one set of column widths across all rows. On a narrow row that used to squeeze every column below readability — the fix is a per-column floor of min(content, minColumnWidth): naturally narrow columns keep their content width, wide ones wrap down to the floor, and once the floors no longer fit the row the table overflows into a horizontal scroller whose measured height still equals what it paints.',
+    tools: [
+      { kind: 'read', title: 'Read the table primitive', detail: 'min column width + overflow' },
+      { kind: 'run', title: 'Measured a 7-column table at 360px', detail: 'scrolls · height exact' },
+    ],
+    body:
+      "No — it keeps a **reasonable minimum column width** and scrolls sideways instead, on web *and* React Native. Each column floors at `min(content, minColumnWidth)`; once the floors no longer fit the row, the table overflows into a horizontal scroller — and its measured height still matches the paint, so the row never jumps:\n\n| model | provider | strengths | context window | pricing (in · out) | tool use | best for |\n|-------|----------|-----------|----------------|--------------------|----------|----------|\n| claude-sonnet-5 | anthropic | reasoning, vision, tools | 200k tokens | $3.00 · $15.00 | ✓ | long-context agents |\n| gpt-mini-4 | openai | fast, cheap, tools | 128k tokens | $0.40 · $1.60 | ✓ | high-volume classify |\n| gemini-flash-3 | google | vision, long context | 1M tokens | $0.10 · $0.40 | — | document extraction |\n\nScroll it sideways — the row height never moved. Tune the floor per theme with `theme.table.minColumnWidth` (this example bumps it to `120`; the default is `96`).",
   },
   {
     id: '15',
