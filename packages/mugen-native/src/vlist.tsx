@@ -716,13 +716,32 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
   const overscanRef = useRef(props.overscan ?? 200);
   overscanRef.current = props.overscan ?? 200;
   const [pendingJump, setPendingJump] = useState<{ from: number; to: number } | null>(null);
+  const lastProgWriteRef = useRef(0);
   adapter.onProgrammaticWrite = (next, prev) => {
     instance.scrollTop = next;
-    setScrollTop(next);
-    if (Math.abs(next - prev) <= overscanRef.current) return false;
-    // Big jump: paint BOTH the departure and destination windows in one
-    // commit, so neither ordering of (scroll command, commit) can show bare
-    // canvas. The landing onScroll drops the departure window.
+    // Rebind slots directly — the smooth-scroll spring writes EVERY FRAME,
+    // and a React list-state update per frame is a full list re-render per
+    // frame: the spring animation itself drops to slideshow fps. The slot
+    // path costs O(rows crossing an edge), same as onScroll. Rapid successive
+    // writes are animation frames even when a single step exceeds the
+    // overscan (a spring moving fast mid-flight) — pre-bind a few steps ahead
+    // instead of churning pendingJump state per frame.
+    const now = performance.now();
+    const animating = now - lastProgWriteRef.current < 100;
+    lastProgWriteRef.current = now;
+    const step = next - prev;
+    if (Math.abs(step) <= overscanRef.current || animating) {
+      allocateRef.current?.(
+        next,
+        true,
+        animating && Math.abs(step) > overscanRef.current ? next + step * 3 : undefined,
+      );
+      return false;
+    }
+    // Isolated big jump: paint BOTH the departure and destination windows in
+    // one commit, so neither ordering of (scroll command, commit) can show
+    // bare canvas. The landing onScroll drops the departure window.
+    allocateRef.current?.(prev, true, next);
     setPendingJump({ from: prev, to: next });
     return true;
   };
