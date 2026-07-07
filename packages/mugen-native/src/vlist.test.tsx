@@ -244,7 +244,7 @@ describe('MugenVList (native)', () => {
     expect(total).toBe(2 * 110 + 100);
   });
 
-  test('windows rows on open; scrolling mounts the destination and keeps visited rows resident', () => {
+  test('windows rows on open; scrolling rebinds the pool to the destination', () => {
     const items = Array.from({ length: 100 }, (_, i) => ({ id: String(i), text: 'AA' }));
     let r!: ReactTestRenderer;
     act(() => {
@@ -255,10 +255,10 @@ describe('MugenVList (native)', () => {
     expect(rows.length).toBe(6);
     expect(rowTop(rows[0]!)).toBe(0);
 
-    // Scroll to 2200 (row 20): the destination window mounts (fresh rows are
-    // budgeted per event, so run a few events like the platform would), and
-    // previously-visited rows STAY mounted — the no-eviction resident cache
-    // that makes any return or re-cross instant.
+    // Scroll to 2200 (row 20): fresh rebinds are budgeted per event, so run a
+    // few events like the platform would; the destination slice binds fully
+    // and the pool stays BOUNDED (rows that left the window are recycled —
+    // that bound is what keeps unmount/navigation instant).
     const scroll = r.root.findByType('rn-scrollview' as never);
     for (let n = 0; n < 4; n++) {
       act(() => {
@@ -269,10 +269,28 @@ describe('MugenVList (native)', () => {
     }
     rows = findRows(r);
     const tops = rows.map(rowTop);
-    // Destination visible slice fully mounted (2200..2750 at least).
     for (const t of [2200, 2310, 2420, 2530, 2640, 2750]) expect(tops).toContain(t);
-    // Origin rows still resident.
-    expect(tops).toContain(0);
+    // Pool bounded: mounted rows ≈ window * headroom, nowhere near all 100.
+    expect(rows.length).toBeLessThan(30);
+  });
+
+  test('a fling-destination pre-bind paints the projected landing zone', () => {
+    const items = Array.from({ length: 100 }, (_, i) => ({ id: String(i), text: 'AA' }));
+    let r!: ReactTestRenderer;
+    act(() => {
+      r = create(<App items={items} />);
+    });
+    const scroll = r.root.findByType('rn-scrollview' as never);
+    // Release a hard fling at the top: v = 12 px/ms downward → travel ≈
+    // 12·0.998/0.002 ≈ 5988px → destination ≈ 5988 (row ~54).
+    act(() => {
+      (scroll.props as { onScrollEndDrag: (e: unknown) => void }).onScrollEndDrag({
+        nativeEvent: { contentOffset: { y: CANVAS_HEADROOM + 0 }, velocity: { y: 12 } },
+      });
+    });
+    const tops = findRows(r).map(rowTop);
+    // The landing zone (~5988) is bound BEFORE the fling arrives.
+    expect(tops.some((t) => t > 5300 && t < 6700)).toBe(true);
   });
 
   test('HStack distributes width; fixed children keep theirs', () => {
