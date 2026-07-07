@@ -1,5 +1,11 @@
 # @wingleeio/mugen-native
 
+## 0.8.2
+
+### Patch Changes
+
+- [`aacc7df`](https://github.com/wingleeio/mugen/commit/aacc7df0b6d6414d775d80db684389636030b0c3) Thanks [@wingleeio](https://github.com/wingleeio)! - Programmatic smooth scrolls (scroll-to-bottom, scrollToItem) no longer re-render the list on every spring frame. onProgrammaticWrite now rebinds slots directly — the same O(rows crossing an edge) path onScroll uses — and rapid successive writes are recognized as animation frames (pre-binding a projected lookahead) instead of churning big-jump state per frame. Fixes scroll-to-bottom animating at slideshow fps in long transcripts.
+
 ## 0.8.1
 
 ### Patch Changes
