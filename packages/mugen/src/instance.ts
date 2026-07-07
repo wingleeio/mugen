@@ -405,6 +405,13 @@ export class MugenInstance<T> implements SlotHost {
 
   /** Produce a row's primitive tree (call inside a session). */
   renderRow(item: T): ReactNode {
+    // A data swap can momentarily leave a pooled slot pointing at an item that
+    // the new item list no longer has (the reassign lands on the next commit).
+    // Rendering `render(undefined)` would hand the app renderer a malformed row
+    // and crash mid-measure; an empty tree is the correct, invisible stand-in
+    // until the slot rebinds. A virtualizer must never crash on a transient
+    // hole during a data swap.
+    if (item == null) return null;
     return this.config!.render(item);
   }
 
@@ -524,8 +531,14 @@ export class MugenInstance<T> implements SlotHost {
    * whole batch. The list calls this with its bind window before assigning
    * slots: per-row resolution inside the scroll path is a notification storm
    * (a re-render per row per scroll event).
+   *
+   * `notify: false` resolves the heights but delivers NO notifications — for
+   * callers inside a React render (the render-phase allocate), where waking
+   * subscribers is a setState-in-render violation ("Cannot update a component
+   * while rendering a different component"). The caller flushes post-commit
+   * via `flushNotifications()`. Returns whether anything was resolved.
    */
-  refineKeys(keys: Iterable<string>): void {
+  refineKeys(keys: Iterable<string>, opts?: { notify?: boolean }): boolean {
     let touched = false;
     for (const key of keys) {
       if (this.estimatedKeys.has(key)) {
@@ -533,10 +546,18 @@ export class MugenInstance<T> implements SlotHost {
         touched = true;
       }
     }
-    if (touched) {
+    if (touched && opts?.notify !== false) {
       this.notifyGlobal();
       this.flushDeferredNotifies();
     }
+    return touched;
+  }
+
+  /** Deliver any pending notifications now — the post-commit companion of
+   *  `refineKeys(keys, { notify: false })`. Safe wherever setState is legal. */
+  flushNotifications(): void {
+    this.notifyGlobal();
+    this.flushDeferredNotifies();
   }
 
   /**
@@ -612,6 +633,10 @@ export class MugenInstance<T> implements SlotHost {
   /** Measure one row at the current content width: run `render(item)` in the
    *  session (so hooks resolve) under an inert dispatcher, then walk the tree. */
   private measureRow(key: string, item: T, width: number): number {
+    // Same guard as renderRow: a stale index reaching measure during a data
+    // swap must not crash the walk. A zero-height row is invisible and is
+    // corrected the moment the slot rebinds to a real item.
+    if (item == null) return 0;
     const rec = this.ensureRow(key, item);
     rec.item = item;
     this.activeRec = rec;

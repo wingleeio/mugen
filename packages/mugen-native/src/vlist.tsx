@@ -387,7 +387,8 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
   const allocateRef = useRef<((center: number, notify: boolean, alsoCover?: number) => void) | null>(
     null,
   );
-  // Slots reassigned during a RENDER-phase allocate; woken post-commit.
+  // Slots reassigned during a RENDER-phase allocate; woken post-commit (the
+  // set is kept small by the render-path bind budget in allocate).
   const dirtySlotsRef = useRef<Set<number>>(new Set());
   // The last projected fling landing (from onScroll) — carried into drain
   // passes so the landing stays covered between scroll events.
@@ -397,6 +398,8 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
   // bare forever (allocate is otherwise event-driven only).
   const drainScheduledRef = useRef(false);
   const renderStarvedRef = useRef(false);
+  // A render-phase allocate resolved estimates silently; flush post-commit.
+  const pendingSilentRefineRef = useRef(false);
   const renderStarvedNearRef = useRef(false);
   const scheduleDrainRef = useRef<((near: boolean) => void) | null>(null);
   const idleDrainTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -964,10 +967,23 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     for (const i of need) needKeys.add(instance.keyAt(i));
     // Rows that will paint must carry REAL heights — resolve any estimates in
     // the bind window as ONE batch (per-row resolution inside the scroll path
-    // is a notification storm: a re-render per row per event).
-    if (instance.estimatedCount() > 0) instance.refineKeys(needKeys);
+    // is a notification storm: a re-render per row per event). On the RENDER
+    // path the refine must be SILENT — notifying wakes subscribers mid-render
+    // (React: "Cannot update a component while rendering a different
+    // component"; the LogBox storm it triggers in dev is its own lag) — the
+    // layout effect flushes post-commit.
+    if (instance.estimatedCount() > 0) {
+      const touched = instance.refineKeys(needKeys, { notify });
+      if (touched && !notify) pendingSilentRefineRef.current = true;
+    }
 
     const put = (slot: number, i: number): void => {
+      // ROOT GUARD: never bind a slot to a nullish item. A stale render-phase
+      // allocate mid data-swap can present an index whose item the new list no
+      // longer has; binding it would paint `render(undefined)` and crash the
+      // measure walk. Skipping leaves the slot's prior (valid) assignment until
+      // the next allocate rebinds it — invisible, never a crash.
+      if (i < 0 || i >= instance.length || instance.itemAt(i) == null) return;
       const key = instance.keyAt(i);
       used.add(slot);
       const evicted = slotToKey.get(slot);
@@ -1005,7 +1021,16 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     // Viewport rows always bind (the bypass below); the overscan tail drains
     // post-commit, so opens paint the visible screen first and fill outward.
     const FRESH_PER_EVENT = Math.abs(v) > 8000 ? 10 : 6;
-    const budgetPx = vh * (Math.abs(v) > 8000 ? 3 : 2);
+    // Content-height budget for one synchronous bind pass. The RENDER path
+    // (notify=false) that ISN'T a cold mount is a DATA SWAP — a session switch
+    // rebinds every visible slot to brand-new heavy markdown. Binding two
+    // viewports there was a ~300ms reconcile in one commit (the visible
+    // "stutter on every switch"). Bind just the visible screen (~1.2vh)
+    // synchronously so it paints fast; the offscreen tail is starved and fills
+    // via the drain — it's outside the viewport, so its fill is invisible.
+    // Scroll (notify) keeps the larger budget: its transit must stay ahead of
+    // the finger.
+    const budgetPx = notify ? vh * (Math.abs(v) > 8000 ? 3 : 2) : vh * 1.2;
     const cap = notify ? FRESH_PER_EVENT : Number.POSITIVE_INFINITY;
     // A COLD MOUNT (no rows bound yet — a fresh session open) binds its whole
     // primary window in the mount commit: one bounded commit is faster and
@@ -1033,6 +1058,11 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
       const bottom = i + 1 < instance.length ? instance.offsetOf(i + 1) : top + vh;
       return bottom > visLo && top < visHi;
     };
+    // The transcript TOP (scroll-to-top landing) is a small fixed set that must
+    // bind on every allocate regardless of budget — the tighter switch budget
+    // below would otherwise starve it (it sorts farthest from the bottom
+    // anchor). Exempt it like the viewport.
+    const inTopLanding = (i: number): boolean => instance.offsetOf(i) < vh * 1.5;
     let assigned = 0;
     let spentPx = 0;
     let starved = false;
@@ -1041,7 +1071,7 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     let grewPool = false;
     for (const i of fresh) {
       const over = coldMount ? !inNearWindow(i) : assigned >= cap || spentPx >= budgetPx;
-      if (over && (hopeless || !intersectsViewport(i))) {
+      if (over && (hopeless || (!intersectsViewport(i) && !inTopLanding(i)))) {
         starved = true;
         if (inNearWindow(i) || (alsoCover !== undefined && Math.abs(instance.offsetOf(i) - alsoCover) < vh * 2))
           starvedNear = true;
@@ -1178,6 +1208,12 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
   // MOUNT this commit read the store directly and won't be dirty-notified
   // redundantly (the notify is a version poke; an unchanged snapshot no-ops).
   useLayoutEffect(() => {
+    // Deliver notifications a render-phase refine had to suppress (see
+    // allocate): post-commit, waking subscribers is legal again.
+    if (pendingSilentRefineRef.current) {
+      pendingSilentRefineRef.current = false;
+      instance.flushNotifications();
+    }
     // Estimated heights refine in idle time from the first commit on.
     if (instance.estimatedCount() > 0) scheduleDrainRef.current?.(false);
     // A render-phase allocate that hit its budget finishes post-commit.
@@ -1188,7 +1224,19 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
       scheduleDrainRef.current?.(near);
     }
     if (dirtySlotsRef.current.size === 0) return;
-    const ids = [...dirtySlotsRef.current];
+    // Wake every slot the render-phase allocate reassigned. This set is already
+    // BOUNDED by the render-path bind budget (~1.2 viewports on a data swap, see
+    // allocate), plus the cheap cleared/refreshed old slots (null → RowView
+    // returns null; offset-only refresh → a light re-render). Waking them all
+    // in one post-commit pass is both correct — the visible rows MUST repaint
+    // with the new chat's content — and small; an earlier attempt to defer
+    // "offscreen" wakes gated visibility on `adapter.scrollTop`, which on a
+    // switch still holds the OLD position (initialScroll re-anchors after this
+    // effect), so the true-visible rows were misjudged offscreen and never
+    // repainted — the "switching shows the previous chat" bug. The overscan
+    // beyond the budget is STARVED (never dirtied here) and fills through the
+    // drain, so this stays bounded without visibility guessing.
+    const ids = [...dirtySlotsRef.current.keys()];
     dirtySlotsRef.current.clear();
     for (const id of ids) slotStore.notify(id);
   });
