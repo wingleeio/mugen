@@ -837,6 +837,8 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     // batch is one long commit — the hitch that lets the viewport outrun the
     // window. Rows INTERSECTING the viewport bypass the budget: if a fling
     // lands in unbound territory, what the user is looking at binds NOW.
+    // 6 balances rebind throughput against event starvation: bigger batches
+    // are longer commits, fewer processed events, teleporting offsets.
     const FRESH_PER_EVENT = 6;
     const cap = notify ? FRESH_PER_EVENT : Number.POSITIVE_INFINITY;
     const visLo = center - 200;
