@@ -13,6 +13,7 @@ import {
   type Token,
 } from '@wingleeio/mugen-markdown/native-core';
 import { fontShorthandToTextStyle } from '@wingleeio/mugen-native';
+import { NO_LIGATURES } from './rich-text';
 
 export type { CodeBlockHeader };
 
@@ -129,6 +130,8 @@ function CodeBlockComponent(props: CodeBlockProps): ReactElement {
   const fontStyle: TextStyle = {
     ...fontShorthandToTextStyle(props.font),
     lineHeight: props.lineHeight,
+    // Code renders literal characters — no `===`/`!=` programming ligatures.
+    fontVariant: NO_LIGATURES,
     ...(props.color != null ? { color: props.color } : null),
   };
 

@@ -38,6 +38,20 @@ export interface RichTextProps {
 
 const webDef = getPrimitiveDef(WebRichText)!;
 
+/**
+ * Turn off every ligature class for code runs, so a programming font's
+ * `===`/`!=`/`=>` render as the literal characters (the native analogue of the
+ * web's `font-variant-ligatures: none`). Height-neutral: monospace advances
+ * don't change under ligature substitution, and pretext-native measured without
+ * ligatures anyway — this only changes which glyphs the shaper draws.
+ */
+export const NO_LIGATURES: TextStyle['fontVariant'] = [
+  'no-common-ligatures',
+  'no-discretionary-ligatures',
+  'no-historical-ligatures',
+  'no-contextual',
+];
+
 /** Map a CSS text-decoration string onto RN's textDecorationLine. */
 function decorationLine(decoration: string | undefined): TextStyle['textDecorationLine'] {
   if (decoration == null) return undefined;
@@ -162,6 +176,8 @@ function RichTextComponent(props: RichTextProps): ReactElement | null {
   const styleForRun = (run: RichTextRun): TextStyle => ({
     ...fontShorthandToTextStyle(resolveRunFont(run, props.font)),
     lineHeight: props.lineHeight,
+    // Code runs render literal `===`/`!=` — turn ligatures off (see NO_LIGATURES).
+    ...(run.noLigatures ? { fontVariant: NO_LIGATURES } : null),
     ...(run.letterSpacing != null ? { letterSpacing: run.letterSpacing } : null),
     ...(run.color != null
       ? { color: run.color }

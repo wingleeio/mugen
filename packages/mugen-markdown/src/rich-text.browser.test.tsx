@@ -1,7 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { createElement } from 'react';
+import { afterEach, describe, expect, it } from 'vitest';
+import { render, cleanup } from '@testing-library/react';
 import { getPrimitiveDef, type MeasureContext } from '@wingleeio/mugen';
 import { RichText, type RichTextRun } from './primitives/rich-text';
 import { CodeBlock } from './primitives/code-block';
+
+afterEach(cleanup);
 
 // Real pretext rich-inline against the real DOM — the accuracy gate for the
 // mixed-font wrapping that single-`<Text>` measurement can't express. Named
@@ -140,6 +144,43 @@ function domCode(value: string, font: string, lineHeight: number, padding: numbe
   document.body.removeChild(pre);
   return h;
 }
+
+describe('code disables ligatures (literal ===/!= glyphs), body keeps them', () => {
+  it('inline code + code block compute font-variant-ligatures: none; body: normal', () => {
+    const { container } = render(
+      createElement(RichText, {
+        lineHeight: 22,
+        runs: [
+          { text: 'plus ', font: '16px Arial' },
+          {
+            text: 'a === b',
+            font: '14px monospace',
+            as: 'code',
+            noLigatures: true,
+            background: '#eee',
+          },
+        ],
+      } as unknown as Parameters<typeof RichText>[0]),
+    );
+    const bodySpan = container.querySelector('span')!;
+    const inlineCode = container.querySelector('code')!;
+    expect(getComputedStyle(inlineCode).fontVariantLigatures).toBe('none');
+    // Body prose keeps its ligatures — only code opts out.
+    expect(getComputedStyle(bodySpan).fontVariantLigatures).toBe('normal');
+
+    const { container: cc } = render(
+      createElement(CodeBlock, {
+        value: 'a === b !== c => d',
+        font: '13px monospace',
+        lineHeight: 20,
+        highlight: false,
+      } as unknown as Parameters<typeof CodeBlock>[0]),
+    );
+    const pre = cc.querySelector('pre')!;
+    // Set on the <pre>, inherited by the <code>.
+    expect(getComputedStyle(pre).fontVariantLigatures).toBe('none');
+  });
+});
 
 describe('CodeBlock analytic height ≈ DOM', () => {
   const FONT = '13px monospace';

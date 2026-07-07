@@ -392,6 +392,8 @@ export class HighlightSession {
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.font = font;
+    // Match the measure ctx + DOM: literal glyphs, no ligatures.
+    ctx.textRendering = 'optimizeSpeed';
     ctx.textBaseline = 'alphabetic';
     if (!needResize) {
       const yTop = (from - t.start) * lineHeight;
