@@ -228,6 +228,21 @@ export class MugenInstance<T> implements SlotHost {
     el.scrollTo({ top: el.scrollHeight, behavior: options.behavior ?? 'auto' });
   }
 
+  /** Jump/animate to the very top (status-bar tap on iOS, "back to start"
+   *  affordances). The list-wired driver breaks the stick and, from deep in
+   *  history, teleports into glide range first — a long smooth scroll's
+   *  animated distance is otherwise unpaintable. */
+  scrollToTop(options: { behavior?: MugenScrollBehavior } = {}): void {
+    if (this.scrollToTopDriver) {
+      this.scrollToTopDriver(options.behavior ?? 'auto');
+      return;
+    }
+    this.stickInterrupt?.();
+    const el = this.scrollEl;
+    if (!el) return;
+    el.scrollTo({ top: 0, behavior: options.behavior ?? 'auto' });
+  }
+
   /** Scroll a row into view by its key. No-op if the key is unknown. */
   scrollToItem(key: string, options?: ScrollToOptions): void {
     const i = this.keyToIndex.get(key);
@@ -801,6 +816,10 @@ export class MugenInstance<T> implements SlotHost {
   /** Set by the list: drive `scrollToBottom` through the scroll controller (spring
    *  for `smooth`, jump otherwise) so it re-engages the stick and tracks growth. */
   scrollToBottomDriver: ((behavior: MugenScrollBehavior) => void) | null = null;
+
+  /** Set by the list: drive `scrollToTop` with stick-break + the platform's
+   *  long-distance choreography (teleport into glide range, then glide). */
+  scrollToTopDriver: ((behavior: MugenScrollBehavior) => void) | null = null;
 
   /** Set by the list: break the stick-to-bottom spring before a programmatic
    *  scroll *up*. The controller only releases on user input, so without this

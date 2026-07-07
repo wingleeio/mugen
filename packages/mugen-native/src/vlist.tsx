@@ -179,6 +179,8 @@ export interface MugenVListProps<T> {
   keyboardDismissMode?: 'none' | 'on-drag' | 'interactive';
   /** Whether taps land on children while the keyboard is up. */
   keyboardShouldPersistTaps?: 'always' | 'never' | 'handled';
+  /** Forwarded to the underlying ScrollView (native intercepts key off it). */
+  testID?: string;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -387,7 +389,15 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
   // bare forever (allocate is otherwise event-driven only).
   const drainScheduledRef = useRef(false);
   const renderStarvedRef = useRef(false);
-  const scheduleDrainRef = useRef<(() => void) | null>(null);
+  const renderStarvedNearRef = useRef(false);
+  const scheduleDrainRef = useRef<((near: boolean) => void) | null>(null);
+  const idleDrainTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (idleDrainTimerRef.current !== null) clearTimeout(idleDrainTimerRef.current);
+    },
+    [],
+  );
 
   // ── mugen-drawn scroll indicator ──
   // The native offset in canvas coordinates, driven on the UI thread — the
@@ -726,6 +736,7 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
   overscanRef.current = props.overscan ?? 200;
   const [pendingJump, setPendingJump] = useState<{ from: number; to: number } | null>(null);
   const lastProgWriteRef = useRef(0);
+  const glideToTopRef = useRef(false);
   adapter.onProgrammaticWrite = (next, prev) => {
     instance.scrollTop = next;
     // Rebind slots directly — the smooth-scroll spring writes EVERY FRAME,
@@ -761,8 +772,45 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
       // motion, and must not enter the velocity estimate.
       lastProgWriteRef.current = performance.now();
       adapter.scrollFn?.(pendingJump.to, false);
+      if (glideToTopRef.current) {
+        // Status-bar-tap: the teleport has landed painted; glide the final
+        // stretch to the very top on the UI thread.
+        glideToTopRef.current = false;
+        requestAnimationFrame(() => {
+          lastProgWriteRef.current = performance.now();
+          adapter.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+      }
     }
   }, [pendingJump, adapter]);
+
+  // ── Smooth scroll to the very top (status-bar tap, app affordances) ──
+  // The system flight from deep history crosses the entire transcript in a
+  // fixed ~0.4s — unpaintable and uninterruptible once launched — so the app
+  // intercepts the tap natively (`scrollViewShouldScrollToTop:` returning NO)
+  // and calls this instead: the same teleport-into-glide-range choreography
+  // scrollToBottom's clamp uses. The jump paints departure and destination
+  // atomically before anything moves (pretext's exact offsets name the
+  // landing rows), and the short glide crosses the resident top block.
+  instance.scrollToTopDriver = (behavior) => {
+    const st = adapter.scrollTop;
+    if (stickOn) ctl.escape();
+    velocityRef.current = 0;
+    projectedRef.current = undefined;
+    lastProgWriteRef.current = performance.now();
+    if (behavior !== 'smooth') {
+      ctl.attach(el);
+      ctl.jumpToTop();
+      syncWindowFromEl();
+      return;
+    }
+    if (st > vh * 3.5) {
+      glideToTopRef.current = true; // pendingJump layout effect starts the glide
+      adapter.scrollTop = vh * 2.5; // atomic dual-window jump into glide range
+    } else if (st > 0.5) {
+      adapter.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
 
   const total = instance.totalHeight();
   const overscan = props.overscan ?? 200;
@@ -902,6 +950,20 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     const FRESH_PER_EVENT = Math.abs(v) > 8000 ? 10 : 6;
     const budgetPx = vh * (Math.abs(v) > 8000 ? 3 : 2);
     const cap = notify ? FRESH_PER_EVENT : Number.POSITIVE_INFINITY;
+    // A COLD MOUNT (no rows bound yet — a fresh session open) binds its whole
+    // primary window in the mount commit: one bounded commit is faster and
+    // reads instant, whereas budgeting it turns the open into a cascade of
+    // drain commits that jank the navigation animation. Only far blocks (the
+    // resident top) defer to the idle drain. Budgets exist for LIVE paths —
+    // scroll events and streaming re-renders — where a huge commit stalls
+    // frames the user is watching.
+    const coldMount = !notify && prev.size === 0;
+    const nearLo = center - overscan - leadUp - vh;
+    const nearHi = center + vh + overscan + leadDown + vh;
+    const inNearWindow = (i: number): boolean => {
+      const t = instance.offsetOf(i);
+      return t > nearLo && t < nearHi;
+    };
     const heightOf = (i: number): number => {
       const top = instance.offsetOf(i);
       const bottom = i + 1 < instance.length ? instance.offsetOf(i + 1) : instance.totalHeight();
@@ -917,12 +979,15 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     let assigned = 0;
     let spentPx = 0;
     let starved = false;
+    let starvedNear = false;
     let scan = 0;
     let grewPool = false;
     for (const i of fresh) {
-      const over = assigned >= cap || spentPx >= budgetPx;
+      const over = coldMount ? !inNearWindow(i) : assigned >= cap || spentPx >= budgetPx;
       if (over && (hopeless || !intersectsViewport(i))) {
         starved = true;
+        if (inNearWindow(i) || (alsoCover !== undefined && Math.abs(instance.offsetOf(i) - alsoCover) < vh * 2))
+          starvedNear = true;
         continue;
       }
       let slot = -1;
@@ -956,8 +1021,11 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     // schedule from here (side effect in render) — it flags the layout
     // effect instead.
     if (starved) {
-      if (notify) scheduleDrainRef.current?.();
-      else renderStarvedRef.current = true;
+      if (notify) scheduleDrainRef.current?.(starvedNear);
+      else {
+        renderStarvedRef.current = true;
+        renderStarvedNearRef.current ||= starvedNear;
+      }
     }
     // Resident (out-of-window) slots: during PURE SCROLL (notify path) they're
     // untouched — offsets are static, so they sit at their true positions and
@@ -993,17 +1061,32 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     rowToSlotRef.current = nextMap;
   };
 
-  scheduleDrainRef.current = () => {
+  // Two drain cadences. NEAR starvation (the scroll window or a fling
+  // landing) drains on rAF — it's what recovers a blank viewport. FAR-only
+  // starvation (the resident top block after a fresh open) waits for idle:
+  // draining it immediately stacks heavy commits onto the open/navigation
+  // animation, which reads as a laggy session switch.
+  const runDrain = (): void => {
+    allocateRef.current?.(
+      instance.scrollTop,
+      true,
+      Math.abs(velocityRef.current) > 2500 ? projectedRef.current : undefined,
+    );
+  };
+  scheduleDrainRef.current = (near: boolean) => {
     if (drainScheduledRef.current) return;
-    drainScheduledRef.current = true;
-    requestAnimationFrame(() => {
-      drainScheduledRef.current = false;
-      allocateRef.current?.(
-        instance.scrollTop,
-        true,
-        Math.abs(velocityRef.current) > 2500 ? projectedRef.current : undefined,
-      );
-    });
+    if (near) {
+      drainScheduledRef.current = true;
+      requestAnimationFrame(() => {
+        drainScheduledRef.current = false;
+        runDrain();
+      });
+    } else if (idleDrainTimerRef.current === null) {
+      idleDrainTimerRef.current = setTimeout(() => {
+        idleDrainTimerRef.current = null;
+        runDrain();
+      }, 700);
+    }
   };
   allocateRef.current = allocate;
 
@@ -1029,8 +1112,10 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
   useLayoutEffect(() => {
     // A render-phase allocate that hit its budget finishes post-commit.
     if (renderStarvedRef.current) {
+      const near = renderStarvedNearRef.current;
       renderStarvedRef.current = false;
-      scheduleDrainRef.current?.();
+      renderStarvedNearRef.current = false;
+      scheduleDrainRef.current?.(near);
     }
     if (dirtySlotsRef.current.size === 0) return;
     const ids = [...dirtySlotsRef.current];
@@ -1241,6 +1326,11 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
         // mugen does its own scroll anchoring; the platform's would double-adjust.
         maintainVisibleContentPosition={undefined}
         removeClippedSubviews={false}
+        // The list stays the scrollsToTop candidate (iOS only consults the
+        // delegate for candidates); the app's native intercept answers the
+        // tap by DECLINING the system flight and driving
+        // `instance.scrollToTop()` instead (see scrollToTopDriver).
+        testID={props.testID}
         keyboardDismissMode={props.keyboardDismissMode}
         keyboardShouldPersistTaps={props.keyboardShouldPersistTaps}
         // Always off: mugen draws its own (see showsVerticalScrollIndicator doc).
