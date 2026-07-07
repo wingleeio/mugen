@@ -1,5 +1,16 @@
 # @wingleeio/mugen-native
 
+## 0.7.0
+
+### Minor Changes
+
+- [`801e4f5`](https://github.com/wingleeio/mugen/commit/801e4f587e0a4d50495cb1e6e5815abf52567657) Thanks [@wingleeio](https://github.com/wingleeio)! - Blank-proof scrolling: the slot pool converges to FULL residency. Three mechanisms compose: (1) NO EVICTION — a row mounted once stays mounted (its absolutely-positioned view is invisible offscreen and costs nothing per frame), so every region the user has crossed is permanently fling-proof; the pool grows on demand, with eviction only past a 5000-row cap. (2) An IDLE RESIDENCY TRICKLE mounts the not-yet-visited remainder a bounded batch per tick while the user isn't scrolling — priority: the viewport's vicinity, then from the chat top downward (the destination of every rip-to-the-top gesture). Within seconds of a chat settling, every row is mounted at its exact offset and NO fling at any velocity can reach unmounted canvas — scrolling costs zero fresh work. (3) During the convergence window, rows INTERSECTING the viewport bypass the per-event mounting budget, so landing in unassigned territory pops content in immediately instead of trickling. Also: velocity-scaled lead (up to 6000px), nearest-to-destination assignment order, and render-phase reallocation now REFRESHES resident rows' offsets (instead of clearing them) so streaming height shifts can't strand a stale row at a wrong position. Engine: adds `instance.indexOfKey`.
+
+### Patch Changes
+
+- Updated dependencies [[`801e4f5`](https://github.com/wingleeio/mugen/commit/801e4f587e0a4d50495cb1e6e5815abf52567657)]:
+  - @wingleeio/mugen@0.6.3
+
 ## 0.6.1
 
 ### Patch Changes
