@@ -756,7 +756,12 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
   };
 
   useLayoutEffect(() => {
-    if (pendingJump !== null) adapter.scrollFn?.(pendingJump.to, false);
+    if (pendingJump !== null) {
+      // Stamp the deferred scroll too — its onScroll echo is a jump, not
+      // motion, and must not enter the velocity estimate.
+      lastProgWriteRef.current = performance.now();
+      adapter.scrollFn?.(pendingJump.to, false);
+    }
   }, [pendingJump, adapter]);
 
   const total = instance.totalHeight();
@@ -801,6 +806,14 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
       }
     };
     addRange(center, leadUp, leadDown);
+    // The transcript TOP stays bound at all times. It is the fixed target of
+    // the iOS status-bar tap, whose fixed-duration native flight crosses the
+    // whole history faster than any bind can chase and cannot be intercepted
+    // from JS (Fabric ignores programmatic scrolls while it runs; its events
+    // coalesce behind commits). A permanently warm first screen costs a
+    // handful of slots — bound once by the drain after open, never evicted —
+    // and the flight then always lands on painted ground.
+    addRange(0, 0, vh / 2);
     // A projected fling DESTINATION (from onScrollEndDrag): bind the landing
     // zone NOW, while the fling flies — pretext's exact offsets tell us
     // precisely which rows land there. By the time deceleration is slow
@@ -1094,16 +1107,18 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     const st = e.nativeEvent.contentOffset.y - originRef.current;
     const now = performance.now();
     const lastSample = scrollSampleRef.current;
-    if (lastSample !== null && now - lastSample.t >= 8) {
+    if (lastSample !== null && now - lastSample.t >= 8 && now - lastProgWriteRef.current > 120) {
       // Smoothed px/s — drives the directional overscan lead. Samples closer
       // than ~half a frame are a queue drain after a JS stall (coalesced
       // events processed back-to-back): position deltas of thousands of px
       // over ~2ms read as millions of px/s and poison every velocity-gated
-      // decision downstream. Only wall-clock-meaningful samples update the
-      // estimate, and it is clamped to physically plausible momentum.
+      // decision downstream. Samples straddling a programmatic write are a
+      // jump, not motion. Only wall-clock-meaningful physical samples update
+      // the estimate, clamped well above finger momentum but low enough to
+      // stay meaningful.
       const inst = ((st - lastSample.y) / (now - lastSample.t)) * 1000;
       const mixed = velocityRef.current * 0.5 + inst * 0.5;
-      velocityRef.current = Math.max(-80_000, Math.min(80_000, mixed));
+      velocityRef.current = Math.max(-150_000, Math.min(150_000, mixed));
     }
     scrollSampleRef.current = { t: now, y: st };
     // A staged correction landed (or the user scrolled) — drop transition state.

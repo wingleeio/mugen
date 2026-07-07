@@ -250,9 +250,11 @@ describe('MugenVList (native)', () => {
     act(() => {
       r = create(<App items={items} />);
     });
-    // 100 rows × 110px; viewport 600 → rows 0..5 visible (offset 550 ≤ 600).
+    // 100 rows × 110px; viewport 600 → rows 0..5 visible (offset 550 ≤ 600),
+    // plus the always-bound top block reaching vh/2 below the viewport (the
+    // open IS at the top here): rows 0..8.
     let rows = findRows(r);
-    expect(rows.length).toBe(6);
+    expect(rows.length).toBe(9);
     expect(rowTop(rows[0]!)).toBe(0);
 
     // Scroll to 2200 (row 20): fresh rebinds are budgeted per event, so run a
@@ -372,9 +374,12 @@ describe('MugenVList (native)', () => {
       y: CANVAS_HEADROOM + 10400,
     });
     const rows = findRows(r);
+    const tops = rows.map(rowTop);
     // Window at the anchor: first visible row starts at ⌊10400/110⌋ × 110.
-    expect(rowTop(rows[0]!)).toBe(10340);
+    for (const t of [10340, 10450, 10560, 10670, 10780, 10890]) expect(tops).toContain(t);
     expect(rowTop(rows[rows.length - 1]!)).toBe(10890);
+    // The transcript top is always bound (scroll-to-top landing zone).
+    expect(tops).toContain(0);
   });
 
   test('resident mode (overscan Infinity): all rows mounted, scroll is free', () => {
