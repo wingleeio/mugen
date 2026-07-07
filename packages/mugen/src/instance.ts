@@ -146,6 +146,19 @@ export class MugenInstance<T> implements SlotHost {
 
   /** Optional persistent height store (see `MugenHeightCache`). */
   heightCache: MugenHeightCache | null = null;
+
+  /**
+   * Lazy measurement: on a full (re)measure, walk only the first `head` and
+   * last `tail` rows for real; every other UNCACHED row receives the running
+   * average as an ESTIMATE. Estimates refine incrementally via
+   * `refineEstimates` (idle time) and `ensureMeasured` (the moment a row is
+   * about to paint), with viewport-stability deltas flowing through the same
+   * scroll-anchor channel as prepends — so a cold heavy transcript opens in
+   * the time it takes to measure a few screens, not the whole history.
+   * Rows with cache/memo hits are always exact; `null` disables laziness.
+   */
+  lazyMeasure: { head: number; tail: number } | null = null;
+  private estimatedKeys = new Set<string>();
   /**
    * Per-instance height memo, keyed by row key and guarded by item identity —
    * the row-level analog of `React.memo`. Without it every `setItems` re-walks
@@ -435,27 +448,116 @@ export class MugenInstance<T> implements SlotHost {
 
   private remeasureAll(): void {
     const width = this.contentWidth();
-    const heights = new Float64Array(this.items.length);
-    for (let i = 0; i < this.items.length; i++) {
+    const n = this.items.length;
+    const heights = new Float64Array(n);
+    this.estimatedKeys.clear();
+    const lazy = this.lazyMeasure;
+    const lazyLo = lazy ? lazy.head : Number.POSITIVE_INFINITY;
+    const lazyHi = lazy ? n - lazy.tail : Number.POSITIVE_INFINITY;
+    // Running average of known heights — the estimate for deferred rows.
+    let knownSum = 0;
+    let knownCount = 0;
+    for (let i = 0; i < n; i++) {
       const key = this.keys[i]!;
       const item = this.items[i]!;
       const memo = this.heightMemo.get(key);
       if (memo !== undefined && memo.item === item) {
         heights[i] = memo.height;
+        if (!this.estimatedKeys.has(key)) {
+          knownSum += memo.height;
+          knownCount++;
+        }
         continue;
       }
       // Never measured by this instance: a persistent cache (if plugged in)
       // knows the default-state height without walking the row.
       let h = memo === undefined ? this.heightCache?.get(key, width) : undefined;
       if (h === undefined) {
+        if (i >= lazyLo && i < lazyHi) {
+          // Deferred: estimate now, refine later. Not memoized as real, never
+          // written to the cache.
+          const est = knownCount > 0 ? knownSum / knownCount : 200;
+          this.estimatedKeys.add(key);
+          this.heightMemo.set(key, { item, height: est });
+          heights[i] = est;
+          continue;
+        }
         h = this.measureRow(key, item, width);
         if (memo === undefined) this.heightCache?.set(key, width, h);
       }
+      this.estimatedKeys.delete(key);
       this.heightMemo.set(key, { item, height: h });
       heights[i] = h;
+      knownSum += h;
+      knownCount++;
     }
     this.offset = new OffsetIndex(heights);
     this.remeasureSlots();
+  }
+
+  /** Whether a row's recorded height is still an estimate (see `lazyMeasure`). */
+  isEstimated(key: string): boolean {
+    return this.estimatedKeys.has(key);
+  }
+
+  /** How many rows still carry estimated heights. */
+  estimatedCount(): number {
+    return this.estimatedKeys.size;
+  }
+
+  /**
+   * Replace one row's ESTIMATE with its real measured height, immediately —
+   * called the moment a row is about to paint (an estimated height would
+   * mis-position everything after it in the window). The height delta flows
+   * through the scroll-anchor channel when the row sits above the viewport,
+   * so the visible content never shifts.
+   */
+  ensureMeasured(key: string): void {
+    if (!this.estimatedKeys.has(key)) return;
+    this.refineOne(key);
+    this.notifyGlobal();
+    this.flushDeferredNotifies();
+  }
+
+  /**
+   * Refine estimated heights until `budgetMs` is spent, nearest-to-the-bottom
+   * first (transcripts anchor at the bottom, so the rows just above the
+   * measured tail are the ones a scroll reaches next). Returns how many
+   * estimates remain.
+   */
+  refineEstimates(budgetMs: number): number {
+    if (this.estimatedKeys.size === 0) return 0;
+    const deadline = performance.now() + budgetMs;
+    const pending = [...this.estimatedKeys]
+      .map((key) => this.keyToIndex.get(key))
+      .filter((i): i is number => i != null)
+      .sort((a, b) => b - a);
+    for (const i of pending) {
+      if (performance.now() >= deadline) break;
+      this.refineOne(this.keys[i]!);
+    }
+    this.notifyGlobal();
+    this.flushDeferredNotifies();
+    return this.estimatedKeys.size;
+  }
+
+  private refineOne(key: string): void {
+    const i = this.keyToIndex.get(key);
+    if (i == null) {
+      this.estimatedKeys.delete(key);
+      return;
+    }
+    const width = this.contentWidth();
+    const item = this.items[i]!;
+    const h = this.measureRow(key, item, width);
+    this.heightCache?.set(key, width, h);
+    this.estimatedKeys.delete(key);
+    this.heightMemo.set(key, { item, height: h });
+    const anchorIdx = this.indexAt(this.scrollTop);
+    const delta = this.offset.setHeight(i, h);
+    // Keep the viewport stable when the corrected row sits above it (the
+    // same channel prepends use; on iOS the origin absorbs it — no scroll).
+    if (delta !== 0 && i < anchorIdx) this.pendingScrollAnchorDelta += delta;
   }
 
   private remeasureSlots(): void {
