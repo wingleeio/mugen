@@ -1,5 +1,11 @@
 # @wingleeio/mugen
 
+## 0.6.7
+
+### Patch Changes
+
+- [`c0246f8`](https://github.com/wingleeio/mugen/commit/c0246f886cd0a32190d3b240590c56e43ed84fe6) Thanks [@wingleeio](https://github.com/wingleeio)! - `refineKeys(keys)` — batch-resolve estimated heights with ONE notification. Per-row `ensureMeasured` inside a scroll path is a notification storm (a re-render per row per event).
+
 ## 0.6.6
 
 ### Patch Changes

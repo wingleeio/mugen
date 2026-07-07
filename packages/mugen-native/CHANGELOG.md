@@ -1,5 +1,14 @@
 # @wingleeio/mugen-native
 
+## 0.8.8
+
+### Patch Changes
+
+- [`c0246f8`](https://github.com/wingleeio/mugen/commit/c0246f886cd0a32190d3b240590c56e43ed84fe6) Thanks [@wingleeio](https://github.com/wingleeio)! - Lazy-measure hardening: the bind window batch-refines estimates before slot assignment (one notification instead of a per-row storm — per-row resolution froze scrolling through unrefined territory), and the background refiner runs at a yielding cadence (10ms bursts / 60ms) until the whole list is exact — after which the engine behaves exactly like a fully pre-measured one. Measured worst case (fully cold cache, immediate hard scroll-up through estimates): longest frame gap 41ms, zero freezes.
+
+- Updated dependencies [[`c0246f8`](https://github.com/wingleeio/mugen/commit/c0246f886cd0a32190d3b240590c56e43ed84fe6)]:
+  - @wingleeio/mugen@0.6.7
+
 ## 0.8.7
 
 ### Patch Changes
