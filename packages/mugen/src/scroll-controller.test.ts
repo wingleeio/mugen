@@ -202,4 +202,24 @@ describe('ScrollController', () => {
     c.springToBottom(DEFAULT_SPRING);
     expect(el.scrollTop).toBe(0); // never started chasing the bottom
   });
+
+  it('springToBottom from far away teleports to glide range before animating', () => {
+    const c = new ScrollController();
+    // Deep in a long transcript: 100k of content, viewport 400, sitting at the top.
+    const el = fakeEl(100_000, 400, 0);
+    c.attach(el);
+    c.springToBottom(DEFAULT_SPRING);
+    // The spring must not animate the full 99.6k — velocity scales with the
+    // remaining diff, crossing thousands of px per frame. It lands 2.5
+    // viewports up (one atomic jump) and glides only that.
+    expect(el.scrollTop).toBe(100_000 - 400 - 2.5 * 400);
+  });
+
+  it('springToBottom within glide range does not teleport', () => {
+    const c = new ScrollController();
+    const el = fakeEl(1000, 400, 200); // 400px from the bottom (1 viewport)
+    c.attach(el);
+    c.springToBottom(DEFAULT_SPRING);
+    expect(el.scrollTop).toBe(200); // untouched — the spring animates from here
+  });
 });

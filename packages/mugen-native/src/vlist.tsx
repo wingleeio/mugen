@@ -379,6 +379,15 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
   );
   // Slots reassigned during a RENDER-phase allocate; woken post-commit.
   const dirtySlotsRef = useRef<Set<number>>(new Set());
+  // The last projected fling landing (from onScroll) — carried into drain
+  // passes so the landing stays covered between scroll events.
+  const projectedRef = useRef<number | undefined>(undefined);
+  // A budget-starved allocate schedules ONE follow-up pass; without it, a
+  // scroll that settles before the window is fully bound leaves the screen
+  // bare forever (allocate is otherwise event-driven only).
+  const drainScheduledRef = useRef(false);
+  const renderStarvedRef = useRef(false);
+  const scheduleDrainRef = useRef<(() => void) | null>(null);
 
   // ── mugen-drawn scroll indicator ──
   // The native offset in canvas coordinates, driven on the UI thread — the
@@ -809,12 +818,23 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
       setPoolSize(grown);
     }
 
-    // Priority: the NEAR FIELD first — what the viewport is about to cross
-    // must bind before it arrives; the projected landing zone is merely
-    // INCLUDED in `need` (protected from eviction, filled with each event's
-    // leftover budget across the ~1s of transit). Anchoring the sort at the
-    // far destination instead starves the near field and blanks the transit.
-    const anchor = center + vh / 2 + Math.max(-900, Math.min(900, v * 0.08));
+    // Priority: two regimes, split by whether transit content can PHYSICALLY
+    // paint. A bind takes ~2-3 frames to reach the screen; once the viewport
+    // turns over faster than that (|v| > ~20 viewports/s, extreme chained
+    // momentum), every near-field bind is off-screen before its commit lands
+    // — the whole budget burns on rows nobody can ever see while the landing
+    // starves, and the screen stays bare for the entire multi-second
+    // deceleration. In that regime anchor the sort at the projected LANDING:
+    // it is the only region that will still be on screen when paint catches
+    // up. At bindable speeds, near field first — what the viewport is about
+    // to cross must bind before it arrives; the landing zone is merely
+    // INCLUDED in `need` (protected from eviction, filled with leftover
+    // budget). Anchoring at the destination in THAT regime starves the
+    // transit and makes blanking worse (measured both ways).
+    const hopeless = alsoCover !== undefined && Math.abs(v) > vh * 20;
+    const anchor = hopeless
+      ? alsoCover! + vh / 2
+      : center + vh / 2 + Math.max(-900, Math.min(900, v * 0.08));
     const dist = (i: number): number => Math.abs(instance.offsetOf(i) - anchor);
     need.sort((a, b) => dist(a) - dist(b));
 
@@ -853,16 +873,27 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
       else fresh.push(i);
     }
     // Fresh rows REBIND recycled slots (evicting rows that left the window),
-    // nearest-to-destination first, at most FRESH_PER_EVENT per scroll event:
-    // one rebind is a markdown reconcile (~5-15ms on Hermes) and an unbounded
-    // batch is one long commit — the hitch that lets the viewport outrun the
-    // window. Rows INTERSECTING the viewport bypass the budget: if a fling
-    // lands in unbound territory, what the user is looking at binds NOW.
-    // 6 balances rebind throughput against event starvation; at extreme
-    // velocity each processed event carries a huge delta anyway, so a larger
-    // batch raises net throughput instead of starving events.
+    // nearest-to-anchor first. The per-event budget is measured in CONTENT
+    // HEIGHT, not row count: a rebind is a markdown reconcile whose cost
+    // tracks how much content the row holds, and pretext gives every height
+    // analytically. A count budget lets one event batch several monster rows
+    // into a single multi-hundred-ms commit — the stall that starves scroll
+    // events, poisons the velocity estimate, and blanks the transit. Rows
+    // INTERSECTING the viewport bypass the budget in the near-field regime
+    // (what the user is looking at binds NOW); at unpaintable speeds the
+    // bypass would steal the budget from the landing, so it's off.
+    // The height budget applies on BOTH paths — a render-phase (mount/data)
+    // allocate that binds an unbounded window is one multi-hundred-ms commit.
+    // Viewport rows always bind (the bypass below); the overscan tail drains
+    // post-commit, so opens paint the visible screen first and fill outward.
     const FRESH_PER_EVENT = Math.abs(v) > 8000 ? 10 : 6;
+    const budgetPx = vh * (Math.abs(v) > 8000 ? 3 : 2);
     const cap = notify ? FRESH_PER_EVENT : Number.POSITIVE_INFINITY;
+    const heightOf = (i: number): number => {
+      const top = instance.offsetOf(i);
+      const bottom = i + 1 < instance.length ? instance.offsetOf(i + 1) : instance.totalHeight();
+      return Math.max(0, bottom - top);
+    };
     const visLo = center - 200;
     const visHi = center + vh + 200;
     const intersectsViewport = (i: number): boolean => {
@@ -871,10 +902,16 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
       return bottom > visLo && top < visHi;
     };
     let assigned = 0;
+    let spentPx = 0;
+    let starved = false;
     let scan = 0;
     let grewPool = false;
     for (const i of fresh) {
-      if (assigned >= cap && !intersectsViewport(i)) continue;
+      const over = assigned >= cap || spentPx >= budgetPx;
+      if (over && (hopeless || !intersectsViewport(i))) {
+        starved = true;
+        continue;
+      }
       let slot = -1;
       while (scan < poolSizeRef.current) {
         if (!used.has(scan)) {
@@ -894,9 +931,21 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
       }
       put(slot, i);
       assigned++;
+      spentPx += heightOf(i);
       scan++;
     }
     if (grewPool) setPoolSize(poolSizeRef.current);
+    // Starved rows drain on a follow-up pass: without one, a scroll that
+    // SETTLES before its window is bound has no further events to finish the
+    // job — the screen stays bare until the next input. Each pass binds
+    // another budget's worth as soon as JS is free; rAF self-paces behind
+    // the commits the previous pass scheduled. A render-phase caller can't
+    // schedule from here (side effect in render) — it flags the layout
+    // effect instead.
+    if (starved) {
+      if (notify) scheduleDrainRef.current?.();
+      else renderStarvedRef.current = true;
+    }
     // Resident (out-of-window) slots: during PURE SCROLL (notify path) they're
     // untouched — offsets are static, so they sit at their true positions and
     // make any return to them instant. On a RENDER-phase allocate
@@ -930,6 +979,19 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     }
     rowToSlotRef.current = nextMap;
   };
+
+  scheduleDrainRef.current = () => {
+    if (drainScheduledRef.current) return;
+    drainScheduledRef.current = true;
+    requestAnimationFrame(() => {
+      drainScheduledRef.current = false;
+      allocateRef.current?.(
+        instance.scrollTop,
+        true,
+        Math.abs(velocityRef.current) > 2500 ? projectedRef.current : undefined,
+      );
+    });
+  };
   allocateRef.current = allocate;
 
   // The slot elements are memoized on pool size: hundreds of slots re-created
@@ -952,6 +1014,11 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
   // MOUNT this commit read the store directly and won't be dirty-notified
   // redundantly (the notify is a version poke; an unchanged snapshot no-ops).
   useLayoutEffect(() => {
+    // A render-phase allocate that hit its budget finishes post-commit.
+    if (renderStarvedRef.current) {
+      renderStarvedRef.current = false;
+      scheduleDrainRef.current?.();
+    }
     if (dirtySlotsRef.current.size === 0) return;
     const ids = [...dirtySlotsRef.current];
     dirtySlotsRef.current.clear();
@@ -1027,10 +1094,16 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     const st = e.nativeEvent.contentOffset.y - originRef.current;
     const now = performance.now();
     const lastSample = scrollSampleRef.current;
-    if (lastSample !== null && now > lastSample.t) {
-      // Smoothed px/s — drives the directional overscan lead.
+    if (lastSample !== null && now - lastSample.t >= 8) {
+      // Smoothed px/s — drives the directional overscan lead. Samples closer
+      // than ~half a frame are a queue drain after a JS stall (coalesced
+      // events processed back-to-back): position deltas of thousands of px
+      // over ~2ms read as millions of px/s and poison every velocity-gated
+      // decision downstream. Only wall-clock-meaningful samples update the
+      // estimate, and it is clamped to physically plausible momentum.
       const inst = ((st - lastSample.y) / (now - lastSample.t)) * 1000;
-      velocityRef.current = velocityRef.current * 0.5 + inst * 0.5;
+      const mixed = velocityRef.current * 0.5 + inst * 0.5;
+      velocityRef.current = Math.max(-80_000, Math.min(80_000, mixed));
     }
     scrollSampleRef.current = { t: now, y: st };
     // A staged correction landed (or the user scrolled) — drop transition state.
@@ -1059,6 +1132,7 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
         const dest = Math.max(0, Math.min(st + travel, maxSt));
         if (Math.abs(dest - st) > vh) projected = dest;
       }
+      projectedRef.current = projected;
       allocateRef.current?.(st, true, projected);
     }
     if (props.onTopReached || props.onBottomReached) {

@@ -34,6 +34,11 @@ const AT_BOTTOM_PX = 2;
 
 const FRAME_MS = 1000 / 60;
 
+/** Longest distance `springToBottom` actually animates, in viewports. A jump
+ *  from further away teleports to this range first and glides the rest —
+ *  matching how chat apps' "scroll to latest" behaves from deep in history. */
+const GLIDE_MAX_VIEWPORTS = 2.5;
+
 /** Cap on simulated frames per tick — a long main-thread hitch catches up over
  *  a couple of writes instead of teleporting. */
 const MAX_CATCHUP_FRAMES = 8;
@@ -208,6 +213,20 @@ export class ScrollController {
   /** Spring toward the bottom. No-op if escaped, dragging, or already there. */
   springToBottom(spring: SpringOptions): void {
     if (this.escaped || this.pointerActive || !this.el || this.distanceFromBottom() <= 0.5) return;
+    // Clamp the animated distance. The spring's velocity scales with the
+    // remaining diff, so from tens of thousands of px it crosses thousands of
+    // px PER FRAME — content cannot paint at that crossing rate (a windowed
+    // renderer shows bare canvas) and every frame's huge write re-windows rows
+    // across regions that are never seen. Land within a couple of screens
+    // first, then glide the rest — the teleport write is delivered as one
+    // atomic jump, which the list paints departure-and-destination for.
+    const el = this.el;
+    const glideMax = GLIDE_MAX_VIEWPORTS * el.clientHeight;
+    if (el.clientHeight > 0 && this.distanceFromBottom() > glideMax) {
+      setScrollTopInstant(el, el.scrollHeight - el.clientHeight - glideMax);
+      this.expectedTop = el.scrollTop;
+      this.lastScrollTop = el.scrollTop;
+    }
     if (this.raf == null) {
       this.lastTick = 0;
       this.raf = requestAnimationFrame(() => this.tick(spring));
