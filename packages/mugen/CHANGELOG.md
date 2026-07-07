@@ -1,5 +1,11 @@
 # @wingleeio/mugen
 
+## 0.6.8
+
+### Patch Changes
+
+- [`f3da80b`](https://github.com/wingleeio/mugen/commit/f3da80b171a010e4fce21abe8196b5877035dce5) Thanks [@wingleeio](https://github.com/wingleeio)! - `refineKeys(keys, { notify: false })` + `flushNotifications()` — resolve estimated heights WITHOUT waking subscribers, for callers inside a React render (the render-phase allocate). Waking mid-render was a setState-in-render violation ("Cannot update a component while rendering a different component") that, on RN, triggered a LogBox error every open/scroll through unrefined rows — its own severe lag. The list flushes the suppressed notifications post-commit.
+
 ## 0.6.7
 
 ### Patch Changes
