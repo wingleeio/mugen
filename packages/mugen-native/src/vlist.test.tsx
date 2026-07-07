@@ -83,10 +83,17 @@ function App(props: {
   );
 }
 
+// Rows are absolutely positioned; the slot pool assigns them nearest-to-
+// viewport-first, so TREE order is not visual order — sort by top.
 const findRows = (r: ReactTestRenderer): ReactTestInstance[] =>
   r.root
     .findAllByType('rn-view' as never)
-    .filter((n) => (n.props as { style?: { position?: string } }).style?.position === 'absolute');
+    .filter((n) => (n.props as { style?: { position?: string } }).style?.position === 'absolute')
+    .sort(
+      (a, b) =>
+        (a.props as { style: { top: number } }).style.top -
+        (b.props as { style: { top: number } }).style.top,
+    );
 
 // Row/canvas coordinates are biased by the iOS headroom origin — normalize.
 const rowTop = (n: ReactTestInstance): number =>
@@ -237,7 +244,7 @@ describe('MugenVList (native)', () => {
     expect(total).toBe(2 * 110 + 100);
   });
 
-  test('windows rows: only the visible slice renders, scrolling moves it', () => {
+  test('windows rows on open; scrolling mounts the destination and keeps visited rows resident', () => {
     const items = Array.from({ length: 100 }, (_, i) => ({ id: String(i), text: 'AA' }));
     let r!: ReactTestRenderer;
     act(() => {
@@ -248,16 +255,24 @@ describe('MugenVList (native)', () => {
     expect(rows.length).toBe(6);
     expect(rowTop(rows[0]!)).toBe(0);
 
-    // Scroll to 2200 (row 20): window follows.
+    // Scroll to 2200 (row 20): the destination window mounts (fresh rows are
+    // budgeted per event, so run a few events like the platform would), and
+    // previously-visited rows STAY mounted — the no-eviction resident cache
+    // that makes any return or re-cross instant.
     const scroll = r.root.findByType('rn-scrollview' as never);
-    act(() => {
-      (scroll.props as { onScroll: (e: unknown) => void }).onScroll({
-        nativeEvent: { contentOffset: { y: CANVAS_HEADROOM + 2200 } },
+    for (let n = 0; n < 4; n++) {
+      act(() => {
+        (scroll.props as { onScroll: (e: unknown) => void }).onScroll({
+          nativeEvent: { contentOffset: { y: CANVAS_HEADROOM + 2200 } },
+        });
       });
-    });
+    }
     rows = findRows(r);
-    expect(rowTop(rows[0]!)).toBe(2200);
-    expect(rows.length).toBe(6);
+    const tops = rows.map(rowTop);
+    // Destination visible slice fully mounted (2200..2750 at least).
+    for (const t of [2200, 2310, 2420, 2530, 2640, 2750]) expect(tops).toContain(t);
+    // Origin rows still resident.
+    expect(tops).toContain(0);
   });
 
   test('HStack distributes width; fixed children keep theirs', () => {

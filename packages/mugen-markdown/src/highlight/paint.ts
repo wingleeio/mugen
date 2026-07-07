@@ -81,6 +81,10 @@ function measureCtx(): CanvasRenderingContext2D | null {
     if (sharedMeasure != null && typeof sharedMeasure.measureText !== 'function') {
       sharedMeasure = null; // partial DOM shims (happy-dom) — leave text visible
     }
+    // Code renders literal characters — turn off the font's `===`/`!=`
+    // ligatures (and kerning, which monospace code doesn't use anyway) so the
+    // painted glyphs match the DOM `<code>` (`font-variant-ligatures: none`).
+    if (sharedMeasure != null) sharedMeasure.textRendering = 'optimizeSpeed';
   }
   return sharedMeasure;
 }

@@ -59,6 +59,14 @@ export interface RichTextRun {
   as?: keyof JSX.IntrinsicElements;
   /** Forbid line breaks inside this run. */
   noBreak?: boolean;
+  /**
+   * Disable ligatures for this run (`font-variant-ligatures: none` on the web,
+   * the `no-*-ligatures`/`no-contextual` font variants on native). Set on
+   * monospace code runs so a programming font's `===`/`!=`/`=>` ligatures render
+   * as the literal characters. Height-neutral: monospace advances don't change
+   * under ligature substitution, so the measure is unaffected.
+   */
+  noLigatures?: boolean;
   letterSpacing?: number;
   className?: string;
   /** A hard line break (renders `<br>`, forces a new line in the measure). */
@@ -250,7 +258,10 @@ function renderRichText(props: RichTextProps): ReactElement {
       // Pin text shaping to the canvas defaults pretext measures with — page
       // CSS targeting the run's tag (e.g. `code { font-feature-settings:
       // 'liga' 0 }`) would otherwise change glyph widths and shift wrapping.
-      fontVariantLigatures: 'normal',
+      // Code runs opt out of ligatures (`none`) so a programming font renders
+      // literal `===`/`!=`; monospace advances are ligature-invariant, so this
+      // never desyncs from the measure.
+      fontVariantLigatures: run.noLigatures ? 'none' : 'normal',
       fontFeatureSettings: 'normal',
       letterSpacing: run.letterSpacing != null ? `${run.letterSpacing}px` : 'normal',
       ...(run.color != null ? { color: run.color } : null),

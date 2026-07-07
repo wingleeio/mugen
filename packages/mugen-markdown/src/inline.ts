@@ -65,6 +65,10 @@ function pushRun(out: RichTextRun[], text: string, fmt: InlineFormat): void {
   } else if (fmt.mono) {
     run.as = 'code';
   }
+  // Monospace runs (inline code) render the literal characters — a programming
+  // font's `===`/`!=`/`=>` ligatures are confusing in code and, being monospace,
+  // ligature substitution never changes the advance, so this is height-neutral.
+  if (fmt.mono) run.noLigatures = true;
   out.push(run);
 }
 

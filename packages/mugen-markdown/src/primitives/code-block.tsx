@@ -374,6 +374,10 @@ function renderCodeBlock(props: CodeBlockProps): ReactElement {
     // Line-height folded into the `font` shorthand (avoids the shorthand reset
     // and React's shorthand/longhand re-render warning).
     font: fontWithLineHeight(props.font, props.lineHeight),
+    // Code shows literal characters — a programming font's `===`/`!=`/`=>`
+    // ligatures are misleading in code. Inherits into the `<code>`. (The canvas
+    // highlighter paints with ligatures off too; see highlight/paint.ts.)
+    fontVariantLigatures: 'none',
     boxSizing: 'border-box',
     ...(props.background != null ? { background: props.background } : null),
     ...(props.color != null ? { color: props.color } : null),

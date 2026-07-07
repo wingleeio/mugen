@@ -377,6 +377,10 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
   const allocateRef = useRef<((center: number, notify: boolean) => void) | null>(null);
   // Slots reassigned during a RENDER-phase allocate; woken post-commit.
   const dirtySlotsRef = useRef<Set<number>>(new Set());
+  // Idle residency trickle: mounts the not-yet-visited remainder of the chat
+  // a few rows per tick while the user isn't scrolling (see below).
+  const trickleRef = useRef<(() => boolean) | null>(null);
+  const trickleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── mugen-drawn scroll indicator ──
   // The native offset in canvas coordinates, driven on the UI thread — the
@@ -752,7 +756,11 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
   const allocate = (center: number, notify: boolean): void => {
     if (resident || instance.length === 0 || vh <= 0 || cw <= 0) return;
     const v = velocityRef.current;
-    const lead = Math.min(2400, Math.abs(v) * 0.1);
+    // Velocity-scaled directional lead: cover ~250ms of travel at the current
+    // velocity so the destination region is assigned long before it's visible.
+    // A device flick reaches far higher velocity than the old 2400px cap
+    // assumed — the cap is what let a hard fling reach bare canvas.
+    const lead = Math.min(6000, Math.abs(v) * 0.25);
     const leadUp = v < 0 ? lead : 0;
     const leadDown = v > 0 ? lead : 0;
     const origin = originRef.current;
@@ -772,19 +780,37 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     if (pendingJump !== null) addRange(pendingJump.from, 0, 0);
 
     if (need.length + 2 > poolSizeRef.current) {
-      const grown = need.length + Math.max(6, Math.ceil(need.length * 0.3));
+      // Generous headroom: stale rows stay mounted as a back-scroll cache, and
+      // growing rarely beats growing often (a growth is a full list commit).
+      const grown = Math.ceil(need.length * 1.8) + 8;
       poolSizeRef.current = grown;
       slotStore.ensure(grown);
       setPoolSize(grown);
     }
 
+    // Assign nearest-to-destination FIRST: where the viewport is heading is
+    // what must commit before it arrives; rows behind the motion can wait.
+    const predicted = center + vh / 2 + Math.max(-900, Math.min(900, v * 0.08));
+    const dist = (i: number): number => Math.abs(instance.offsetOf(i) - predicted);
+    need.sort((a, b) => dist(a) - dist(b));
+
     const prev = rowToSlotRef.current;
     const used = new Set<number>();
-    const nextMap = new Map<string, number>();
-    const fresh: number[] = [];
+    // Keep prior mappings: slots NOT reassigned this pass retain their row
+    // (mounted, offscreen) — an instant cache when the user scrolls back, and
+    // zero wake cost. Entries are evicted only when their slot is taken.
+    const nextMap = new Map(prev);
+    const slotToKey = new Map<number, string>();
+    for (const [k, s] of prev) slotToKey.set(s, k);
+    const needKeys = new Set<string>();
+    for (const i of need) needKeys.add(instance.keyAt(i));
+
     const put = (slot: number, i: number): void => {
       const key = instance.keyAt(i);
       used.add(slot);
+      const evicted = slotToKey.get(slot);
+      if (evicted !== undefined && evicted !== key) nextMap.delete(evicted);
+      slotToKey.set(slot, key);
       nextMap.set(key, slot);
       const changed = slotStore.set(
         slot,
@@ -794,26 +820,160 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
       // Render-phase caller: deliver the wake post-commit (see layout effect).
       if (changed && !notify) dirtySlotsRef.current.add(slot);
     };
+
+    // Rows already holding a slot refresh in place (usually a no-op).
+    const fresh: number[] = [];
     for (const i of need) {
       const s = prev.get(instance.keyAt(i));
       if (s != null && s < poolSizeRef.current && !used.has(s)) put(s, i);
       else fresh.push(i);
     }
+    // Fresh rows mount into slots, nearest-to-destination first, at most
+    // FRESH_PER_EVENT per scroll event: one slot wake is a markdown reconcile
+    // (~5-15ms on Hermes), and an unbounded batch is one long commit — the
+    // hitch that let the viewport outrun the window. Bounding it keeps every
+    // frame cheap; the velocity lead means the skipped tail is still far from
+    // visible and the next events pick it up.
+    //
+    // NO EVICTION below RESIDENT_CAP: a row mounted once STAYS mounted (its
+    // absolutely-positioned view is invisible offscreen and costs nothing per
+    // frame), so every region the user has crossed — plus everything the idle
+    // trickle has covered — is permanently fling-proof. Fresh rows take truly
+    // EMPTY slots or grow the pool; only past the cap does eviction of
+    // out-of-window rows resume (degenerate, book-length chats).
+    const FRESH_PER_EVENT = 4;
+    const RESIDENT_CAP = 5000;
+    const evictAllowed = nextMap.size > RESIDENT_CAP;
+    const cap = notify ? FRESH_PER_EVENT : Number.POSITIVE_INFINITY;
+    // Rows INTERSECTING the viewport bypass the budget: if a violent fling
+    // lands the viewport in unassigned territory, what the user is looking at
+    // mounts NOW (one bounded burst) instead of trickling in — black becomes
+    // a sub-frame pop-in as the fling decelerates.
+    const visLo = center - 200;
+    const visHi = center + vh + 200;
+    const intersectsViewport = (i: number): boolean => {
+      const top = instance.offsetOf(i);
+      const bottom = i + 1 < instance.length ? instance.offsetOf(i + 1) : top + vh;
+      return bottom > visLo && top < visHi;
+    };
+    let assigned = 0;
     let scan = 0;
+    let grewPool = false;
     for (const i of fresh) {
-      while (scan < poolSizeRef.current && used.has(scan)) scan++;
-      put(scan, i);
+      if (assigned >= cap && !intersectsViewport(i)) continue;
+      let slot = -1;
+      while (scan < poolSizeRef.current) {
+        if (!used.has(scan)) {
+          const holder = slotToKey.get(scan);
+          if (holder === undefined || (evictAllowed && !needKeys.has(holder))) {
+            slot = scan;
+            break;
+          }
+        }
+        scan++;
+      }
+      if (slot < 0) {
+        // No empty slot: grow the pool (batched — one setState after the loop).
+        slot = poolSizeRef.current;
+        poolSizeRef.current = slot + Math.max(8, fresh.length - assigned);
+        slotStore.ensure(poolSizeRef.current);
+        grewPool = true;
+      }
+      put(slot, i);
+      assigned++;
       scan++;
     }
-    for (let s = 0; s < poolSizeRef.current; s++) {
-      if (!used.has(s)) {
-        const changed = slotStore.set(s, null, notify);
-        if (changed && !notify) dirtySlotsRef.current.add(s);
+    if (grewPool) setPoolSize(poolSizeRef.current);
+    // Resident (out-of-window) slots: during PURE SCROLL (notify path) they're
+    // untouched — offsets are static, so they sit at their true positions and
+    // make any return to them instant. On a RENDER-phase allocate
+    // (data/heights changed) REFRESH their offsets — heights above them may
+    // have shifted and a wrong-top row could drift into view — and clear only
+    // rows that left the data set. Mostly no-op sets (item + top unchanged),
+    // so this is cheap per commit.
+    if (!notify) {
+      for (const [key, s] of [...nextMap]) {
+        if (used.has(s)) continue;
+        const idx = instance.indexOfKey(key);
+        if (idx === undefined) {
+          const changed = slotStore.set(s, null, false);
+          if (changed) dirtySlotsRef.current.add(s);
+          nextMap.delete(key);
+        } else {
+          const changed = slotStore.set(
+            s,
+            {
+              rowKey: key,
+              item: instance.itemAt(idx),
+              top: origin + instance.offsetOf(idx),
+              cw,
+              centered,
+            },
+            false,
+          );
+          if (changed) dirtySlotsRef.current.add(s);
+        }
       }
     }
     rowToSlotRef.current = nextMap;
   };
   allocateRef.current = allocate;
+
+  // ── Idle residency trickle ──
+  // While the user isn't scrolling, mount the rest of the chat a few rows per
+  // tick, nearest-to-viewport first. The list converges to FULL residency
+  // (every row mounted at its exact offset) within a few seconds of idling —
+  // after which no fling at ANY velocity can reach unmounted canvas, because
+  // there is none: scrolling touches zero fresh work. Bounded per tick, so it
+  // never hitches the UI; canceled by scroll/data activity and resumed after.
+  trickleRef.current = (): boolean => {
+    if (resident || instance.length === 0 || vh <= 0 || cw <= 0) return false;
+    const mapped = rowToSlotRef.current;
+    if (mapped.size >= Math.min(instance.length, 5000)) return false;
+    const center = adapter.scrollTop + vh / 2;
+    const cands: number[] = [];
+    for (let i = 0; i < instance.length; i++) {
+      if (!mapped.has(instance.keyAt(i))) cands.push(i);
+    }
+    if (cands.length === 0) return false;
+    // Priority: (1) the viewport's vicinity (±2 screens — closest first),
+    // (2) then from the TOP of the chat downward — the destination of every
+    // rip-to-the-top gesture, so violent flings meet mounted content — with
+    // the region between filled last (it's covered by the fling's own
+    // event-path mounting as it crosses).
+    const priority = (i: number): number => {
+      const d = Math.abs(instance.offsetOf(i) - center);
+      return d < 2 * vh ? d : 1e9 + instance.offsetOf(i);
+    };
+    cands.sort((a, b) => priority(a) - priority(b));
+    const origin = originRef.current;
+    let grew = false;
+    for (let n = 0; n < 10 && n < cands.length; n++) {
+      const i = cands[n]!;
+      const key = instance.keyAt(i);
+      let slot = -1;
+      for (let s = 0; s < poolSizeRef.current; s++) {
+        if (slotStore.get(s) === null) {
+          slot = s;
+          break;
+        }
+      }
+      if (slot < 0) {
+        slot = poolSizeRef.current;
+        poolSizeRef.current = slot + 8;
+        slotStore.ensure(poolSizeRef.current);
+        grew = true;
+      }
+      slotStore.set(
+        slot,
+        { rowKey: key, item: instance.itemAt(i), top: origin + instance.offsetOf(i), cw, centered },
+        true, // timer context — immediate notify is legal
+      );
+      mapped.set(key, slot);
+    }
+    if (grew) setPoolSize(poolSizeRef.current);
+    return cands.length > 10;
+  };
 
   // Deliver render-phase slot reassignments AFTER the commit. Calling a slot's
   // subscribers during MugenVList's render is a cross-component setState in
@@ -828,6 +988,37 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     dirtySlotsRef.current.clear();
     for (const id of ids) slotStore.notify(id);
   });
+
+  // Arm the idle trickle after every commit (activity resets the 250ms fuse;
+  // ticks re-arm themselves while there's ground left to cover).
+  const armTrickle = (): void => {
+    if (trickleTimerRef.current) clearTimeout(trickleTimerRef.current);
+    trickleTimerRef.current = setTimeout(function tick() {
+      // Chain the next tick BEFORE mounting: each tick's own commit re-runs
+      // the arming effect below, and an unconditional re-arm there would
+      // reset this chain to the long fuse every tick — collapsing the fill
+      // rate and never converging (measured: ~50 rows/s instead of ~300).
+      trickleTimerRef.current = setTimeout(tick, 33);
+      const more = trickleRef.current?.() ?? false;
+      if (!more && trickleTimerRef.current) {
+        clearTimeout(trickleTimerRef.current);
+        trickleTimerRef.current = null;
+      }
+    }, 120);
+  };
+  useEffect(() => {
+    // Arm only when idle — a pending timer means a tick chain (or fuse) is
+    // already running; resetting it from trickle-caused commits starves the
+    // fill. Scroll events reset explicitly (deferring the fill is the point).
+    if (trickleTimerRef.current === null) armTrickle();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- checked on every commit by design
+  });
+  useEffect(
+    () => () => {
+      if (trickleTimerRef.current) clearTimeout(trickleTimerRef.current);
+    },
+    [],
+  );
 
   const rows: ReactNode[] = [];
   if (resident && instance.length > 0 && vh > 0 && cw > 0) {
@@ -916,7 +1107,10 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     // Only slots a row entered or left re-render, each reusing its RowView
     // fiber. Rows still in view are untouched. Resident mode keeps everything
     // mounted and needs nothing here.
-    if (Number.isFinite(props.overscan ?? 200)) allocateRef.current?.(st, true);
+    if (Number.isFinite(props.overscan ?? 200)) {
+      allocateRef.current?.(st, true);
+      armTrickle(); // scrolling defers the idle residency fill
+    }
     if (props.onTopReached || props.onBottomReached) {
       const topT = Math.max(0, props.topReachedThreshold ?? 0);
       const botT = Math.max(0, props.bottomReachedThreshold ?? 0);

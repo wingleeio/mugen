@@ -835,6 +835,10 @@ export class MugenInstance<T> implements SlotHost {
   keyAt(i: number): string {
     return this.keys[i]!;
   }
+  /** Index of a row key in the current items, or undefined if it left. */
+  indexOfKey(key: string): number | undefined {
+    return this.keyToIndex.get(key);
+  }
   itemAt(i: number): T {
     return this.items[i]!;
   }
