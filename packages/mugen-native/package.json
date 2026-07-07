@@ -1,6 +1,6 @@
 {
   "name": "@wingleeio/mugen-native",
-  "version": "0.8.4",
+  "version": "0.8.5",
   "description": "React Native renderer for mugen — virtualized lists with analytic row heights, measured with pretext-native, never the host layout.",
   "license": "MIT",
   "author": "Wing Lee <contact@winglee.io>",

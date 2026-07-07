@@ -1,5 +1,11 @@
 # @wingleeio/mugen
 
+## 0.6.5
+
+### Patch Changes
+
+- [`d566dc3`](https://github.com/wingleeio/mugen/commit/d566dc38b4fdac12cc1fa190752d53e60dd960a0) Thanks [@wingleeio](https://github.com/wingleeio)! - `instance.scrollToTop({ behavior })` — first-class sibling of `scrollToBottom`. The list wires a driver that breaks the stick and, from deep history, teleports into glide range before animating (a long smooth scroll's animated distance is otherwise unpaintable); without a driver it falls back to a plain element scroll.
+
 ## 0.6.4
 
 ### Patch Changes
