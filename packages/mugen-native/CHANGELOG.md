@@ -1,5 +1,11 @@
 # @wingleeio/mugen-native
 
+## 0.8.6
+
+### Patch Changes
+
+- [`64717fe`](https://github.com/wingleeio/mugen/commit/64717fe8198dc1f56b36953067ff4e50e86785fb) Thanks [@wingleeio](https://github.com/wingleeio)! - Wormhole scroll: `scrollToTop`/`scrollToBottom` from ANY distance is one CONTINUOUS motion — no cut, no blank, no fps drop. A long jump cannot honestly animate its full distance (crossing 100k px at readable pace is unpaintable) and a teleport-then-glide shows a hard content swap. Slots are absolutely positioned on mugen's canvas, so the destination's real neighborhood is temporarily laid out flush against the current viewport (snapped to a row boundary — edge-to-edge seam, overscan neighbors hidden invisibly), the list glides exactly one viewport of real pixels on the UI thread, and coordinates re-normalize atomically through the headroom canvas's origin absorption — identical pixels, native offset untouched, the same mechanism prepends use. A finger grab mid-glide normalizes instantly and the drag continues from exactly what's on screen. Measured on an 8MB transcript: 63-67fps, zero blank frames, zero discontinuous frame pairs, both directions.
+
 ## 0.8.5
 
 ### Patch Changes
