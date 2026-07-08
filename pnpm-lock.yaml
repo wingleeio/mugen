@@ -172,6 +172,9 @@ importers:
       '@chenglou/pretext':
         specifier: 0.0.8
         version: 0.0.8
+      '@wingleeio/pretext-core':
+        specifier: workspace:^
+        version: link:../pretext-core
       use-sync-external-store:
         specifier: ^1.6.0
         version: 1.6.0(react@19.2.7)
@@ -227,6 +230,9 @@ importers:
       '@types/mdast':
         specifier: ^4.0.4
         version: 4.0.4
+      '@wingleeio/pretext-core':
+        specifier: workspace:^
+        version: link:../pretext-core
     devDependencies:
       '@testing-library/react':
         specifier: ^16.3.2
@@ -282,6 +288,9 @@ importers:
       '@wingleeio/mugen-markdown':
         specifier: workspace:^
         version: link:../mugen-markdown
+      '@wingleeio/pretext-core':
+        specifier: workspace:^
+        version: link:../pretext-core
     devDependencies:
       '@types/react':
         specifier: ^19.2.15
@@ -292,9 +301,6 @@ importers:
       '@wingleeio/mugen-native':
         specifier: workspace:^
         version: link:../mugen-native
-      '@wingleeio/pretext-core':
-        specifier: workspace:^
-        version: link:../pretext-core
       '@wingleeio/pretext-native':
         specifier: workspace:^
         version: link:../pretext-native
@@ -325,6 +331,9 @@ importers:
       '@wingleeio/mugen':
         specifier: workspace:^
         version: link:../mugen
+      '@wingleeio/pretext-core':
+        specifier: workspace:^
+        version: link:../pretext-core
       '@wingleeio/pretext-native':
         specifier: workspace:^
         version: link:../pretext-native
@@ -356,22 +365,22 @@ importers:
 
   packages/pretext-core:
     dependencies:
+      '@chenglou/pretext':
+        specifier: 0.0.8
+        version: 0.0.8
+      '@wingleeio/pretext-native':
+        specifier: workspace:^
+        version: link:../pretext-native
       react:
         specifier: '>=18'
         version: 19.2.7
     devDependencies:
-      '@chenglou/pretext':
-        specifier: 0.0.8
-        version: 0.0.8
       '@types/node':
         specifier: ^22.0.0
         version: 22.20.0
       '@types/react':
         specifier: ~19.1.17
         version: 19.1.17
-      '@wingleeio/pretext-native':
-        specifier: workspace:^
-        version: link:../pretext-native
       nitrogen:
         specifier: 0.36.1
         version: 0.36.1(react-native@0.81.5(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.2.7))(react@19.2.7)

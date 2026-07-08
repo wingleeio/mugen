@@ -20,7 +20,7 @@ import {
   measureRichInlineStats,
   type PreparedRichInline,
   type RichInlineItem,
-} from '@chenglou/pretext/rich-inline';
+} from '@wingleeio/pretext-core';
 
 /**
  * One styled span of inline text. A `RichText` is a sequence of runs that wrap

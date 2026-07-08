@@ -43,6 +43,10 @@
     "build:host": "cmake -S . -B build-host -DCMAKE_BUILD_TYPE=Release && cmake --build build-host -j",
     "clean": "rm -rf dist build-host"
   },
+  "dependencies": {
+    "@chenglou/pretext": "0.0.8",
+    "@wingleeio/pretext-native": "workspace:^"
+  },
   "devDependencies": {
     "@chenglou/pretext": "0.0.8",
     "@types/node": "^22.0.0",
