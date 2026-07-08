@@ -1194,13 +1194,16 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     // the finger.
     const budgetPx = notify ? vh * (Math.abs(v) > 8000 ? 3 : 2) : vh * 1.2;
     const cap = notify ? FRESH_PER_EVENT : Number.POSITIVE_INFINITY;
-    // A COLD MOUNT (no rows bound yet — a fresh session open) binds its whole
-    // primary window in the mount commit: one bounded commit is faster and
-    // reads instant, whereas budgeting it turns the open into a cascade of
-    // drain commits that jank the navigation animation. Only far blocks (the
-    // resident top) defer to the idle drain. Budgets exist for LIVE paths —
-    // scroll events and streaming re-renders — where a huge commit stalls
-    // frames the user is watching.
+    // A COLD MOUNT (no rows bound yet — a fresh session open) is budgeted
+    // like any data swap: bind the VISIBLE screen in the mount commit and
+    // drain the overscan invisibly afterward. Binding the whole primary
+    // window in one commit (the previous design) rendered 40-80 heavy
+    // markdown rows synchronously — measured ~1.8s on a 1002-row transcript
+    // (profiled: sync/setItems/allocate were all <50ms; the whole cost was
+    // React committing offscreen rows nobody could see yet). The mount also
+    // SKIPS the top-landing exemption: the drain binds the transcript top
+    // within a few frames, far sooner than any human can reach the status
+    // bar after an open.
     const coldMount = !notify && prev.size === 0;
     const nearLo = center - overscan - leadUp - vh;
     const nearHi = center + vh + overscan + leadDown + vh;
@@ -1232,8 +1235,8 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     let scan = 0;
     let grewPool = false;
     for (const i of fresh) {
-      const over = coldMount ? !inNearWindow(i) : assigned >= cap || spentPx >= budgetPx;
-      if (over && (hopeless || (!intersectsViewport(i) && !inTopLanding(i)))) {
+      const over = assigned >= cap || spentPx >= budgetPx;
+      if (over && (hopeless || (!intersectsViewport(i) && (coldMount || !inTopLanding(i))))) {
         starved = true;
         if (inNearWindow(i) || (alsoCover !== undefined && Math.abs(instance.offsetOf(i) - alsoCover) < vh * 2))
           starvedNear = true;

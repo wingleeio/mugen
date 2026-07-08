@@ -8,12 +8,15 @@ import {
   prepareTextSegments,
   naturalWidth,
   fontEpoch,
+  currentSession,
   Text as WebText,
   TextDefaultsContext,
+  RowScopeContext,
   type TextProps as WebTextProps,
   type Font,
   type WhiteSpaceMode,
   type WordBreakMode,
+  type MeasureContext,
 } from '@wingleeio/mugen/native-core';
 import { WidthContext } from '../width-context';
 import { fontShorthandToTextStyle } from '../font-style';
@@ -33,6 +36,89 @@ export interface TextProps {
   style?: StyleProp<TextStyle>;
   selectable?: boolean;
 }
+
+/** A paint-ready text layout: pretext's lines joined by hard newlines. */
+export interface TextLayout {
+  /** The laid-out text — lines joined with `\n` at pretext's break points. */
+  text: string;
+  /** Wrapped line count (the paint's `numberOfLines` cap). */
+  count: number;
+  /** Total laid-out height in px. */
+  height: number;
+  /** The width the layout was computed at (shrink resolves below the row width). */
+  width: number;
+}
+
+/**
+ * Optional app-provided layout store (mirror of `MugenHeightCache`, for the
+ * PAINT side). Text layouts are pure functions of (text, font, options,
+ * width, line-height) — computing one costs real milliseconds on Hermes
+ * (segmentation dominates), so a first render of a never-painted transcript
+ * used to pay ~2ms per text node. With a store attached, the layout is
+ * computed exactly once per key: the MEASURE half primes it during any walk
+ * (a boot warmer's sweep covers whole chats in the background), and an app
+ * that persists entries makes first paints segmentation-free across
+ * launches.
+ *
+ * `rowKey` (when known) names the row being laid out — an app can use it to
+ * skip persisting volatile rows (streaming content re-lays-out every token).
+ */
+export interface MugenTextLayoutCache {
+  get(key: string): TextLayout | undefined;
+  set(key: string, value: TextLayout, rowKey?: string): void;
+}
+
+let layoutStore: MugenTextLayoutCache | null = null;
+
+/** Attach (or detach) the shared text-layout store. */
+export const setTextLayoutCache = (store: MugenTextLayoutCache | null): void => {
+  layoutStore = store;
+};
+
+interface ResolvedText {
+  font: Font;
+  lineHeight: number;
+  letterSpacing?: number;
+  opts?: { whiteSpace?: WhiteSpaceMode; wordBreak?: WordBreakMode; letterSpacing?: number };
+}
+
+const layoutKeyOf = (text: string, r: ResolvedText, rowWidth: number, shrink: boolean): string =>
+  `${rowWidth}|${r.lineHeight}|${r.font}|${r.opts?.whiteSpace ?? ''}|${r.opts?.wordBreak ?? ''}|${r.opts?.letterSpacing ?? ''}|${shrink ? 1 : 0}|${text}`;
+
+/**
+ * Compute (or fetch) the paint-ready layout for a text at a row width. The
+ * single source for BOTH halves: the render consumes it, and the measure
+ * half primes it — so any height walk leaves the paint layout behind it.
+ */
+const computeTextLayout = (
+  text: string,
+  r: ResolvedText,
+  rowWidth: number,
+  shrink: boolean,
+  rowKey?: string,
+): TextLayout => {
+  const key = layoutStore !== null ? layoutKeyOf(text, r, rowWidth, shrink) : '';
+  if (layoutStore !== null) {
+    const hit = layoutStore.get(key);
+    if (hit !== undefined) return hit;
+  }
+  const width = shrink
+    ? Math.min(rowWidth, Math.ceil(naturalWidth(text, r.font, r.opts)))
+    : rowWidth;
+  const prepared = prepareTextSegments(text, r.font, r.opts);
+  // Mirrors `layout()`'s break decisions — the exact call the measure made.
+  const { lines, height } = layoutWithLines(prepared, width, r.lineHeight);
+  // Join at pretext's break points with hard newlines: RN renders exactly
+  // these lines, in one node, without re-choosing any breaks.
+  const value: TextLayout = {
+    text: lines.map((l) => l.text).join('\n'),
+    count: lines.length,
+    height,
+    width,
+  };
+  layoutStore?.set(key, value, rowKey);
+  return value;
+};
 
 const webTextDef = getPrimitiveDef(WebText)!;
 
@@ -61,24 +147,18 @@ const webTextDef = getPrimitiveDef(WebText)!;
 function TextComponent(props: TextProps): ReactElement | null {
   const defaults = useContext(TextDefaultsContext);
   const rowWidth = useContext(WidthContext);
+  const scope = useContext(RowScopeContext);
   const r = resolveText(props as unknown as WebTextProps, defaults);
   const text = props.children;
   const epoch = fontEpoch();
+  const rowKey = scope?.rowKey;
 
   const laidOut = useMemo(() => {
     if (rowWidth <= 0 || typeof text !== 'string') return null;
-    const width = props.shrink
-      ? Math.min(rowWidth, Math.ceil(naturalWidth(text, r.font, r.opts)))
-      : rowWidth;
-    const prepared = prepareTextSegments(text, r.font, r.opts);
-    // Mirrors `layout()`'s break decisions — the exact call the measure made.
-    const { lines, height } = layoutWithLines(prepared, width, r.lineHeight);
-    // Join at pretext's break points with hard newlines: RN renders exactly
-    // these lines, in one node, without re-choosing any breaks.
-    return { text: lines.map((l) => l.text).join('\n'), count: lines.length, height, width };
+    return computeTextLayout(text, r as unknown as ResolvedText, rowWidth, !!props.shrink, rowKey);
     // `epoch` invalidates when fonts (re)register and metrics change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text, r.font, r.lineHeight, r.letterSpacing, r.whiteSpace, r.wordBreak, rowWidth, props.shrink, epoch]);
+  }, [text, r.font, r.lineHeight, r.letterSpacing, r.whiteSpace, r.wordBreak, rowWidth, props.shrink, epoch, rowKey]);
 
   if (laidOut === null) return null;
 
@@ -115,10 +195,29 @@ TextComponent.displayName = 'Text';
 /**
  * Measured exactly like the web `Text` — the measure half *is* the web one
  * (same pretext caches, same options resolution), so a tree authored for
- * `@wingleeio/mugen` computes identical heights here.
+ * `@wingleeio/mugen` computes identical heights here. With a layout store
+ * attached, measuring ALSO primes the paint layout at the same width the
+ * walker used (the render threads the identical width by construction), so
+ * a background height sweep leaves every text paint-ready.
  */
 export const Text = markPrimitive(TextComponent as (props: TextProps) => ReactElement | null, {
   name: 'Text',
-  measure: webTextDef.measure,
+  measure(props: Record<string, unknown>, ctx: MeasureContext) {
+    const h = webTextDef.measure(props, ctx);
+    if (layoutStore !== null) {
+      const p = props as unknown as TextProps;
+      if (typeof p.children === 'string' && ctx.width > 0) {
+        const r = resolveText(p as unknown as WebTextProps, ctx.defaults);
+        computeTextLayout(
+          p.children,
+          r as unknown as ResolvedText,
+          ctx.width,
+          !!p.shrink,
+          currentSession()?.rowKey,
+        );
+      }
+    }
+    return h;
+  },
   naturalWidth: webTextDef.naturalWidth,
 });

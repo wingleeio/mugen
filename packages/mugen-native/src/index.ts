@@ -62,8 +62,8 @@ export type {
 } from '@wingleeio/mugen/native-core';
 
 // ── Primitives (native render halves, shared measure halves) ──
-export { Text } from './primitives/text';
-export type { TextProps } from './primitives/text';
+export { Text, setTextLayoutCache } from './primitives/text';
+export type { TextProps, TextLayout, MugenTextLayoutCache } from './primitives/text';
 export { VStack, HStack, definePrimitive } from './primitives/box';
 export type {
   NativeBoxProps,
