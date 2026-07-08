@@ -1,5 +1,19 @@
 # @wingleeio/pretext-core
 
+## 0.1.1
+
+### Patch Changes
+
+- [#55](https://github.com/wingleeio/mugen/pull/55) [`519710b`](https://github.com/wingleeio/mugen/commit/519710be92f9daed296ca341eca03812aaafc14f) Thanks [@wingleeio](https://github.com/wingleeio)! - Fix React Native / Metro bundling of the `/text-block` entry.
+
+  - Build with tsdown `platform: 'neutral'` so the lazy native-module locators
+    keep a bare `require` (resolved by Metro at runtime) instead of a
+    `createRequire` from `node:module`, which Metro cannot bundle.
+  - `MugenTextBlock` now statically imports `getHostComponent` from
+    `react-native-nitro-modules` (Metro only bundles static imports; a dynamic
+    `require` threw "unknown module" at runtime even with the pod installed).
+  - Declare `react` / `react-native-nitro-modules` as optional peer deps.
+
 ## 0.1.0
 
 ### Minor Changes
