@@ -1,0 +1,52 @@
+{
+  "name": "@wingleeio/pretext-core",
+  "version": "0.0.0",
+  "description": "C++ JSI text engine for React Native — @chenglou/pretext's line breaker and pretext-native's font-table metrics, ported to native and exposed as synchronous JSI calls, plus the PretextBlockView single-view text block.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wingleeio/mugen.git",
+    "directory": "packages/pretext-core"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "cpp",
+    "ios",
+    "android",
+    "nitrogen/generated",
+    "*.podspec",
+    "nitro.json"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "test": "vitest run",
+    "check-types": "tsc --noEmit",
+    "gen:tables": "node scripts/gen-unicode-tables.mjs",
+    "build:host": "cmake -S . -B build-host -DCMAKE_BUILD_TYPE=Release && cmake --build build-host -j",
+    "clean": "rm -rf dist build-host"
+  },
+  "devDependencies": {
+    "@chenglou/pretext": "0.0.8",
+    "@types/node": "^22.0.0",
+    "@wingleeio/pretext-native": "workspace:^",
+    "tsdown": "^0.15.7",
+    "typescript": "^6.0.3",
+    "vitest": "^3.2.4"
+  },
+  "peerDependencies": {
+    "react-native": ">=0.76"
+  }
+}
