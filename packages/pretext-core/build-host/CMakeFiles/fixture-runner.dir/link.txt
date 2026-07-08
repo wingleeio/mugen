@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG -arch arm64 -Wl,-search_paths_first -Wl,-headerpad_max_install_names "CMakeFiles/fixture-runner.dir/tools/fixture-runner/main.cpp.o" -o fixture-runner  libpretext_core.a

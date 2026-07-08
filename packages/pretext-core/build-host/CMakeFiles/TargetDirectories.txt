@@ -1,4 +1,0 @@
-/Users/wing/Documents/GitHub/mugen/packages/pretext-core/build-host/CMakeFiles/pretext_core.dir
-/Users/wing/Documents/GitHub/mugen/packages/pretext-core/build-host/CMakeFiles/fixture-runner.dir
-/Users/wing/Documents/GitHub/mugen/packages/pretext-core/build-host/CMakeFiles/edit_cache.dir
-/Users/wing/Documents/GitHub/mugen/packages/pretext-core/build-host/CMakeFiles/rebuild_cache.dir
