@@ -357,4 +357,11 @@ inline constexpr CpRange kScriptArabic[] = {
 };
 inline bool isScriptArabic(char32_t cp) { return inRanges(cp, kScriptArabic, 56); }
 
+// \s — 10 ranges
+inline constexpr CpRange kWhitespace[] = {
+    {0x9, 0xd}, {0x20, 0x20}, {0xa0, 0xa0}, {0x1680, 0x1680}, {0x2000, 0x200a}, {0x2028, 0x2029},
+    {0x202f, 0x202f}, {0x205f, 0x205f}, {0x3000, 0x3000}, {0xfeff, 0xfeff},
+};
+inline bool isWhitespace(char32_t cp) { return inRanges(cp, kWhitespace, 10); }
+
 }  // namespace pretext::tables

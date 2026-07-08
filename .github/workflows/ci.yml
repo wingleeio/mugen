@@ -49,3 +49,31 @@ jobs:
         run: |
           pnpm --filter @wingleeio/mugen test:browser
           pnpm --filter @wingleeio/mugen-markdown test:browser
+
+  # pretext-core golden conformance: the C++ kernel must be byte-identical
+  # (Object.is per number) to TS pretext running on pretext-native's polyfills
+  # over the corpus. This is the gate NATIVE-TEXT.md requires before any
+  # cache deletion ships.
+  pretext-core-conformance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build JS deps (pretext-native for the reference driver)
+        run: pnpm turbo run build --filter=@wingleeio/pretext-core...
+
+      - name: Build kernel + fixture runner (host)
+        run: pnpm --filter @wingleeio/pretext-core build:host
+
+      - name: Conformance (TS pretext vs pretext-core)
+        run: pnpm --filter @wingleeio/pretext-core test

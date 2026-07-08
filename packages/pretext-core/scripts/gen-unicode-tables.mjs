@@ -6,7 +6,7 @@
 // Classes come from:
 //   @chenglou/pretext src/analysis.ts:   \p{M}, \p{Nd}, [\p{P}\p{S}\p{Co}],
 //                                        \p{Emoji_Presentation}, \p{Script=Arabic}
-//   pretext-native segmenter/word.ts:    [\p{L}\p{M}], \p{Nd}, [\p{L}\p{M}\p{Nd}\p{Pc}]
+//   pretext-native segmenter/word.ts:    [\p{L}\p{M}], \p{Nd}, [\p{L}\p{M}\p{Nd}\p{Pc}], \s
 //   pretext-native segmenter/grapheme.ts: \p{Extended_Pictographic} (if used)
 
 const CLASSES = [
@@ -19,6 +19,9 @@ const CLASSES = [
   ['ExtendedPictographic', /\p{Extended_Pictographic}/u],
   ['RegionalIndicator', /\p{Regional_Indicator}/u],
   ['ScriptArabic', /\p{Script=Arabic}/u],
+  // word.ts isWhitespace: /\s/.test(String.fromCodePoint(cp)) — \s is the JS
+  // regex whitespace set (BMP-only), identical with or without the u flag.
+  ['Whitespace', /\s/u],
 ];
 
 function rangesFor(re) {
