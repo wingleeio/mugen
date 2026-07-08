@@ -484,3 +484,19 @@ export function installPretextPolyfills(
 if (getNative() === null) {
   jsInstallPretextPolyfills();
 }
+
+// ---------------------------------------------------------------------------
+// <MugenTextBlock> — the one-native-view-per-block Fabric component
+// (NATIVE-TEXT.md). The React component itself lives behind the
+// `@wingleeio/pretext-core/text-block` subpath so importing the measurement
+// API never pulls in react/react-native (keeps this module usable from Node
+// and from mugen's measure code). Only the plain-data spec types are surfaced
+// here (they erase at runtime).
+// ---------------------------------------------------------------------------
+export type {
+  MugenTextBlockSpec,
+  MugenTextRun,
+  MugenTextFragment,
+  MugenTextLine,
+  MugenTextAlign,
+} from './specs/mugen-text-block.nitro.js';

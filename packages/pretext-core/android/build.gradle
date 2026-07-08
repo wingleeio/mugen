@@ -8,6 +8,13 @@ def isNewArchitectureEnabled() {
 }
 
 apply plugin: "com.android.library"
+// The <MugenTextBlock> Nitro HybridView is implemented in Kotlin
+// (src/main/java/com/margelo/nitro/pretextcore/HybridMugenTextBlock.kt) and
+// nitrogen now emits Kotlin specs for it — so this module needs the Kotlin
+// plugin (the kernel HybridObjects stay pure C++). The plugin is provided by
+// the RN root Gradle project, like every other Nitro module (see
+// react-native-nitro-modules/android/build.gradle).
+apply plugin: "org.jetbrains.kotlin.android"
 
 android {
   namespace "com.margelo.nitro.pretextcore"
@@ -26,6 +33,15 @@ android {
   externalNativeBuild {
     cmake {
       path "CMakeLists.txt"
+    }
+  }
+
+  // Our hand-written Kotlin view lives in the default src/main/java root; keep
+  // it an explicit Kotlin source dir alongside the nitrogen-generated Kotlin
+  // (added by PretextCore+autolinking.gradle below).
+  sourceSets {
+    main {
+      java.srcDirs += ["src/main/java"]
     }
   }
 

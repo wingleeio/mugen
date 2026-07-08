@@ -15,9 +15,12 @@
 #include <fbjni/fbjni.h>
 #include <NitroModules/HybridObjectRegistry.hpp>
 
+#include "JHybridMugenTextBlockSpec.hpp"
+#include "views/JHybridMugenTextBlockStateUpdater.hpp"
 #include "PretextCoreModule.hpp"
 #include "PreparedTextObject.hpp"
 #include "PreparedRichInlineObject.hpp"
+#include <NitroModules/DefaultConstructableObject.hpp>
 
 namespace margelo::nitro::pretextcore {
 
@@ -27,14 +30,22 @@ int initialize(JavaVM* vm) {
   });
 }
 
-
+struct JHybridMugenTextBlockSpecImpl: public jni::JavaClass<JHybridMugenTextBlockSpecImpl, JHybridMugenTextBlockSpec::JavaPart> {
+  static constexpr auto kJavaDescriptor = "Lcom/margelo/nitro/pretextcore/HybridMugenTextBlock;";
+  static std::shared_ptr<JHybridMugenTextBlockSpec> create() {
+    static const auto constructorFn = javaClassStatic()->getConstructor<JHybridMugenTextBlockSpecImpl::javaobject()>();
+    jni::local_ref<JHybridMugenTextBlockSpec::JavaPart> javaPart = javaClassStatic()->newObject(constructorFn);
+    return javaPart->getJHybridMugenTextBlockSpec();
+  }
+};
 
 void registerAllNatives() {
   using namespace margelo::nitro;
   using namespace margelo::nitro::pretextcore;
 
   // Register native JNI methods
-  
+  margelo::nitro::pretextcore::JHybridMugenTextBlockSpec::CxxPart::registerNatives();
+  margelo::nitro::pretextcore::views::JHybridMugenTextBlockStateUpdater::registerNatives();
 
   // Register Nitro Hybrid Objects
   HybridObjectRegistry::registerHybridObjectConstructor(
@@ -62,6 +73,12 @@ void registerAllNatives() {
                     "The HybridObject \"PreparedRichInlineObject\" is not default-constructible! "
                     "Create a public constructor that takes zero arguments to be able to autolink this HybridObject.");
       return std::make_shared<PreparedRichInlineObject>();
+    }
+  );
+  HybridObjectRegistry::registerHybridObjectConstructor(
+    "MugenTextBlock",
+    []() -> std::shared_ptr<HybridObject> {
+      return JHybridMugenTextBlockSpecImpl::create();
     }
   );
 }

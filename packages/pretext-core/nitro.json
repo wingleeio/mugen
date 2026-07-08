@@ -25,6 +25,16 @@
         "language": "c++",
         "implementationClassName": "PreparedRichInlineObject"
       }
+    },
+    "MugenTextBlock": {
+      "ios": {
+        "language": "swift",
+        "implementationClassName": "HybridMugenTextBlock"
+      },
+      "android": {
+        "language": "kotlin",
+        "implementationClassName": "HybridMugenTextBlock"
+      }
     }
   },
   "ignorePaths": ["node_modules", "dist", "build-host"]

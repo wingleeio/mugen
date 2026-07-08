@@ -8,10 +8,26 @@
 #include "PretextCore-Swift-Cxx-Bridge.hpp"
 
 // Include C++ implementation defined types
-
+#include "HybridMugenTextBlockSpecSwift.hpp"
+#include "PretextCore-Swift-Cxx-Umbrella.hpp"
+#include <NitroModules/NitroDefines.hpp>
 
 namespace margelo::nitro::pretextcore::bridge::swift {
 
-  
+  // pragma MARK: std::shared_ptr<HybridMugenTextBlockSpec>
+  std::shared_ptr<HybridMugenTextBlockSpec> create_std__shared_ptr_HybridMugenTextBlockSpec_(void* NON_NULL swiftUnsafePointer) noexcept {
+    PretextCore::HybridMugenTextBlockSpec_cxx swiftPart = PretextCore::HybridMugenTextBlockSpec_cxx::fromUnsafe(swiftUnsafePointer);
+    return std::make_shared<margelo::nitro::pretextcore::HybridMugenTextBlockSpecSwift>(swiftPart);
+  }
+  void* NON_NULL get_std__shared_ptr_HybridMugenTextBlockSpec_(std__shared_ptr_HybridMugenTextBlockSpec_ cppType) {
+    std::shared_ptr<margelo::nitro::pretextcore::HybridMugenTextBlockSpecSwift> swiftWrapper = std::dynamic_pointer_cast<margelo::nitro::pretextcore::HybridMugenTextBlockSpecSwift>(cppType);
+    #ifdef NITRO_DEBUG
+    if (swiftWrapper == nullptr) [[unlikely]] {
+      throw std::runtime_error("Class \"HybridMugenTextBlockSpec\" is not implemented in Swift!");
+    }
+    #endif
+    PretextCore::HybridMugenTextBlockSpec_cxx& swiftPart = swiftWrapper->getSwiftPart();
+    return swiftPart.toUnsafe();
+  }
 
 } // namespace margelo::nitro::pretextcore::bridge::swift

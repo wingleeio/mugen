@@ -12,5 +12,15 @@ import NitroModules
 public final class PretextCoreAutolinking {
   public typealias bridge = margelo.nitro.pretextcore.bridge.swift
 
+  public static func createMugenTextBlock() -> bridge.std__shared_ptr_HybridMugenTextBlockSpec_ {
+    let hybridObject = HybridMugenTextBlock()
+    return { () -> bridge.std__shared_ptr_HybridMugenTextBlockSpec_ in
+      let __cxxWrapped = hybridObject.getCxxWrapper()
+      return __cxxWrapped.getCxxPart()
+    }()
+  }
   
+  public static func isMugenTextBlockRecyclable() -> Bool {
+    return HybridMugenTextBlock.self is any RecyclableView.Type
+  }
 }

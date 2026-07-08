@@ -7,12 +7,13 @@
 
 #import <Foundation/Foundation.h>
 #import <NitroModules/HybridObjectRegistry.hpp>
-
+#import "PretextCore-Swift-Cxx-Umbrella.hpp"
 #import <type_traits>
 
 #include "PretextCoreModule.hpp"
 #include "PreparedTextObject.hpp"
 #include "PreparedRichInlineObject.hpp"
+#include "HybridMugenTextBlockSpecSwift.hpp"
 
 @interface PretextCoreAutolinking : NSObject
 @end
@@ -48,6 +49,13 @@
                     "The HybridObject \"PreparedRichInlineObject\" is not default-constructible! "
                     "Create a public constructor that takes zero arguments to be able to autolink this HybridObject.");
       return std::make_shared<PreparedRichInlineObject>();
+    }
+  );
+  HybridObjectRegistry::registerHybridObjectConstructor(
+    "MugenTextBlock",
+    []() -> std::shared_ptr<HybridObject> {
+      std::shared_ptr<HybridMugenTextBlockSpec> hybridObject = PretextCore::PretextCoreAutolinking::createMugenTextBlock();
+      return hybridObject;
     }
   );
 }

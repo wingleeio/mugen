@@ -8,10 +8,30 @@
 #pragma once
 
 // Forward declarations of C++ defined types
-
+// Forward declaration of `HybridMugenTextBlockSpec` to properly resolve imports.
+namespace margelo::nitro::pretextcore { class HybridMugenTextBlockSpec; }
+// Forward declaration of `MugenTextAlign` to properly resolve imports.
+namespace margelo::nitro::pretextcore { enum class MugenTextAlign; }
+// Forward declaration of `MugenTextBlockSpec` to properly resolve imports.
+namespace margelo::nitro::pretextcore { struct MugenTextBlockSpec; }
+// Forward declaration of `MugenTextFragment` to properly resolve imports.
+namespace margelo::nitro::pretextcore { struct MugenTextFragment; }
+// Forward declaration of `MugenTextLine` to properly resolve imports.
+namespace margelo::nitro::pretextcore { struct MugenTextLine; }
+// Forward declaration of `MugenTextRun` to properly resolve imports.
+namespace margelo::nitro::pretextcore { struct MugenTextRun; }
 
 // Include C++ defined types
-
+#include "HybridMugenTextBlockSpec.hpp"
+#include "MugenTextAlign.hpp"
+#include "MugenTextBlockSpec.hpp"
+#include "MugenTextFragment.hpp"
+#include "MugenTextLine.hpp"
+#include "MugenTextRun.hpp"
+#include <memory>
+#include <optional>
+#include <string>
+#include <vector>
 
 // C++ helpers for Swift
 #include "PretextCore-Swift-Cxx-Bridge.hpp"
@@ -23,7 +43,8 @@
 #include <NitroModules/DateToChronoDate.hpp>
 
 // Forward declarations of Swift defined types
-
+// Forward declaration of `HybridMugenTextBlockSpec_cxx` to properly resolve imports.
+namespace PretextCore { class HybridMugenTextBlockSpec_cxx; }
 
 // Include Swift defined types
 #if __has_include("PretextCore-Swift.h")

@@ -33,11 +33,14 @@ target_sources(
   # Autolinking Setup
   ../nitrogen/generated/android/PretextCoreOnLoad.cpp
   # Shared Nitrogen C++ sources
+  ../nitrogen/generated/shared/c++/HybridMugenTextBlockSpec.cpp
+  ../nitrogen/generated/shared/c++/views/HybridMugenTextBlockComponent.cpp
   ../nitrogen/generated/shared/c++/HybridPreparedTextSpec.cpp
   ../nitrogen/generated/shared/c++/HybridPreparedRichInlineSpec.cpp
   ../nitrogen/generated/shared/c++/HybridPretextCoreSpec.cpp
   # Android-specific Nitrogen C++ sources
-  
+  ../nitrogen/generated/android/c++/JHybridMugenTextBlockSpec.cpp
+  ../nitrogen/generated/android/c++/views/JHybridMugenTextBlockStateUpdater.cpp
 )
 
 # From node_modules/react-native/ReactAndroid/cmake-utils/folly-flags.cmake

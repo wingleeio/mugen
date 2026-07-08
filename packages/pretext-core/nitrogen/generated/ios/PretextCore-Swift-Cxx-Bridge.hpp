@@ -8,13 +8,31 @@
 #pragma once
 
 // Forward declarations of C++ defined types
-
+// Forward declaration of `HybridMugenTextBlockSpec` to properly resolve imports.
+namespace margelo::nitro::pretextcore { class HybridMugenTextBlockSpec; }
+// Forward declaration of `MugenTextAlign` to properly resolve imports.
+namespace margelo::nitro::pretextcore { enum class MugenTextAlign; }
+// Forward declaration of `MugenTextFragment` to properly resolve imports.
+namespace margelo::nitro::pretextcore { struct MugenTextFragment; }
+// Forward declaration of `MugenTextLine` to properly resolve imports.
+namespace margelo::nitro::pretextcore { struct MugenTextLine; }
+// Forward declaration of `MugenTextRun` to properly resolve imports.
+namespace margelo::nitro::pretextcore { struct MugenTextRun; }
 
 // Forward declarations of Swift defined types
-
+// Forward declaration of `HybridMugenTextBlockSpec_cxx` to properly resolve imports.
+namespace PretextCore { class HybridMugenTextBlockSpec_cxx; }
 
 // Include C++ defined types
-
+#include "HybridMugenTextBlockSpec.hpp"
+#include "MugenTextAlign.hpp"
+#include "MugenTextFragment.hpp"
+#include "MugenTextLine.hpp"
+#include "MugenTextRun.hpp"
+#include <memory>
+#include <optional>
+#include <string>
+#include <vector>
 
 /**
  * Contains specialized versions of C++ templated types so they can be accessed from Swift,
@@ -22,6 +40,109 @@
  */
 namespace margelo::nitro::pretextcore::bridge::swift {
 
+  // pragma MARK: std::optional<std::string>
+  /**
+   * Specialized version of `std::optional<std::string>`.
+   */
+  using std__optional_std__string_ = std::optional<std::string>;
+  inline std::optional<std::string> create_std__optional_std__string_(const std::string& value) noexcept {
+    return std::optional<std::string>(value);
+  }
+  inline bool has_value_std__optional_std__string_(const std::optional<std::string>& optional) noexcept {
+    return optional.has_value();
+  }
+  inline std::string get_std__optional_std__string_(const std::optional<std::string>& optional) noexcept {
+    return optional.value();
+  }
   
+  // pragma MARK: std::optional<double>
+  /**
+   * Specialized version of `std::optional<double>`.
+   */
+  using std__optional_double_ = std::optional<double>;
+  inline std::optional<double> create_std__optional_double_(const double& value) noexcept {
+    return std::optional<double>(value);
+  }
+  inline bool has_value_std__optional_double_(const std::optional<double>& optional) noexcept {
+    return optional.has_value();
+  }
+  inline double get_std__optional_double_(const std::optional<double>& optional) noexcept {
+    return optional.value();
+  }
+  
+  // pragma MARK: std::optional<bool>
+  /**
+   * Specialized version of `std::optional<bool>`.
+   */
+  using std__optional_bool_ = std::optional<bool>;
+  inline std::optional<bool> create_std__optional_bool_(const bool& value) noexcept {
+    return std::optional<bool>(value);
+  }
+  inline bool has_value_std__optional_bool_(const std::optional<bool>& optional) noexcept {
+    return optional.has_value();
+  }
+  inline bool get_std__optional_bool_(const std::optional<bool>& optional) noexcept {
+    return optional.value();
+  }
+  
+  // pragma MARK: std::vector<MugenTextRun>
+  /**
+   * Specialized version of `std::vector<MugenTextRun>`.
+   */
+  using std__vector_MugenTextRun_ = std::vector<MugenTextRun>;
+  inline std::vector<MugenTextRun> create_std__vector_MugenTextRun_(size_t size) noexcept {
+    std::vector<MugenTextRun> vector;
+    vector.reserve(size);
+    return vector;
+  }
+  
+  // pragma MARK: std::vector<MugenTextFragment>
+  /**
+   * Specialized version of `std::vector<MugenTextFragment>`.
+   */
+  using std__vector_MugenTextFragment_ = std::vector<MugenTextFragment>;
+  inline std::vector<MugenTextFragment> create_std__vector_MugenTextFragment_(size_t size) noexcept {
+    std::vector<MugenTextFragment> vector;
+    vector.reserve(size);
+    return vector;
+  }
+  
+  // pragma MARK: std::vector<MugenTextLine>
+  /**
+   * Specialized version of `std::vector<MugenTextLine>`.
+   */
+  using std__vector_MugenTextLine_ = std::vector<MugenTextLine>;
+  inline std::vector<MugenTextLine> create_std__vector_MugenTextLine_(size_t size) noexcept {
+    std::vector<MugenTextLine> vector;
+    vector.reserve(size);
+    return vector;
+  }
+  
+  // pragma MARK: std::optional<MugenTextAlign>
+  /**
+   * Specialized version of `std::optional<MugenTextAlign>`.
+   */
+  using std__optional_MugenTextAlign_ = std::optional<MugenTextAlign>;
+  inline std::optional<MugenTextAlign> create_std__optional_MugenTextAlign_(const MugenTextAlign& value) noexcept {
+    return std::optional<MugenTextAlign>(value);
+  }
+  inline bool has_value_std__optional_MugenTextAlign_(const std::optional<MugenTextAlign>& optional) noexcept {
+    return optional.has_value();
+  }
+  inline MugenTextAlign get_std__optional_MugenTextAlign_(const std::optional<MugenTextAlign>& optional) noexcept {
+    return optional.value();
+  }
+  
+  // pragma MARK: std::shared_ptr<HybridMugenTextBlockSpec>
+  /**
+   * Specialized version of `std::shared_ptr<HybridMugenTextBlockSpec>`.
+   */
+  using std__shared_ptr_HybridMugenTextBlockSpec_ = std::shared_ptr<HybridMugenTextBlockSpec>;
+  std::shared_ptr<HybridMugenTextBlockSpec> create_std__shared_ptr_HybridMugenTextBlockSpec_(void* NON_NULL swiftUnsafePointer) noexcept;
+  void* NON_NULL get_std__shared_ptr_HybridMugenTextBlockSpec_(std__shared_ptr_HybridMugenTextBlockSpec_ cppType);
+  
+  // pragma MARK: std::weak_ptr<HybridMugenTextBlockSpec>
+  using std__weak_ptr_HybridMugenTextBlockSpec_ = std::weak_ptr<HybridMugenTextBlockSpec>;
+  inline std__weak_ptr_HybridMugenTextBlockSpec_ weakify_std__shared_ptr_HybridMugenTextBlockSpec_(const std::shared_ptr<HybridMugenTextBlockSpec>& strong) noexcept { return strong; }
 
 } // namespace margelo::nitro::pretextcore::bridge::swift

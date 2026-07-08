@@ -17,6 +17,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./text-block": {
+      "types": "./dist/text-block.d.ts",
+      "import": "./dist/text-block.js",
+      "require": "./dist/text-block.cjs"
     }
   },
   "files": [
