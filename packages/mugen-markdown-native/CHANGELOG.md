@@ -1,5 +1,16 @@
 # @wingleeio/mugen-markdown-native
 
+## 0.4.1
+
+### Patch Changes
+
+- [#55](https://github.com/wingleeio/mugen/pull/55) [`519710b`](https://github.com/wingleeio/mugen/commit/519710be92f9daed296ca341eca03812aaafc14f) Thanks [@wingleeio](https://github.com/wingleeio)! - `<MugenTextBlock>` is now injected by the consumer instead of dynamically
+  required. `setMugenTextBlock(component)` (replacing `setMugenTextBlockEnabled`)
+  takes the `@wingleeio/pretext-core/text-block` component directly, so this
+  package has no runtime dependency on pretext-core and never emits a
+  `require('@wingleeio/pretext-core/text-block')` — which pulled a `node:module`
+  `createRequire` shim into the ESM build that React Native / Metro can't bundle.
+
 ## 0.4.0
 
 ### Minor Changes
