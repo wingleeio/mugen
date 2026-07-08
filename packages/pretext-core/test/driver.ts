@@ -1,8 +1,9 @@
 // Drives the fixture-runner CLI (C++ side) and the TS engine (reference side)
 // over the same ops, then deep-compares with Object.is number semantics.
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { spawn, type ChildProcessByStdio } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
 import { createInterface, type Interface } from 'node:readline';
+import type { Readable, Writable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -49,7 +50,7 @@ export type Op = Record<string, unknown> & { op: string };
 // --- C++ side ---
 
 export class Runner {
-  private proc: ChildProcessWithoutNullStreams;
+  private proc: ChildProcessByStdio<Writable, Readable, null>;
   private lines: Interface;
   private queue: Array<(line: string) => void> = [];
 
