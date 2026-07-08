@@ -189,6 +189,13 @@ export interface MugenVListProps<T> {
   keyboardShouldPersistTaps?: 'always' | 'never' | 'handled';
   /** Forwarded to the underlying ScrollView (native intercepts key off it). */
   testID?: string;
+  /**
+   * iOS status-bar-tap candidacy (default true). iOS silently ignores the tap
+   * when 2+ visible scroll views claim it — an app that keeps several lists
+   * mounted (a pane pool, a drawer) must leave `scrollsToTop` on ONLY the
+   * active one.
+   */
+  scrollsToTop?: boolean;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -517,18 +524,25 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
   const lastInitialKeyRef = useRef(initialKey);
 
   // Back `instance.scrollToBottom()` with the controller (see web vlist).
-  // From deep in history the stick spring's velocity scales with distance and
-  // outruns painting — the capped glide scrolls the whole real distance at
-  // paintable speed and re-engages the stick on arrival.
+  // From deep in history no honest animation can cross the distance in
+  // reasonable time — the wormhole glides one continuous stretch of real
+  // pixels instead and re-engages the stick on arrival.
   instance.scrollToBottomDriver = (behavior) => {
     ctl.attach(el);
-    ctl.escaped = false;
     const maxSt = Math.max(0, instance.totalHeight() - vh);
     if (behavior === 'smooth') {
-      if (maxSt - adapter.scrollTop > vh * 3)
-        cappedGlideTo(() => Math.max(0, instance.totalHeight() - vh), 1);
-      else ctl.springToBottom(stickSpring);
+      if (maxSt - adapter.scrollTop > vh * 3) {
+        // Stay escaped during the flight: streaming growth mid-wormhole would
+        // otherwise fire the stick spring and fight the glide. Arrival
+        // re-engages (see finish()).
+        ctl.escaped = true;
+        wormholeTo(maxSt, 1);
+      } else {
+        ctl.escaped = false;
+        ctl.springToBottom(stickSpring);
+      }
     } else {
+      ctl.escaped = false;
       ctl.jumpToBottom();
       syncWindowFromEl();
     }
@@ -563,6 +577,9 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     didInitialScroll.current = false;
     prevTotalRef.current = -1;
     ctl.stop();
+    // A data swap invalidates a mid-flight wormhole's corridor and shift —
+    // drop it without re-normalizing (initialScroll re-anchors everything).
+    wormholeAbortRef.current?.();
   });
 
   // Apply `initialScroll` once, after the first real measure (content width and
@@ -794,65 +811,204 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     }
   }, [pendingJump, adapter]);
 
-  // ── Capped glide: honest full-distance smooth scroll ──
-  // Scroll-to-top/bottom scrolls the ENTIRE real distance — the same spring
-  // family as the stick, with one extra rule: velocity never exceeds what
-  // the recycler is measured to paint (the fling-verified regime). Every
-  // frame of the journey is real content at its real position; a touch
-  // cancels it exactly like it cancels any programmatic scroll. Duration
-  // scales with distance — the honest cost of showing everything.
-  const GLIDE_VMAX = 15_000; // px/s, within the verified paintable regime
-  const GLIDE_ACCEL = 0.12; // pull toward cruise per frame
-  const glideRef = useRef<{ raf: number; cancelled: boolean } | null>(null);
-  const cancelGlide = (): void => {
-    if (glideRef.current !== null) {
-      glideRef.current.cancelled = true;
-      cancelAnimationFrame(glideRef.current.raf);
-      glideRef.current = null;
-    }
-  };
-  const cancelGlideRef = useRef(cancelGlide);
-  cancelGlideRef.current = cancelGlide;
-  const cappedGlideTo = (targetOf: () => number, dir: 1 | -1): void => {
-    cancelGlide();
-    let last = performance.now();
-    let v = 0; // px/s
-    const state = { raf: 0, cancelled: false };
-    glideRef.current = state;
-    const tick = (): void => {
-      if (state.cancelled) return;
-      const now = performance.now();
-      const dt = Math.min(64, now - last) / 1000;
-      last = now;
-      const target = targetOf();
-      const pos = adapter.scrollTop;
-      const remaining = (target - pos) * dir;
-      if (remaining <= 1) {
-        glideRef.current = null;
-        adapter.scrollTop = target;
-        if (dir === 1 && stickOn) {
-          ctl.attach(el);
-          ctl.escaped = false;
-          ctl.springToBottom(stickSpring);
+  // ── Wormhole: CONTINUOUS smooth scroll across any distance, bounded time ──
+  // A long "scroll to top/bottom" cannot honestly animate its full distance
+  // (crossing 100k px at any readable pace either blanks or takes seconds),
+  // and a teleport into glide range shows a hard cut. Slots are absolutely
+  // positioned on the canvas, so mugen can do what neither can: lay the
+  // DESTINATION's real neighborhood just beyond the current viewport (a
+  // temporary top for the corridor rows — the same one-frame commit any
+  // rebind is), glide one short stretch of real pixels on the UI thread,
+  // then RE-NORMALIZE coordinates with the headroom canvas's origin
+  // absorption — identical pixels, native offset untouched, exactly the
+  // mechanism prepends use. The user sees one unbroken motion arriving at
+  // real content, in ~a third of a second regardless of distance.
+  const wormholeRef = useRef<{
+    target: number;
+    glideTo: number;
+    shift: number;
+    dir: 1 | -1;
+    timer: ReturnType<typeof setTimeout>;
+  } | null>(null);
+  const wormholeFinishRef = useRef<(() => void) | null>(null);
+  const wormholeAbortRef = useRef<(() => void) | null>(null);
+  const wormholeTo = (target: number, dir: 1 | -1): void => {
+    if (wormholeRef.current !== null) return; // one at a time
+    const st = adapter.scrollTop;
+    // The corridor must tile with EXACT heights — an estimated row painted at
+    // an estimated offset would land the glide on misaligned content. Resolve
+    // the destination zone SILENTLY (a notify here re-renders the list, whose
+    // render-phase allocate would immediately rebind the corridor to real
+    // positions) and absorb the height deltas inline, exactly like the
+    // render-phase anchor block: refined rows above the viewport shift the
+    // origin, never the pixels.
+    if (instance.estimatedCount() > 0) {
+      for (let pass = 0; pass < 4; pass++) {
+        const keys = new Set<string>();
+        if (dir === -1) {
+          for (let i = 0; i < instance.length && instance.offsetOf(i) < vh * 2.5; i++) {
+            const k = instance.keyAt(i);
+            if (instance.isEstimated(k)) keys.add(k);
+          }
+        } else {
+          const total = instance.totalHeight();
+          for (let i = instance.length - 1; i >= 0 && instance.offsetOf(i) > total - vh * 2.5; i--) {
+            const k = instance.keyAt(i);
+            if (instance.isEstimated(k)) keys.add(k);
+          }
         }
-        return;
+        if (keys.size === 0) break;
+        instance.refineKeys(keys, { notify: false });
       }
-      // Accelerate toward cruise; brake into the target with v = √(2·a·d)
-      // so the arrival is soft.
-      const brake = Math.sqrt(2 * GLIDE_VMAX * 2.2 * remaining);
-      const cruise = Math.min(GLIDE_VMAX, brake);
-      v = v + (cruise - v) * GLIDE_ACCEL;
-      const step = Math.min(remaining, Math.max(1, v * dt));
-      adapter.scrollTop = pos + dir * step;
-      state.raf = requestAnimationFrame(tick);
+      const anchorDelta = instance.takeScrollAnchorDelta();
+      if (anchorDelta !== 0) {
+        const max = Math.max(0, instance.totalHeight() - vh);
+        const next = Math.max(0, Math.min(adapter.scrollTop + anchorDelta, max));
+        const applied = next - adapter.scrollTop;
+        adapter.onNativeScroll(next);
+        instance.scrollTop = next;
+        // Origin absorption (iOS headroom). The contentInset prop refreshes on
+        // the finish() commit; the interim staleness is unreachable mid-glide.
+        originRef.current = Math.max(0, originRef.current - applied);
+      }
+    }
+    const stNow = adapter.scrollTop;
+    const total = instance.totalHeight();
+    const origin = originRef.current;
+    // Corridor = the destination-side rows that will fill exactly one glide of
+    // ≥ one viewport, SNAPPED to a row boundary so the seam between departure
+    // content and corridor is edge-to-edge — no overlap, no gap.
+    let first: number;
+    let last: number;
+    let glideDist: number;
+    if (dir === -1) {
+      // To the top: rows [0 .. k-1] where row k is the first at/below one
+      // viewport — they tile [0, offsetOf(k)) and land above the viewport.
+      const k = Math.max(
+        1,
+        instance.indexAt(vh) + (instance.offsetOf(instance.indexAt(vh)) < vh ? 1 : 0),
+      );
+      first = 0;
+      last = Math.min(k, instance.length - 1);
+      glideDist = Math.min(stNow, instance.offsetOf(Math.min(k, instance.length - 1)) || vh);
+      if (glideDist <= 0) return;
+    } else {
+      // To the bottom: rows [j ..] tiling [offsetOf(j), total], presented so
+      // their top edge sits exactly at the departure viewport's bottom.
+      const maxSt = Math.max(0, total - vh);
+      const j = instance.indexAt(maxSt);
+      first = j;
+      last = instance.length - 1;
+      glideDist = vh + (maxSt - instance.offsetOf(j));
+    }
+    const glideTo = stNow + dir * glideDist;
+    // Where the corridor pretends to be, minus where it is.
+    const shift = dir === -1 ? stNow - glideDist : stNow + vh - instance.offsetOf(first);
+    const map = rowToSlotRef.current;
+    // Hide every mapped row whose REAL canvas position intrudes on the glide
+    // window (overscan neighbors of the departure viewport included — they
+    // are offscreen, so hiding them changes no pixels). The visible departure
+    // rows themselves stay: they slide out as real content.
+    const visLo = stNow - 1;
+    const visHi = stNow + vh + 1;
+    const glideLo = Math.min(stNow, glideTo) - vh;
+    const glideHi = Math.max(stNow + vh, glideTo + vh) + vh;
+    for (const [key, slot] of [...map]) {
+      const idx = instance.indexOfKey(key);
+      if (idx === undefined) continue;
+      if (idx >= first && idx <= last) continue; // corridor member
+      const top = instance.offsetOf(idx);
+      const bottom = idx + 1 < instance.length ? instance.offsetOf(idx + 1) : total;
+      const visible = bottom > visLo && top < visHi;
+      const inGlide = bottom > glideLo && top < glideHi;
+      if (inGlide && !visible) {
+        map.delete(key);
+        slotStore.set(slot, null, true);
+      }
+    }
+    // Present the corridor at its temporary (shifted) position.
+    let scan = 0;
+    const used = new Set(map.values());
+    for (let i = first; i <= last && i < instance.length; i++) {
+      if (instance.itemAt(i) == null) continue; // transient hole mid-swap
+      const key = instance.keyAt(i);
+      let slot = map.get(key);
+      if (slot == null) {
+        while (scan < poolSizeRef.current && (used.has(scan) || slotStore.get(scan) !== null))
+          scan++;
+        if (scan >= poolSizeRef.current) {
+          poolSizeRef.current = poolSizeRef.current + Math.max(8, last - i + 1);
+          slotStore.ensure(poolSizeRef.current);
+          setPoolSize(poolSizeRef.current);
+        }
+        slot = scan;
+        map.set(key, slot);
+        used.add(slot);
+      }
+      slotStore.set(
+        slot,
+        {
+          rowKey: key,
+          item: instance.itemAt(i),
+          top: origin + instance.offsetOf(i) + shift,
+          cw,
+          centered,
+        },
+        true,
+      );
+    }
+    const finish = (): void => {
+      const w = wormholeRef.current;
+      if (w === null) return;
+      wormholeRef.current = null;
+      clearTimeout(w.timer);
+      // RE-NORMALIZE: move the canvas origin so the corridor rows' REAL
+      // positions equal their painted ones — identical pixels, native offset
+      // untouched (the same absorption prepends use; the iOS headroom has
+      // room in both directions). Works mid-glide too (a finger grab): the
+      // content coordinate becomes wherever the offset maps to.
+      originRef.current = Math.max(0, originRef.current + w.shift);
+      const stFinal = Math.max(0, adapter.scrollTop - w.shift);
+      adapter.onNativeScroll(stFinal);
+      instance.setScrollTop(stFinal); // wakes useMugenSelector consumers too
+      lastProgWriteRef.current = performance.now();
+      scrollSampleRef.current = null; // pre/post-wormhole samples don't compose
+      setScrollTop(stFinal); // render: contentInset + every slot top refresh atomically
+      if (stickOn && w.dir === 1) {
+        ctl.attach(el);
+        ctl.escaped = false;
+        // Content that streamed in mid-flight grew past the corridor's bottom
+        // edge — let the stick close the residue smoothly.
+        if (ctl.distanceFromBottom() > 0.5) ctl.springToBottom(stickSpring);
+      }
     };
-    state.raf = requestAnimationFrame(tick);
+    wormholeRef.current = {
+      target,
+      glideTo,
+      shift,
+      dir,
+      timer: setTimeout(finish, 900), // fallback if the settle event is missed
+    };
+    wormholeFinishRef.current = finish;
+    // A DATA SWAP mid-flight (living-pane session switch) invalidates the
+    // corridor's shift entirely — drop the wormhole WITHOUT re-normalizing
+    // (the new data's initialScroll re-anchors everything anyway).
+    wormholeAbortRef.current = () => {
+      const w = wormholeRef.current;
+      if (w === null) return;
+      wormholeRef.current = null;
+      clearTimeout(w.timer);
+      lastProgWriteRef.current = performance.now();
+      scrollSampleRef.current = null;
+    };
+    lastProgWriteRef.current = performance.now();
+    adapter.scrollTo({ top: glideTo, behavior: 'smooth' });
   };
 
   // ── Smooth scroll to the very top (status-bar tap, app affordances) ──
   // The system flight is intercepted natively (`scrollViewShouldScrollToTop:`
-  // returning NO) and answered here: a full-distance capped glide — every
-  // frame real painted content, no cut, no teleport.
+  // returning NO) and answered here: near the top a plain native glide; from
+  // deep history the wormhole — one continuous motion, no cut, no blank.
   instance.scrollToTopDriver = (behavior) => {
     const st = adapter.scrollTop;
     if (stickOn) ctl.escape();
@@ -864,7 +1020,7 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
       syncWindowFromEl();
       return;
     }
-    if (st > vh * 3) cappedGlideTo(() => 0, -1);
+    if (st > vh * 3) wormholeTo(0, -1);
     else if (st > 0.5) adapter.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -890,6 +1046,12 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
   // the pool (a rare state update) when a window needs more slots.
   const allocate = (center: number, notify: boolean, alsoCover?: number): void => {
     if (resident || instance.length === 0 || vh <= 0 || cw <= 0) return;
+    // A wormhole owns the slot pool while it flies (~a third of a second):
+    // the corridor sits at TEMPORARY tops, and any allocate — a streaming
+    // re-render, a pool-growth commit, a drain — would rebind it to real
+    // positions mid-glide and tear the illusion. Everything rebinds on the
+    // finish() commit.
+    if (wormholeRef.current !== null) return;
     const v = velocityRef.current;
     // Velocity-scaled directional lead: cover ~250ms of travel at the current
     // velocity so upcoming rows are bound before they're visible.
@@ -1165,6 +1327,12 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     if (instance.estimatedCount() > 0 && refineTimerRef.current === null) {
       const pump = (): void => {
         refineTimerRef.current = null;
+        // Refines shift offsets through the anchor channel — hold while a
+        // wormhole's corridor depends on them; retry after it lands.
+        if (wormholeRef.current !== null) {
+          refineTimerRef.current = setTimeout(pump, 120);
+          return;
+        }
         const remaining = instance.refineEstimates(10);
         if (remaining > 0) refineTimerRef.current = setTimeout(pump, 60);
       };
@@ -1309,6 +1477,16 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const st = e.nativeEvent.contentOffset.y - originRef.current;
     const now = performance.now();
+    // Wormhole in flight: the corridor is pre-painted at temporary tops —
+    // normal allocation would rebind it to real positions mid-glide. Just
+    // watch for arrival.
+    const w = wormholeRef.current;
+    if (w !== null) {
+      adapter.onNativeScroll(st);
+      pokeIndicator();
+      if (Math.abs(st - w.glideTo) < 3) wormholeFinishRef.current?.();
+      return;
+    }
     const lastSample = scrollSampleRef.current;
     if (lastSample !== null && now - lastSample.t >= 8 && now - lastProgWriteRef.current > 120) {
       // Smoothed px/s — drives the directional overscan lead. Samples closer
@@ -1434,9 +1612,9 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
         // touchstart/touchend pair (wheel has no mobile equivalent). Drags also
         // arm the scroll indicator (programmatic motion never shows it).
         onScrollBeginDrag={() => {
-          // A finger cancels a running glide — the drag takes over from the
-          // exact current position.
-          cancelGlideRef.current();
+          // A finger interrupts a wormhole: normalize immediately (identical
+          // pixels — the drag continues from exactly what's on screen).
+          if (wormholeRef.current !== null) wormholeFinishRef.current?.();
           indicatorPokeUntilRef.current = Number.MAX_SAFE_INTEGER;
           if (stickOn) ctl.handleTouchStart();
         }}
@@ -1450,7 +1628,10 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
         // The list stays the scrollsToTop candidate (iOS only consults the
         // delegate for candidates); the app's native intercept answers the
         // tap by DECLINING the system flight and driving
-        // `instance.scrollToTop()` instead (see scrollToTopDriver).
+        // `instance.scrollToTop()` instead (see scrollToTopDriver). Pooled
+        // (hidden) panes must opt OUT via `scrollsToTop={false}` or iOS
+        // ignores the tap entirely.
+        scrollsToTop={props.scrollsToTop ?? true}
         testID={props.testID}
         keyboardDismissMode={props.keyboardDismissMode}
         keyboardShouldPersistTaps={props.keyboardShouldPersistTaps}
