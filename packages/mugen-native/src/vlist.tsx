@@ -1611,9 +1611,19 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
           listener: onScroll as (e: NativeSyntheticEvent<NativeScrollEvent>) => void,
         })}
         scrollEventThrottle={16}
-        // Break the stick from user *input* — a drag is the RN analog of the web's
-        // touchstart/touchend pair (wheel has no mobile equivalent). Drags also
-        // arm the scroll indicator (programmatic motion never shows it).
+        // Break the stick from user *input* at FINGER-DOWN, like the web host's
+        // touchstart/touchend pair. Drag begin/end alone is too late: a tap on a
+        // row control never becomes a drag, so while the spring is warm (during
+        // a stream and its settle grace) each frame's programmatic scrollTo
+        // moves the content under the finger and the OS cancels the child press
+        // — taps on collapse toggles do nothing until a drag stops the spring.
+        onTouchStart={stickOn ? () => ctl.handleTouchStart() : undefined}
+        onTouchEnd={stickOn ? () => ctl.handleTouchEnd(stickThreshold) : undefined}
+        // A recognized drag CANCELS the JS touch (no onTouchEnd); close out the
+        // pointer so handleScroll's non-pointer bookkeeping takes over. When the
+        // drag handlers below also fire, their touchStart/touchEnd pair simply
+        // recomputes the same state — the calls are idempotent.
+        onTouchCancel={stickOn ? () => ctl.handleTouchEnd(stickThreshold) : undefined}
         onScrollBeginDrag={() => {
           // A finger interrupts a wormhole: normalize immediately (identical
           // pixels — the drag continues from exactly what's on screen).

@@ -283,12 +283,13 @@ describe('MugenVList (native)', () => {
       r = create(<App items={items} />);
     });
     const scroll = r.root.findByType('rn-scrollview' as never);
-    const fire = (y: number): void =>
+    const fire = (y: number): void => {
       act(() => {
         (scroll.props as { onScroll: (e: unknown) => void }).onScroll({
           nativeEvent: { contentOffset: { y: CANVAS_HEADROOM + y } },
         });
       });
+    };
     // Build measured velocity: two events ~15ms apart moving 90px →
     // ~6000px/s → projected travel ≈ 6·0.998/0.002 ≈ 2994px past the offset.
     fire(0);
