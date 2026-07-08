@@ -13,11 +13,13 @@ Pod::Spec.new do |spec|
   spec.source       = { :git => "https://github.com/wingleeio/mugen.git", :tag => "#{spec.version}" }
 
   # The pretext-core C++ kernel (platform-independent) + the Nitro HybridObject
-  # implementations. No Objective-C/Swift of our own — Nitro autolinking wires
-  # the HybridObjects into the JSI runtime; there is nothing to register in a
-  # `+load` because Nitro's HybridObjectRegistry handles it.
+  # implementations, plus the Swift <MugenTextBlock> Hybrid View. The kernel
+  # HybridObjects need no `+load` registration (Nitro's HybridObjectRegistry
+  # handles them); the view is a Swift `HybridView` autolinked via nitro.json
+  # (HybridMugenTextBlock) — see ios/HybridMugenTextBlock.swift.
   spec.source_files = [
     "cpp/**/*.{hpp,cpp}",
+    "ios/**/*.swift",
   ]
 
   spec.pod_target_xcconfig = {
