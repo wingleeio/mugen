@@ -18,7 +18,7 @@
 #include "pretext/fonts/shorthand.hpp"  // pretext::fonts::FontStyle
 #include "pretext/types.hpp"            // pretext::codePointAt/codePointLen, modes
 
-namespace pretextcore {
+namespace ptcjsi {
 
 // --- UTF-8 <-> UTF-16 (JS-faithful) ---
 // Mirrors tools/fixture-runner/main.cpp toU16/toU8 exactly.
@@ -106,4 +106,4 @@ inline pretext::WordBreakMode wordBreakModeFromString(const std::string& mode) {
   return pretext::WordBreakMode::Normal;
 }
 
-}  // namespace pretextcore
+}  // namespace ptcjsi

@@ -20,9 +20,9 @@ void PretextCoreModule::registerFont(const std::string& family, double weight,
                                      const std::string& style,
                                      const std::shared_ptr<ArrayBuffer>& data) {
   pretext::fonts::RegisterFontOptions options;
-  options.family = pretextcore::u8ToU16(family);
+  options.family = ptcjsi::u8ToU16(family);
   options.weight = weight;
-  options.style = pretextcore::fontStyleFromString(style);
+  options.style = ptcjsi::fontStyleFromString(style);
   options.data = data->data();
   options.size = data->size();
   pretext::fonts::registerFont(options);
@@ -34,8 +34,8 @@ void PretextCoreModule::clearRegisteredFonts() {
 
 void PretextCoreModule::setGenericFontFamily(const std::string& generic,
                                              const std::string& family) {
-  pretext::fonts::setGenericFontFamily(pretextcore::u8ToU16(generic),
-                                       pretextcore::u8ToU16(family));
+  pretext::fonts::setGenericFontFamily(ptcjsi::u8ToU16(generic),
+                                       ptcjsi::u8ToU16(family));
 }
 
 void PretextCoreModule::setEmojiAdvanceEm(double value) {
@@ -44,8 +44,8 @@ void PretextCoreModule::setEmojiAdvanceEm(double value) {
 
 double PretextCoreModule::measureTextWidth(const std::string& text,
                                            const std::string& font) {
-  return pretext::fonts::measureTextWidth(pretextcore::u8ToU16(text),
-                                          pretextcore::u8ToU16(font));
+  return pretext::fonts::measureTextWidth(ptcjsi::u8ToU16(text),
+                                          ptcjsi::u8ToU16(font));
 }
 
 std::shared_ptr<HybridPreparedTextSpec> PretextCoreModule::prepare(
@@ -53,12 +53,12 @@ std::shared_ptr<HybridPreparedTextSpec> PretextCoreModule::prepare(
     const std::string& whiteSpace, const std::string& wordBreak,
     double letterSpacing) {
   pretext::PrepareOptions options;
-  options.whiteSpace = pretextcore::whiteSpaceModeFromString(whiteSpace);
-  options.wordBreak = pretextcore::wordBreakModeFromString(wordBreak);
+  options.whiteSpace = ptcjsi::whiteSpaceModeFromString(whiteSpace);
+  options.wordBreak = ptcjsi::wordBreakModeFromString(wordBreak);
   options.letterSpacing = letterSpacing;
 
-  std::u16string text16 = pretextcore::u8ToU16(text);
-  std::u16string font16 = pretextcore::u8ToU16(font);
+  std::u16string text16 = ptcjsi::u8ToU16(text);
+  std::u16string font16 = ptcjsi::u8ToU16(font);
   pretext::PreparedPtr prepared =
       withSegments ? pretext::prepareWithSegments(text16, font16, options)
                    : pretext::prepare(text16, font16, options);
@@ -72,8 +72,8 @@ PretextCoreModule::prepareRichInline(
   kernelItems.reserve(items.size());
   for (const auto& it : items) {
     pretext::RichInlineItem item;
-    item.text = pretextcore::u8ToU16(it.text);
-    item.font = pretextcore::u8ToU16(it.font);
+    item.text = ptcjsi::u8ToU16(it.text);
+    item.font = ptcjsi::u8ToU16(it.font);
     item.letterSpacing = it.letterSpacing;
     item.breakNever = it.breakNever;
     item.extraWidth = it.extraWidth;

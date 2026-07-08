@@ -35,7 +35,7 @@
     "nitro.json"
   ],
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown && node scripts/fix-metro-require.mjs",
     "dev": "tsdown --watch",
     "test": "vitest run",
     "check-types": "tsc --noEmit",

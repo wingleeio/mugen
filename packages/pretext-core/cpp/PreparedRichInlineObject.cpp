@@ -32,7 +32,7 @@ RichWalkResultSpec PreparedRichInlineObject::walk(double maxWidth) {
     fragments.reserve(line.fragments.size());
     for (const auto& f : line.fragments) {
       fragments.emplace_back(
-          static_cast<double>(f.itemIndex), pretextcore::u16ToU8(f.text),
+          static_cast<double>(f.itemIndex), ptcjsi::u16ToU8(f.text),
           f.gapBefore, f.occupiedWidth,
           LayoutCursor(static_cast<double>(f.start.segmentIndex),
                        static_cast<double>(f.start.graphemeIndex)),
