@@ -1,5 +1,25 @@
 # @wingleeio/mugen-markdown-native
 
+## 0.4.0
+
+### Minor Changes
+
+- [#51](https://github.com/wingleeio/mugen/pull/51) [`6737a27`](https://github.com/wingleeio/mugen/commit/6737a27cb341077bc95cc238b0fd09c5e29d73ce) Thanks [@wingleeio](https://github.com/wingleeio)! - Opt-in `<MugenTextBlock>` single-native-view rendering path for `RichText`.
+
+  `setMugenTextBlockEnabled(true)` (default off) makes a whole markdown block
+  render as **one** native view (`@wingleeio/pretext-core`'s `MugenTextBlock`)
+  instead of a per-fragment `<Text>` tree — a row drops from 10–30 fibers to 1–2.
+  The block is built from the same pretext rich-inline walk the measure pass uses,
+  so painted geometry equals the measured geometry (`lines × lineHeight`); inline
+  boxes overlay at their reserved advances. Off by default (and a no-op unless
+  `@wingleeio/pretext-core`'s native view is installed), so existing behavior is
+  unchanged until the on-device measurements in NATIVE-TEXT.md hold.
+
+### Patch Changes
+
+- Updated dependencies [[`6737a27`](https://github.com/wingleeio/mugen/commit/6737a27cb341077bc95cc238b0fd09c5e29d73ce)]:
+  - @wingleeio/mugen@0.7.0
+
 ## 0.3.2
 
 ### Patch Changes
