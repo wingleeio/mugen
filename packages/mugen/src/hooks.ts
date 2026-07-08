@@ -78,6 +78,14 @@ export interface MugenRowScope {
   effect(effect: () => void | EffectCleanup, deps: readonly unknown[]): void;
   /** `useMugenTween`, scoped. */
   tween(target: number, options?: MugenTweenOptions): number;
+  /**
+   * Render-measure escape hatch: report this row's true height, read from a
+   * live mount (e.g. `ref.measure()` on Fabric, synchronous in a layout
+   * effect), and route it through the engine's estimate→anchor-absorption
+   * channel. No-op during the measure walk (there is no mounted view then);
+   * only the real fiber render applies it. Returns the applied delta.
+   */
+  renderMeasure(height: number): number;
 }
 
 class RowScopeImpl implements MugenRowScope {
@@ -110,6 +118,14 @@ class RowScopeImpl implements MugenRowScope {
 
   tween(target: number, options?: MugenTweenOptions): number {
     return this.host.tween(this.rowKey, this.slotKey(), target, options, this.mode === 'measure');
+  }
+
+  renderMeasure(height: number): number {
+    // The measure walk has no mounted view; only a real fiber render can
+    // observe a rendered height, so ignore the walk (it would otherwise fight
+    // the analytic height the walk itself just produced).
+    if (this.mode === 'measure') return 0;
+    return this.host.applyMeasuredHeight(this.rowKey, height);
   }
 }
 
