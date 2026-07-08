@@ -1,5 +1,13 @@
 # @wingleeio/mugen-native
 
+## 0.8.10
+
+### Patch Changes
+
+- [`050bc71`](https://github.com/wingleeio/mugen/commit/050bc71be75512bb327ae871cd1619dd4c3b1e38) Thanks [@wingleeio](https://github.com/wingleeio)! - Wormhole scroll returns, adapted to the lazy-measurement engine: `scrollToTop`/`scrollToBottom` from ANY distance is one CONTINUOUS bounded-time motion (~a third of a second) — no cut, no blank. The destination's real rows are temporarily laid flush against the current viewport (seam snapped to a row boundary), the list glides exactly one viewport of real pixels on the UI thread, and coordinates re-normalize atomically through the headroom canvas's origin absorption — identical pixels, native offset untouched. New under lazy measurement: the destination zone's estimated heights resolve SILENTLY before the corridor is laid (a notify would re-render the list and rebind the corridor to real positions mid-flight), with the anchor delta absorbed inline; `allocate` is suspended while the wormhole flies so streaming commits, pool growth, and drains cannot tear the corridor; the estimate-refine pump holds and retries after landing; and a living-pane data swap aborts the flight without re-normalizing (the new data's initial anchor re-seeds everything). A finger grab mid-glide normalizes instantly and the drag continues from exactly what's on screen. Replaces the full-distance capped glide, whose duration scaled with distance (seconds on a long transcript).
+
+  New `scrollsToTop` prop (default true): iOS silently ignores the status-bar tap when 2+ visible scroll views claim it — an app that keeps several lists mounted (a pane pool, a drawer) must leave `scrollsToTop` on ONLY the active one.
+
 ## 0.8.9
 
 ### Patch Changes
