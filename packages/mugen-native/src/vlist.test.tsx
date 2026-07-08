@@ -7,7 +7,7 @@
  * aliased to a host-component stub; layout and scroll arrive by invoking the
  * `onLayout`/`onScroll` props, exactly like the platform would.
  */
-import { beforeAll, beforeEach, describe, expect, test } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import { create, act, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 import { installPretextPolyfills, registerFont } from '@wingleeio/pretext-native';
 import { buildTestFont } from '@wingleeio/pretext-native/testing';
@@ -276,29 +276,42 @@ describe('MugenVList (native)', () => {
     expect(rows.length).toBeLessThan(30);
   });
 
-  test('the live-velocity projection binds the momentum landing zone ahead', async () => {
+  test('the live-velocity projection binds the momentum landing zone ahead', () => {
     const items = Array.from({ length: 100 }, (_, i) => ({ id: String(i), text: 'AA' }));
-    let r!: ReactTestRenderer;
-    act(() => {
-      r = create(<App items={items} />);
-    });
-    const scroll = r.root.findByType('rn-scrollview' as never);
-    const fire = (y: number): void => {
+    // The velocity estimate divides the pixel delta by the performance.now()
+    // gap between two scroll events. A real setTimeout makes that gap — and so
+    // the projected landing — nondeterministic under CI load (a slow runner
+    // stretches the gap, underestimates velocity, and the projection falls
+    // short). Drive the clock ourselves: two events exactly 15ms apart, past
+    // the 120ms programmatic-write settle, for a fixed ~6000px/s.
+    let clock = 10_000;
+    const nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => clock);
+    try {
+      let r!: ReactTestRenderer;
       act(() => {
-        (scroll.props as { onScroll: (e: unknown) => void }).onScroll({
-          nativeEvent: { contentOffset: { y: CANVAS_HEADROOM + y } },
-        });
+        r = create(<App items={items} />);
       });
-    };
-    // Build measured velocity: two events ~15ms apart moving 90px →
-    // ~6000px/s → projected travel ≈ 6·0.998/0.002 ≈ 2994px past the offset.
-    fire(0);
-    await new Promise((res) => setTimeout(res, 15));
-    fire(90);
-    const tops = findRows(r).map(rowTop);
-    // Rows near the projected landing (~90+smoothed-travel; smoothing halves
-    // the first estimate, so expect binding well beyond the plain window).
-    expect(Math.max(...tops)).toBeGreaterThan(1200);
+      const scroll = r.root.findByType('rn-scrollview' as never);
+      const fire = (y: number): void => {
+        act(() => {
+          (scroll.props as { onScroll: (e: unknown) => void }).onScroll({
+            nativeEvent: { contentOffset: { y: CANVAS_HEADROOM + y } },
+          });
+        });
+      };
+      // Two events 15ms apart moving 90px → ~6000px/s → projected travel
+      // ≈ 6·0.998/0.002 ≈ 2994px past the offset.
+      clock += 200; // clear the post-mount programmatic-write settle window
+      fire(0);
+      clock += 15;
+      fire(90);
+      const tops = findRows(r).map(rowTop);
+      // Rows near the projected landing (~90+smoothed-travel; smoothing halves
+      // the first estimate, so expect binding well beyond the plain window).
+      expect(Math.max(...tops)).toBeGreaterThan(1200);
+    } finally {
+      nowSpy.mockRestore();
+    }
   });
 
   test('HStack distributes width; fixed children keep theirs', () => {

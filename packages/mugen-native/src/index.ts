@@ -61,6 +61,9 @@ export type {
   MugenEasing,
 } from '@wingleeio/mugen/native-core';
 
+// ── Render-measure escape hatch (mugen/NATIVE-TEXT.md) ──
+export { useRenderMeasure } from './hooks/use-render-measure';
+
 // ── Primitives (native render halves, shared measure halves) ──
 export { Text, setTextLayoutCache } from './primitives/text';
 export type { TextProps, TextLayout, MugenTextLayoutCache } from './primitives/text';

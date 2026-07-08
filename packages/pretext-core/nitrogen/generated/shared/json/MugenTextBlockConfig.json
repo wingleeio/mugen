@@ -1,0 +1,10 @@
+{
+  "uiViewClassName": "MugenTextBlock",
+  "supportsRawText": false,
+  "bubblingEventTypes": {},
+  "directEventTypes": {},
+  "validAttributes": {
+    "spec": true,
+    "hybridRef": true
+  }
+}

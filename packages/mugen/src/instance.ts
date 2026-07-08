@@ -601,6 +601,43 @@ export class MugenInstance<T> implements SlotHost {
     if (delta !== 0 && i < anchorIdx) this.pendingScrollAnchorDelta += delta;
   }
 
+  /**
+   * Render-measure escape hatch. For content the analytic engine can't model
+   * (system fallback glyphs, unusual emoji sequences, arbitrary embedded
+   * views), a mounted row can report its true height — read synchronously from
+   * `ref.measure()` in the commit — and have it flow through the SAME
+   * estimate→anchor-absorption channel `refineOne` uses. pretext-core stays
+   * authoritative for everything it models; this only overrides a specific
+   * row's recorded height, and only when the reported height actually differs.
+   *
+   * Safe to call in a layout-effect/commit: it patches the offset index and
+   * queues any above-the-fold delta into `pendingScrollAnchorDelta` (absorbed
+   * by the headroom-canvas origin on iOS — no visible scroll), then notifies.
+   * Returns the applied delta (0 if nothing changed).
+   */
+  applyMeasuredHeight(key: string, measuredHeight: number): number {
+    const i = this.keyToIndex.get(key);
+    if (i == null) return 0;
+    if (!(measuredHeight >= 0)) return 0; // guard NaN/negative from a bad measure
+    const current = this.offset.heightAt(i);
+    // Sub-pixel jitter from the native measure must not thrash the index or the
+    // origin; only act on a real change.
+    if (Math.abs(measuredHeight - current) < 0.5) {
+      this.estimatedKeys.delete(key);
+      return 0;
+    }
+    const item = this.items[i]!;
+    // This row is now measured, not estimated — but it is NOT a default-state
+    // height (it came from a live mount), so it must never be written to the
+    // persistent heightCache. Only the per-instance memo records it.
+    this.estimatedKeys.delete(key);
+    this.heightMemo.set(key, { item, height: measuredHeight });
+    const anchorIdx = this.indexAt(this.scrollTop);
+    const delta = this.offset.setHeight(i, measuredHeight);
+    if (delta !== 0 && i < anchorIdx) this.pendingScrollAnchorDelta += delta;
+    return delta;
+  }
+
   private remeasureSlots(): void {
     const width = this.contentWidth();
     this.topSlotHeight = this.measureSlot(this.config?.renderTop, width);

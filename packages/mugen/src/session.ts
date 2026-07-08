@@ -47,6 +47,12 @@ export interface SlotHost {
   slotEpoch(key: string): number;
   subscribeRow(key: string, cb: () => void): () => void;
   rowVersion(key: string): number;
+
+  // ── Render-measure escape hatch ──
+  /** Override a row's recorded height with one read from a live mount
+   *  (`ref.measure()`), routed through the estimate→anchor-absorption channel.
+   *  Returns the applied delta (0 if unchanged). See `applyMeasuredHeight`. */
+  applyMeasuredHeight(key: string, measuredHeight: number): number;
 }
 
 export type SessionMode = 'measure' | 'render';

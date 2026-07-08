@@ -1,0 +1,41 @@
+{
+  "cxxNamespace": ["pretextcore"],
+  "ios": {
+    "iosModuleName": "PretextCore"
+  },
+  "android": {
+    "androidNamespace": ["pretextcore"],
+    "androidCxxLibName": "PretextCore"
+  },
+  "autolinking": {
+    "PretextCore": {
+      "all": {
+        "language": "c++",
+        "implementationClassName": "PretextCoreModule"
+      }
+    },
+    "PreparedText": {
+      "all": {
+        "language": "c++",
+        "implementationClassName": "PreparedTextObject"
+      }
+    },
+    "PreparedRichInline": {
+      "all": {
+        "language": "c++",
+        "implementationClassName": "PreparedRichInlineObject"
+      }
+    },
+    "MugenTextBlock": {
+      "ios": {
+        "language": "swift",
+        "implementationClassName": "HybridMugenTextBlock"
+      },
+      "android": {
+        "language": "kotlin",
+        "implementationClassName": "HybridMugenTextBlock"
+      }
+    }
+  },
+  "ignorePaths": ["node_modules", "dist", "build-host"]
+}
