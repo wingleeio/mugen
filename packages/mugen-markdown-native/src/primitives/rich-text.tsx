@@ -4,7 +4,7 @@ import {
   walkRichInlineLineRanges,
   materializeRichInlineLineRange,
   type RichInlineLineRange,
-} from '@chenglou/pretext/rich-inline';
+} from '@wingleeio/pretext-core';
 import {
   getPrimitiveDef,
   markPrimitive,

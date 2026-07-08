@@ -67,6 +67,7 @@
   },
   "dependencies": {
     "@chenglou/pretext": "0.0.8",
+    "@wingleeio/pretext-core": "workspace:^",
     "use-sync-external-store": "^1.6.0"
   },
   "peerDependencies": {

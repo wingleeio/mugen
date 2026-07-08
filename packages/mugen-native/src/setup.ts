@@ -1,9 +1,14 @@
+// Register fonts through @wingleeio/pretext-core so measurement runs against
+// the SAME engine that measures: on native the C++ PretextCore JSI registry
+// (so the ported kernel has the glyph advances), on web/Node pretext-native.
+// Keeping registration and measurement on one seam is what makes the JSI path
+// actually measure — the C++ kernel can only measure fonts it was given.
 import {
   installPretextPolyfills,
   registerFont,
   setGenericFontFamily,
   type RegisterFontOptions,
-} from '@wingleeio/pretext-native';
+} from '@wingleeio/pretext-core';
 import { notifyFontsChanged } from '@wingleeio/mugen/native-core';
 import { setFontFaceResolver, clearFontStyleCache, type FontFaceResolver } from './font-style';
 

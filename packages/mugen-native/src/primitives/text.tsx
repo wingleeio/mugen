@@ -1,6 +1,6 @@
 import { useContext, useMemo, type ReactElement } from 'react';
 import { Text as RNText, View, type StyleProp, type TextStyle } from 'react-native';
-import { layoutWithLines } from '@chenglou/pretext';
+import { layoutWithLines } from '@wingleeio/pretext-core';
 import {
   getPrimitiveDef,
   markPrimitive,

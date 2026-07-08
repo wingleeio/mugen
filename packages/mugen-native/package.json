@@ -58,6 +58,7 @@
   "dependencies": {
     "@chenglou/pretext": "0.0.8",
     "@wingleeio/mugen": "workspace:^",
+    "@wingleeio/pretext-core": "workspace:^",
     "@wingleeio/pretext-native": "workspace:^"
   },
   "peerDependencies": {
