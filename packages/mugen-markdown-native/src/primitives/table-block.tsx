@@ -45,12 +45,11 @@ const STUB_CTX: MeasureContext = { defaults: {}, width: 0, measure: () => 0 };
  * — so each cell's width (and the `WidthContext` the RichText inside wraps at)
  * matches the analytic height at any viewport.
  *
- * When the columns' minimums fit the viewport the table renders inline exactly
- * as before (a plain plate with hairlines and an overlay ring). When they don't,
- * the rows go inside a horizontal `ScrollView` sized to the shared measured
- * height (React Native won't derive a horizontal scroller's cross-axis height on
- * its own), the ring frames the fixed viewport, and the content scrolls under
- * it — the native analogue of the web's clipped, scrollbar-hidden overflow.
+ * When the columns' minimums fit the viewport the table renders inline (frameless
+ * rows of hairline-separated cells). When they don't, the rows go inside a
+ * horizontal `ScrollView` sized to the shared measured height (React Native won't
+ * derive a horizontal scroller's cross-axis height on its own), and the content
+ * scrolls — the native analogue of the web's clipped, scrollbar-hidden overflow.
  */
 function TableBlockComponent(props: TableBlockProps): ReactElement | null {
   const width = useContext(WidthContext);
@@ -96,37 +95,15 @@ function TableBlockComponent(props: TableBlockProps): ReactElement | null {
     );
   });
 
+  // Frameless "flat hairline" design: the row rules (Views between rows) are the
+  // only chrome — no outer border. An optional `radius` still clips the corners
+  // for a framed variant.
   const clip =
     props.radius > 0 ? { borderRadius: props.radius, overflow: 'hidden' as const } : null;
-  // The outer border is an absolutely-positioned ring, not a real border — a
-  // border would inset the content box; the ring is height-neutral, exactly like
-  // the web's inset box-shadow. It frames the viewport, so the content scrolls
-  // beneath it.
-  const ring =
-    props.divider > 0 ? (
-      <View
-        pointerEvents="none"
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          borderWidth: props.divider,
-          borderColor: props.borderColor,
-          ...(props.radius > 0 ? { borderRadius: props.radius } : null),
-        }}
-      />
-    ) : null;
 
   if (!overflow) {
     // Fits: content-driven height, identical to the pre-overflow renderer.
-    return (
-      <View style={clip ?? undefined}>
-        {children}
-        {ring}
-      </View>
-    );
+    return <View style={clip ?? undefined}>{children}</View>;
   }
 
   // Overflow: the ScrollView needs an explicit cross-axis height. Reuse the
@@ -144,7 +121,6 @@ function TableBlockComponent(props: TableBlockProps): ReactElement | null {
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ height }}>
         <View style={{ width: tableWidth }}>{children}</View>
       </ScrollView>
-      {ring}
     </View>
   );
 }

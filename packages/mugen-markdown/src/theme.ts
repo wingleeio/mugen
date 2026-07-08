@@ -201,12 +201,14 @@ export const defaultTheme: MarkdownTheme = {
   list: { gap: 6, indent: 28, markerColor: 'inherit' },
 
   table: {
-    cellPadding: 8,
+    // A clean, frameless "flat hairline" table: horizontal rules under the
+    // header and between rows, no outer box, no header fill, no rounded corners.
+    cellPadding: 12,
     gap: 1,
-    headerWeight: 650,
-    headerBackground: 'rgba(127, 127, 127, 0.12)',
-    borderColor: 'rgba(127, 127, 127, 0.35)',
-    radius: 8,
+    headerWeight: 700,
+    headerBackground: 'transparent',
+    borderColor: 'rgba(127, 127, 127, 0.2)',
+    radius: 0,
     minColumnWidth: 96,
   },
 

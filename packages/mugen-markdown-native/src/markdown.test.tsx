@@ -278,3 +278,49 @@ describe('streaming', () => {
     expect(r.root.findAllByType('rn-animated-view' as never).length).toBe(2);
   });
 });
+
+describe('inline emphasis is recognized (no literal ** leaks to paint)', () => {
+  // Regression guard for "bold spans aren't recognized on native": a list item
+  // whose **bold** spans follow an inline-code span, exercised both settled and
+  // streamed word-by-word with fade — the native materialization/collapse +
+  // streaming path. Parse is shared with web; this pins the native render.
+  const ITEM = '- **AA** BB (`AVA`) and **AAA BB VVV** and **BB AAA VVV** end.';
+
+  const starLeaks = (r: ReactTestRenderer): boolean => textsOf(r).some((t) => t.includes('*'));
+  const boldCount = (r: ReactTestRenderer): number =>
+    r.root.findAllByType('rn-text' as never).filter((t) => {
+      const style = (t.props as { style?: unknown }).style;
+      const flat = Object.assign(
+        {},
+        ...(Array.isArray(style) ? style : [style]).filter(Boolean),
+      ) as { fontWeight?: unknown };
+      return String(flat.fontWeight) === '700';
+    }).length;
+
+  test('settled: bold applied, never literal **', () => {
+    let r!: ReactTestRenderer;
+    act(() => {
+      r = create(<App source={ITEM} />);
+    });
+    expect(starLeaks(r), `TEXTS=${JSON.stringify(textsOf(r))}`).toBe(false);
+    expect(boldCount(r)).toBeGreaterThan(0);
+  });
+
+  test('streamed word-by-word with fade: settles with bold, never literal **', () => {
+    const words = ITEM.split(' ');
+    let r!: ReactTestRenderer;
+    act(() => {
+      r = create(<App source={words.slice(0, 1).join(' ')} fade />);
+    });
+    for (let i = 2; i <= words.length; i++) {
+      act(() => {
+        r.update(<App source={words.slice(0, i).join(' ')} fade />);
+      });
+    }
+    act(() => {
+      r.update(<App source={ITEM} fade />);
+    });
+    expect(starLeaks(r), `TEXTS=${JSON.stringify(textsOf(r))}`).toBe(false);
+    expect(boldCount(r)).toBeGreaterThan(0);
+  });
+});

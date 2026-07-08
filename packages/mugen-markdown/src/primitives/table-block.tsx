@@ -24,12 +24,12 @@ import {
  * column to a sliver. `resolveColumnWidths` mirrors that algorithm so the
  * analytic height matches the painted flex layout at any width.
  *
- * Chrome is height-neutral by construction: row hairlines are real
- * `divider`-px elements (counted in the height), while the outer ring is an
- * inset box-shadow and the corner radius is pure overflow clipping — neither
- * consumes width or height the walker can't see. The horizontal scroller hides
- * its scrollbar (`scrollbar-width: none`) so the scroll affordance never adds
- * height the measure can't see, on classic-scrollbar platforms included.
+ * The design is frameless — a flat "hairline" table: horizontal row rules under
+ * the header and between rows are the only chrome, with no outer box or header
+ * fill. Those rules are real `divider`-px elements (counted in the height); an
+ * optional corner `radius` is pure overflow clipping. The horizontal scroller
+ * hides its scrollbar (`scrollbar-width: none`) so the scroll affordance never
+ * adds height the measure can't see, on classic-scrollbar platforms included.
  */
 export interface TableBlockProps<C extends string = string> {
   /** Cell content per row, header row first. Rows may be ragged. */
@@ -203,22 +203,21 @@ function measureTable(p: TableBlockProps, ctx: MeasureContext): number {
 function renderTableBlock(p: TableBlockProps): ReactElement {
   const cols = columnCount(p.rows);
   const geo = tableColumns(p, STUB_CTX);
-  // The scroller is the *viewport*: it carries the ring + radius, clips the
-  // table to that rounded window, and scrolls horizontally when the column
+  // The scroller is the *viewport*: it scrolls horizontally when the column
   // minimums overflow it. `min-width: 0` lets it shrink inside the flex column
   // of blocks; the hidden scrollbar keeps the scroll affordance height-neutral.
+  // The table is frameless (flat hairline design) — row rules are the only
+  // chrome; an optional `radius` still clips the corners for a framed variant.
   const scroller: CSSProperties = {
     margin: 0,
     minWidth: 0,
     maxWidth: '100%',
     // `auto`/`hidden` (both non-visible) makes this a scroll container that
-    // clips its content — including the scrolled overflow — to the radius, the
-    // same rounded window the old single-div table clipped to.
+    // clips its content — including scrolled overflow — to the (optional) radius.
     overflowX: 'auto',
     overflowY: 'hidden',
     scrollbarWidth: 'none',
     ...(p.radius > 0 ? { borderRadius: `${p.radius}px` } : null),
-    ...(p.divider > 0 ? { boxShadow: `inset 0 0 0 ${p.divider}px ${p.borderColor}` } : null),
     ...(p.style as CSSProperties | undefined),
   };
   // The table content fills the viewport but never shrinks below the column
