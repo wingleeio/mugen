@@ -292,6 +292,9 @@ importers:
       '@wingleeio/mugen-native':
         specifier: workspace:^
         version: link:../mugen-native
+      '@wingleeio/pretext-core':
+        specifier: workspace:^
+        version: link:../pretext-core
       '@wingleeio/pretext-native':
         specifier: workspace:^
         version: link:../pretext-native

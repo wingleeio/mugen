@@ -21,6 +21,11 @@ import {
 } from '@wingleeio/mugen-markdown/native-core';
 import { WidthContext, fontShorthandToTextStyle } from '@wingleeio/mugen-native';
 import { FadeLine, useInFadeScope } from './fade';
+import {
+  getMugenTextBlock,
+  isMugenTextBlockEnabled,
+  buildBlockSpec,
+} from './mugen-text-block-bridge';
 
 export type { RichTextRun };
 
@@ -117,7 +122,29 @@ function RichTextComponent(props: RichTextProps): ReactElement | null {
   const inFadeScope = useInFadeScope();
   const { runs, lineHeight } = props;
 
+  // Native single-view path (opt-in, NATIVE-TEXT.md). When enabled and the
+  // <MugenTextBlock> view is installed, the whole block is ONE native view
+  // built from the same walk — a markdown row drops from 10–30 fibers to 1–2.
+  // Computed unconditionally (hooks order); null unless the flag is on and the
+  // host resolves, so the default per-fragment path below is unaffected.
+  const Block = getMugenTextBlock();
+  const wantBlock = isMugenTextBlockEnabled() && Block !== null;
+  const block = useMemo(() => {
+    if (!wantBlock || width <= 0 || runs.length === 0) return null;
+    return buildBlockSpec({
+      segments: segmentItems(runs, props.font),
+      width: Math.max(0, width),
+      lineHeight,
+      align: props.align,
+      fallbackFont: props.font,
+      color: props.color,
+      hasBreak: runs.some((r) => r.break),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wantBlock, runs, props.font, props.align, props.color, lineHeight, width, epoch]);
+
   const painted = useMemo(() => {
+    if (wantBlock) return null; // block mode replaces the fragment paint
     if (width <= 0 || runs.length === 0) return null;
     const segments = segmentItems(runs, props.font);
     const hasText = segments.some((s) => s.items.length > 0);
@@ -169,7 +196,35 @@ function RichTextComponent(props: RichTextProps): ReactElement | null {
     return { lines, height: top };
     // `epoch` invalidates when fonts (re)register and metrics change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runs, props.font, props.align, lineHeight, width, epoch]);
+  }, [wantBlock, runs, props.font, props.align, lineHeight, width, epoch]);
+
+  // Native single-view render: one <MugenTextBlock> paints the whole block from
+  // pretext's own geometry; inline-box contents overlay as siblings at their
+  // reserved advances. Selection spans the block for free.
+  if (wantBlock && Block !== null) {
+    if (block === null) return null;
+    return (
+      <View style={{ height: block.height }}>
+        <Block spec={block.spec} style={{ width, height: block.height }} />
+        {block.boxes.map((b) => (
+          <View
+            key={b.key}
+            style={{
+              position: 'absolute',
+              left: b.left,
+              top: b.top,
+              width: b.advance,
+              height: b.height,
+              overflow: 'hidden',
+              justifyContent: 'center',
+            }}
+          >
+            {b.content}
+          </View>
+        ))}
+      </View>
+    );
+  }
 
   if (painted === null) return null;
 
