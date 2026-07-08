@@ -1,4 +1,9 @@
-import { createIncremarkParser, type IncremarkParser, type ParserOptions } from '@incremark/core';
+import {
+  createIncremarkParser,
+  type IncremarkParser,
+  type IncrementalUpdate,
+  type ParserOptions,
+} from '@incremark/core';
 import type { Root } from 'mdast';
 
 /**
@@ -56,6 +61,49 @@ function writeAst(cacheKey: string, ast: Root): void {
     if (oldest !== undefined) astCache.delete(oldest);
   }
   astCache.set(cacheKey, ast);
+}
+
+// ── Position re-anchoring ────────────────────────────────────────────────────
+// incremark parses its stable and pending regions as SEPARATE micromark
+// documents, so the mdast `position.*.offset` values on the nodes it exposes
+// via `.ast` are relative to the REGION text, not the document — the absolute
+// offsets live only on its `ParsedBlock` wrappers. Left uncorrected, consumers
+// that map positions back into the source string (per-block row splitting,
+// cursor sync) slice garbage after incremental appends: blocks cut mid-word at
+// streaming chunk boundaries, duplicated content, broken code fences.
+//
+// Re-anchor every block's node subtree from the ParsedBlock: the shift delta
+// (`block.startOffset − node.position.start.offset`) is exactly the region
+// offset, and it's 0 for a node that is already absolute, so re-anchoring is
+// idempotent even though completed nodes are shared across successive `.ast`
+// snapshots. Only offsets are corrected — `line`/`column` stay region-relative
+// (incremark drops inline positions entirely, and no consumer reads lines;
+// offsets are the authoritative coordinates).
+
+function shiftOffsets(node: unknown, delta: number): void {
+  const n = node as {
+    position?: { start?: { offset?: number }; end?: { offset?: number } };
+    children?: unknown[];
+  };
+  const pos = n.position;
+  if (pos != null) {
+    if (pos.start?.offset != null) pos.start.offset += delta;
+    if (pos.end?.offset != null) pos.end.offset += delta;
+  }
+  if (Array.isArray(n.children)) for (const child of n.children) shiftOffsets(child, delta);
+}
+
+/** Re-anchor this append's freshly parsed nodes (newly completed + pending) to
+ *  document-absolute offsets, then return the assembled AST. Earlier-completed
+ *  nodes were re-anchored by the append that completed them. */
+function absolutized(update: IncrementalUpdate): Root {
+  for (const block of [...update.completed, ...update.pending]) {
+    const start = block.node.position?.start?.offset;
+    if (start == null) continue;
+    const delta = block.startOffset - start;
+    if (delta !== 0) shiftOffsets(block.node, delta);
+  }
+  return update.ast;
 }
 
 // ── Incremental parser pool ──────────────────────────────────────────────────
@@ -122,14 +170,14 @@ export function parseMarkdown(source: string, options: MarkdownParseOptions = DE
     // The source extends a parser we already have — append just the delta.
     const entry = promote(idx);
     const delta = source.slice(entry.lastSource.length);
-    ast = entry.parser.append(delta).ast;
+    ast = absolutized(entry.parser.append(delta));
     entry.lastSource = source;
   } else {
     // New (or non-extending) document — parse fresh and retain the parser so a
     // subsequent growth can extend it. No `finalize()`: an un-finalized parser
     // can keep appending, and incremark's AST already includes the pending tail.
     const parser = makeParser(options);
-    ast = parser.append(source).ast;
+    ast = absolutized(parser.append(source));
     live.unshift({ key, parser, lastSource: source });
     if (live.length > MAX_LIVE) live.pop();
   }
