@@ -1,5 +1,11 @@
 # @wingleeio/mugen-native
 
+## 0.8.12
+
+### Patch Changes
+
+- [#49](https://github.com/wingleeio/mugen/pull/49) [`4ff3141`](https://github.com/wingleeio/mugen/commit/4ff3141c5db21632baa97a79420dab3433ad8fde) Thanks [@wingleeio](https://github.com/wingleeio)! - Stop the stick-to-bottom spring at finger-down (onTouchStart), not just drag-begin. A tap never becomes a drag, so while the spring was warm (streaming + settle grace) its per-frame scrollTo writes moved content under the finger and iOS canceled the child press — collapse toggles and other row controls ignored taps until a drag stopped the spring. Mirrors the web host's touchstart/touchend wiring; onTouchCancel closes out the pointer when a recognized drag cancels the JS touch.
+
 ## 0.8.11
 
 ### Patch Changes
