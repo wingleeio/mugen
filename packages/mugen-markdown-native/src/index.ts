@@ -40,11 +40,14 @@ export type {
 // ── Markdown primitives (compose overrides from these) ──
 export { RichText, clearRichTextCache, measureInline } from './primitives/rich-text';
 export type { RichTextProps, RichTextRun } from './primitives/rich-text';
-// Opt-in native single-view text block (NATIVE-TEXT.md). Off by default; flip
-// on once the on-device measurements hold. Requires @wingleeio/pretext-core.
+// Opt-in native single-view text block (NATIVE-TEXT.md). Off by default; the
+// consumer injects the component from @wingleeio/pretext-core/text-block:
+//   import { MugenTextBlock } from '@wingleeio/pretext-core/text-block';
+//   setMugenTextBlock(MugenTextBlock);
 export {
-  setMugenTextBlockEnabled,
+  setMugenTextBlock,
   isMugenTextBlockEnabled,
+  type BlockComponent as MugenTextBlockComponent,
 } from './primitives/mugen-text-block-bridge';
 export { CodeBlock, setCodeCopyHandler } from './primitives/code-block';
 export type { CodeBlockProps, CodeBlockHeader } from './primitives/code-block';

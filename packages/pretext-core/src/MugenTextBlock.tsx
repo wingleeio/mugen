@@ -16,6 +16,12 @@
 // (RN 0.81, Xcode 26) — see NATIVE-TEXT.md.
 import { createElement, type ReactElement } from 'react';
 import type { ViewProps } from 'react-native';
+// STATIC import (not a dynamic require): Metro only bundles statically-imported
+// modules, so a `require('react-native-nitro-modules')` throws "unknown module"
+// at runtime even when the pod is installed. This `/text-block` entry is
+// React-Native-only (it already imports 'react-native'), so a static import is
+// safe — Node never loads this module (the Node-safe API is the package root).
+import { getHostComponent } from 'react-native-nitro-modules';
 import type {
   MugenTextBlockSpec,
   MugenTextBlockProps as MugenTextBlockNativeProps,
@@ -46,23 +52,14 @@ type HostComponent = (props: MugenTextBlockViewProps) => ReactElement | null;
 
 let hostComponent: HostComponent | null | undefined;
 
-/** Resolve (once) the Nitro host component, or null off React Native. */
+/** Resolve (once) the Nitro host component, or null if it can't be created. */
 function getHost(): HostComponent | null {
   if (hostComponent !== undefined) return hostComponent;
   try {
-    if (typeof require !== 'function') {
-      hostComponent = null;
-      return null;
-    }
-    const mod = require('react-native-nitro-modules') as {
-      getHostComponent?: (name: string, getViewConfig: () => unknown) => HostComponent;
-    };
-    const getHostComponent = mod?.getHostComponent;
-    if (typeof getHostComponent !== 'function') {
-      hostComponent = null;
-      return null;
-    }
-    hostComponent = getHostComponent('MugenTextBlock', () => VIEW_CONFIG);
+    hostComponent = getHostComponent(
+      'MugenTextBlock',
+      () => VIEW_CONFIG,
+    ) as unknown as HostComponent;
   } catch {
     hostComponent = null;
   }

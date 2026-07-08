@@ -25,9 +25,11 @@ import {
   type RichTextRun,
 } from '@wingleeio/mugen-markdown/native-core';
 
-// The pretext-core spec/component types. Imported as types only; the runtime
-// component is resolved lazily below so bundlers that don't ship pretext-core
-// (web, tests) never fail to resolve it.
+// The pretext-core spec/component types. TYPE-ONLY import (erased at build) so
+// this library never has a runtime dependency on @wingleeio/pretext-core — the
+// consumer INJECTS the component via setMugenTextBlock(). That avoids a dynamic
+// `require()` (which bundles a `node:module` createRequire shim Metro can't
+// resolve) and lets the consumer's own bundler resolve pretext-core.
 import type {
   MugenTextBlockSpec,
   MugenTextRun,
@@ -60,45 +62,38 @@ export interface BlockBuild {
   height: number;
 }
 
-// ── Enable flag (default off) ────────────────────────────────────────────────
+// ── Injected native component (default off) ──────────────────────────────────
 
-let enabled = false;
+/** Structural type of `@wingleeio/pretext-core/text-block`'s `MugenTextBlock`.
+ *  Kept structural so consumers don't need the exact prop type to inject it. */
+export type BlockComponent = (props: { spec: MugenTextBlockSpec; style?: unknown }) => ReactNode;
+
+let injected: BlockComponent | null = null;
 
 /**
- * Turn the native single-view text block on/off (default off). comet flips this
- * on once the on-device measurements in NATIVE-TEXT.md hold (cold-open render,
- * zero blank scroll frames) — until then the proven per-fragment paint stays.
+ * Inject the pretext-core `<MugenTextBlock>` native view to paint each markdown
+ * block as ONE view (NATIVE-TEXT.md) instead of a per-fragment `<Text>` tree.
+ * Default OFF. The CONSUMER imports the component and passes it in:
+ *
+ *   import { MugenTextBlock } from '@wingleeio/pretext-core/text-block';
+ *   setMugenTextBlock(MugenTextBlock);
+ *
+ * so this library keeps no runtime dependency on pretext-core (the consumer's
+ * bundler resolves it). Pass `null` to disable. Flip it on once the on-device
+ * measurements in NATIVE-TEXT.md hold; until then the proven per-fragment paint
+ * stays.
  */
-export function setMugenTextBlockEnabled(value: boolean): void {
-  enabled = value;
+export function setMugenTextBlock(component: BlockComponent | null): void {
+  injected = component;
 }
 
 export function isMugenTextBlockEnabled(): boolean {
-  return enabled;
+  return injected !== null;
 }
 
-// ── Lazy native component resolution ─────────────────────────────────────────
-
-type BlockComponent = (props: { spec: MugenTextBlockSpec; style?: unknown }) => ReactNode;
-
-let resolved: BlockComponent | null | undefined;
-
-/** The `<MugenTextBlock>` component, or null when pretext-core/text-block isn't
- *  installed or resolves to a no-op (web/tests). Resolved once. */
+/** The injected `<MugenTextBlock>` component, or null when not set. */
 export function getMugenTextBlock(): BlockComponent | null {
-  if (resolved !== undefined) return resolved;
-  resolved = null;
-  try {
-    if (typeof require === 'function') {
-      const mod = require('@wingleeio/pretext-core/text-block') as {
-        MugenTextBlock?: BlockComponent;
-      };
-      if (typeof mod?.MugenTextBlock === 'function') resolved = mod.MugenTextBlock;
-    }
-  } catch {
-    resolved = null;
-  }
-  return resolved;
+  return injected;
 }
 
 // ── Spec construction ────────────────────────────────────────────────────────
