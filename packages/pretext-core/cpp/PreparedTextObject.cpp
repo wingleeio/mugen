@@ -27,7 +27,7 @@ LayoutLinesResultSpec PreparedTextObject::layoutWithLines(double maxWidth,
   lines.reserve(r.lines.size());
   for (const auto& l : r.lines) {
     lines.emplace_back(
-        pretextcore::u16ToU8(l.text), l.width,
+        ptcjsi::u16ToU8(l.text), l.width,
         LayoutCursor(static_cast<double>(l.start.segmentIndex),
                      static_cast<double>(l.start.graphemeIndex)),
         LayoutCursor(static_cast<double>(l.end.segmentIndex),
