@@ -1,6 +1,8 @@
 // Port of @chenglou/pretext@0.0.8 src/layout.ts — the public engine API.
 #pragma once
 
+#include <cstdint>
+
 #include <functional>
 #include <string>
 

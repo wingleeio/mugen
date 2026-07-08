@@ -1,6 +1,8 @@
 // Port of packages/pretext-native/src/engine/registry.ts
 #pragma once
 
+#include <cstdint>
+
 #include <functional>
 #include <memory>
 #include <string>

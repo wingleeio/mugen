@@ -11,6 +11,8 @@
 // it also compiles inside the RN build.
 #pragma once
 
+#include <cstdint>
+
 #include <string>
 
 #include "pretext/fonts/shorthand.hpp"  // pretext::fonts::FontStyle

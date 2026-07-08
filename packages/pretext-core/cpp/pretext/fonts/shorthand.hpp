@@ -1,6 +1,7 @@
 // Port of packages/pretext-native/src/engine/shorthand.ts
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <vector>
 

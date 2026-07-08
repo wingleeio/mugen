@@ -3,6 +3,8 @@
 // grapheme cache lives on Prepared::lineTextCache (TS uses a WeakMap).
 #pragma once
 
+#include <cstdint>
+
 #include <string>
 
 #include "types.hpp"

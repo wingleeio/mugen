@@ -3,6 +3,8 @@
 // tabs, soft hyphens, letter-spacing, breakable segments).
 #pragma once
 
+#include <cstdint>
+
 #include "types.hpp"
 
 namespace pretext {

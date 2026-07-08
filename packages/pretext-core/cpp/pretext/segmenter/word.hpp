@@ -3,6 +3,8 @@
 // for the deliberate UAX#29 simplifications — keep them identical).
 #pragma once
 
+#include <cstdint>
+
 #include <string>
 #include <vector>
 

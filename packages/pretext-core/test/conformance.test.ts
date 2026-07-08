@@ -1,7 +1,7 @@
 // Golden conformance: the C++ kernel must be byte-identical (Object.is per
 // number, === per string) to the TS engine (@chenglou/pretext on
 // pretext-native's polyfills — exactly what runs on Hermes today).
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -12,8 +12,21 @@ import {
   ensurePolyfills,
   fontOps,
   pkgRoot,
+  runnerPath,
   type Op,
 } from './driver.js';
+
+// The C++ conformance needs the host fixture-runner built (`pnpm build:host`,
+// requires cmake). The dedicated `pretext-core-conformance` CI job builds it;
+// the generic `pnpm test` (turbo across all packages) does not, so skip there
+// instead of failing. `pnpm build:host` locally re-enables it.
+const RUNNER_BUILT = existsSync(runnerPath);
+if (!RUNNER_BUILT) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[pretext-core] skipping C++ conformance — fixture-runner not built at ${runnerPath}. Run "pnpm build:host".`,
+  );
+}
 
 const WIDTHS = [180, 320.5, 375, 800];
 const LINE_HEIGHT = 24;
@@ -25,6 +38,7 @@ let reference: Reference;
 let nextId = 1;
 
 beforeAll(async () => {
+  if (!RUNNER_BUILT) return;
   ensurePolyfills();
   runner = new Runner();
   reference = new Reference();
@@ -62,7 +76,7 @@ function fullSuiteFor(text: string, font: string, options: Partial<Op> = {}): Op
   return ops;
 }
 
-describe('primitive cases', () => {
+describe.skipIf(!RUNNER_BUILT)('primitive cases', () => {
   it('measureTextWidth basics', async () => {
     const texts = [
       'hello world',
@@ -123,7 +137,7 @@ describe('primitive cases', () => {
   });
 });
 
-describe('rich inline', () => {
+describe.skipIf(!RUNNER_BUILT)('rich inline', () => {
   it('mixed-run layout', async () => {
     const id = nextId++;
     const items = [
@@ -160,7 +174,7 @@ describe('rich inline', () => {
   });
 });
 
-describe('corpus', () => {
+describe.skipIf(!RUNNER_BUILT)('corpus', () => {
   const corpusDir = join(pkgRoot, 'test/corpus');
   const files = readdirSync(corpusDir).filter(f => f.endsWith('.txt'));
   const MAX_PARAGRAPHS = 120;

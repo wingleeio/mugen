@@ -3,6 +3,8 @@
 // module implements — port its tables/rules verbatim, not full ICU).
 #pragma once
 
+#include <cstdint>
+
 #include <string>
 #include <vector>
 

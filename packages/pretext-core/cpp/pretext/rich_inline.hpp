@@ -2,6 +2,8 @@
 // Multi-item (font-run) inline layout over per-item Prepared handles.
 #pragma once
 
+#include <cstdint>
+
 #include <functional>
 #include <vector>
 
