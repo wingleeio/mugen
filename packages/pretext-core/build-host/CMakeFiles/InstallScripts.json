@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/Users/wing/Documents/GitHub/mugen/packages/pretext-core/build-host/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
