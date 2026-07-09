@@ -15,11 +15,19 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "react-native": {
+        "import": "./dist/index.native.js",
+        "require": "./dist/index.native.cjs"
+      },
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
     "./text-block": {
       "types": "./dist/text-block.d.ts",
+      "react-native": {
+        "import": "./dist/text-block.native.js",
+        "require": "./dist/text-block.native.cjs"
+      },
       "import": "./dist/text-block.js",
       "require": "./dist/text-block.cjs"
     }
