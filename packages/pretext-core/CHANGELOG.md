@@ -1,5 +1,43 @@
 # @wingleeio/pretext-core
 
+## 0.1.4
+
+### Patch Changes
+
+- [#59](https://github.com/wingleeio/mugen/pull/59) [`44b6996`](https://github.com/wingleeio/mugen/commit/44b6996c28a925a888964a75a9a7eb3ed284cd43) Thanks [@wingleeio](https://github.com/wingleeio)! - Fix the native C++ JSI engine never actually engaging on React Native (it
+  silently fell back to the JS engine). Four issues, all in how the native module
+  is located and compiled:
+
+  - **`this`-binding**: `native.ts` called `createHybridObject` as a detached
+    reference; Nitro's proxy throws "`this` is not bound". Call it as a method on
+    `NitroModules`.
+  - **Premature memoization**: `getNative()` ran once at module load — before
+    Nitro registers `PretextCore` — and cached the resulting `null` forever.
+    Now it memoizes only success and retries until the registry is ready.
+  - **Metro can't bundle the shimmed require**: `platform: 'neutral'` rewrites
+    `require` to a `__require` shim that Metro's dependency collector ignores, so
+    `react-native-nitro-modules` was never bundled ("unknown module"). A
+    post-build step restores the literal `require("react-native-nitro-modules")`.
+  - **C++ namespace collision**: the Nitro HybridObject impls live in
+    `margelo::nitro::pretextcore` and referenced the global helper namespace as
+    `pretextcore::…`, which the compiler bound to the enclosing namespace and
+    failed to compile on a clean build. Renamed the helper namespace to `ptcjsi`.
+
+  With these, `getNative()` resolves the C++ HybridObject and text measurement
+  runs in native (verified on device: cold session opens dropped to ~100 ms).
+
+- [#61](https://github.com/wingleeio/mugen/pull/61) [`6a38e6a`](https://github.com/wingleeio/mugen/commit/6a38e6a0351f5d801fc2eb1e34cf0893f94fb560) Thanks [@wingleeio](https://github.com/wingleeio)! - Fix web/electron builds that consume pretext-core (directly or via mugen). The
+  native locator does a literal `require("react-native-nitro-modules")` — the only
+  form Metro bundles — but web bundlers (Vite/Rolldown/webpack) eagerly resolve
+  that literal at build time and fail on React Native's Flow source ("Flow is not
+  supported"). The runtime try/catch only saved Node, not a web _build_.
+
+  pretext-core now ships two builds selected by `exports` conditions: the
+  `react-native` condition keeps the literal require (Metro/on-device), while the
+  default `import`/`require` entry uses a locator that always returns null and
+  references no native module at all — so web/electron/Node bundles stay clean and
+  fall back to the pure-JS engine, exactly as before native measurement existed.
+
 ## 0.1.3
 
 ### Patch Changes
