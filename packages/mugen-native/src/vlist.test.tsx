@@ -14,6 +14,7 @@ import { buildTestFont } from '@wingleeio/pretext-native/testing';
 import { clearTextCache, clearHeightCache, notifyFontsChanged } from '@wingleeio/mugen/native-core';
 import { MugenVList, useMugenVirtualizer, Text, VStack, HStack, Escape, Collapse, useMugenRow } from './index';
 import { CANVAS_HEADROOM } from './vlist';
+import { scrollToCalls } from '../test/react-native-stub';
 import * as React from 'react';
 
 // The animation clock (Collapse tweens) drives itself on rAF, absent in Node.
@@ -48,6 +49,7 @@ beforeAll(() => {
 beforeEach(() => {
   clearTextCache();
   clearHeightCache();
+  scrollToCalls.length = 0;
 });
 
 interface Msg {
@@ -394,6 +396,48 @@ describe('MugenVList (native)', () => {
     expect(rowTop(rows[rows.length - 1]!)).toBe(10890);
     // The transcript top is always bound (scroll-to-top landing zone).
     expect(tops).toContain(0);
+  });
+
+  test('stickToBottom uses fresh adapter geometry when pinned content grows', () => {
+    function BottomApp(props: { text: string }) {
+      const items = [{ id: '1', text: props.text }];
+      const instance = useMugenVirtualizer({ items });
+      return (
+        <MugenVList
+          instance={instance}
+          getKey={(m) => m.id}
+          width={400}
+          height={600}
+          overscan={0}
+          font="100px Test"
+          lineHeight={110}
+          initialScroll="bottom"
+          stickToBottom={{ behavior: 'instant' }}
+          render={(m) => (
+            <VStack>
+              <Text>{m.text}</Text>
+            </VStack>
+          )}
+        />
+      );
+    }
+
+    let r!: ReactTestRenderer;
+    act(() => {
+      r = create(<BottomApp text="AAAA AAAA AAAA AAAA AAAA AAAA" />);
+    });
+    const scroll = r.root.findByType('rn-scrollview' as never);
+    expect((scroll.props as { contentOffset?: { y: number } }).contentOffset).toEqual({
+      x: 0,
+      y: CANVAS_HEADROOM + 60,
+    });
+    scrollToCalls.length = 0;
+
+    act(() => {
+      r.update(<BottomApp text="AAAA AAAA AAAA AAAA AAAA AAAA AAAA AAAA AAAA" />);
+    });
+
+    expect(scrollToCalls).toContainEqual({ y: CANVAS_HEADROOM + 390, animated: false });
   });
 
   test('resident mode (overscan Infinity): all rows mounted, scroll is free', () => {

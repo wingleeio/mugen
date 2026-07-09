@@ -632,6 +632,10 @@ export function MugenVList<T>(props: MugenVListProps<T>): ReactElement {
     const resized = curW !== lastViewportRef.current.w || curH !== lastViewportRef.current.h;
     lastViewportRef.current = { w: curW, h: curH };
     const total = instance.totalHeight();
+    // Native's scroll element is an adapter, not the DOM: keep its geometry
+    // current before the controller asks `hasOverflow()` / `distanceFromBottom()`.
+    adapter.contentHeight = total;
+    adapter.viewportHeight = vh;
     const prevTotal = prevTotalRef.current;
     prevTotalRef.current = total;
     if (prevTotal < 0) return;
