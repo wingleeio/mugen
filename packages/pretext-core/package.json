@@ -1,6 +1,6 @@
 {
   "name": "@wingleeio/pretext-core",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "C++ JSI text engine for React Native — @chenglou/pretext's line breaker and pretext-native's font-table metrics, ported to native and exposed as synchronous JSI calls, plus the PretextBlockView single-view text block.",
   "license": "MIT",
   "repository": {
