@@ -1,5 +1,11 @@
 # @wingleeio/mugen-native
 
+## 0.10.1
+
+### Patch Changes
+
+- [`49ddfd4`](https://github.com/wingleeio/mugen/commit/49ddfd4f96f4a767fa7404e45f911ac6ca3eb622) Thanks [@wingleeio](https://github.com/wingleeio)! - Keep the native scroll adapter's geometry current before stick-to-bottom checks run. Streaming content growth could otherwise be compared against stale content height, making the controller think it was already pinned and skip the bottom correction.
+
 ## 0.10.0
 
 ### Minor Changes
